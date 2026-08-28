@@ -480,14 +480,16 @@ fn draw_body(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
-    let rows =
-        Layout::vertical([Constraint::Length(1), Constraint::Length(1), Constraint::Length(1)])
-            .split(area);
+    let rows = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(area);
 
     let rule = "─".repeat(area.width as usize);
     frame.render_widget(
-        Paragraph::new(rule.clone())
-            .style(Style::default().fg(PALETTE.line).bg(PALETTE.bg)),
+        Paragraph::new(rule.clone()).style(Style::default().fg(PALETTE.line).bg(PALETTE.bg)),
         rows[0],
     );
 
@@ -527,9 +529,9 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
     };
 
     let top = Layout::horizontal([
-        Constraint::Percentage(27),
-        Constraint::Percentage(46),
-        Constraint::Percentage(27),
+        Constraint::Percentage(20),
+        Constraint::Percentage(60),
+        Constraint::Percentage(20),
     ])
     .split(rows[0]);
 
@@ -566,11 +568,8 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
         top[2],
     );
 
-    let bottom = Layout::horizontal([
-        Constraint::Percentage(50),
-        Constraint::Percentage(50),
-    ])
-    .split(rows[1]);
+    let bottom =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[1]);
 
     frame.render_widget(
         Paragraph::new(app.workspace_label.clone())
