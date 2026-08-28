@@ -84,129 +84,11 @@ enum Phase {
     Rejected,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum RuntimeEvent {
-    ProposalCreated { proposal: String },
-    PlanUpdated { text: String },
-    AuditVerdict { verdict: String },
-    ExecutionStarted,
-    ExecutionOutput { text: String },
-    ValidationCompleted { result: String },
-    ExecutionCompleted { receipt_id: String },
-    ExecutionRejected,
-}
-
-#[derive(Debug)]
-struct ScheduledRuntimeEvent {
-    due_at: Instant,
-    event: RuntimeEvent,
-}
-
-trait RuntimeClient {
-    fn submit_intent(&mut self, intent: String, mode: AgentMode, now: Instant)
-    -> Vec<RuntimeEvent>;
-    fn approve(&mut self, now: Instant) -> Vec<RuntimeEvent>;
-    fn reject(&mut self) -> Vec<RuntimeEvent>;
-    fn drain_due(&mut self, now: Instant) -> Vec<RuntimeEvent>;
-    fn next_wake(&self, now: Instant) -> Option<Duration>;
-}
-
-#[derive(Debug, Default)]
-struct MockRuntimeClient {
-    scheduled: VecDeque<ScheduledRuntimeEvent>,
-}
-
-impl RuntimeClient for MockRuntimeClient {
-    fn submit_intent(
-        &mut self,
-        intent: String,
-        mode: AgentMode,
-        _now: Instant,
-    ) -> Vec<RuntimeEvent> {
-        match mode {
-            AgentMode::Regular => vec![RuntimeEvent::ProposalCreated {
-                proposal: format!("Proposed: {intent}"),
-            }],
-            AgentMode::Plan => vec![RuntimeEvent::PlanUpdated {
-                text: format!("Mock plan: investigate {intent}; no execution requested."),
-            }],
-            AgentMode::Audit => vec![RuntimeEvent::AuditVerdict {
-                verdict: "INSUFFICIENT_EVIDENCE · mock runtime is not connected to LBE guards."
-                    .to_owned(),
-            }],
-        }
-    }
-
-    fn approve(&mut self, now: Instant) -> Vec<RuntimeEvent> {
-        self.scheduled = VecDeque::from([
-            ScheduledRuntimeEvent {
-                due_at: now + Duration::from_millis(250),
-                event: RuntimeEvent::ExecutionOutput {
-                    text: "Inspecting active workspace...".to_owned(),
-                },
-            },
-            ScheduledRuntimeEvent {
-                due_at: now + Duration::from_millis(650),
-                event: RuntimeEvent::ValidationCompleted {
-                    result: "Focused validation complete.".to_owned(),
-                },
-            },
-            ScheduledRuntimeEvent {
-                due_at: now + Duration::from_millis(950),
-                event: RuntimeEvent::ExecutionCompleted {
-                    receipt_id: "rcpt_demo_7f31".to_owned(),
-                },
-            },
-        ]);
-        vec![RuntimeEvent::ExecutionStarted]
-    }
-
-    fn reject(&mut self) -> Vec<RuntimeEvent> {
-        self.scheduled.clear();
-        vec![RuntimeEvent::ExecutionRejected]
-    }
-
-    fn drain_due(&mut self, now: Instant) -> Vec<RuntimeEvent> {
-        let mut events = Vec::new();
-        while self
-            .scheduled
-            .front()
-            .is_some_and(|scheduled| scheduled.due_at <= now)
-        {
-            if let Some(scheduled) = self.scheduled.pop_front() {
-                events.push(scheduled.event);
-            }
-        }
-        events
-    }
-
-    fn next_wake(&self, now: Instant) -> Option<Duration> {
-        self.scheduled
-            .front()
-            .map(|scheduled| scheduled.due_at.saturating_duration_since(now))
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AgentMode {
     Audit,
     Regular,
     Plan,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MockPanel {
-    Account,
-    Provider,
-    Model,
-    Mcp,
-    Tools,
-    History,
-    Session,
-    Evidence,
-    Receipts,
-    Status,
-    Undo,
 }
 
 impl AgentMode {
@@ -227,6 +109,192 @@ impl AgentMode {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LbeSnapshot {
+    workspace_label: String,
+    model_id: String,
+    model_family: String,
+    effort_label: Option<String>,
+    context_used: usize,
+    context_capacity: usize,
+    active_mode: AgentMode,
+    runtime_label: String,
+}
+
+impl Default for LbeSnapshot {
+    fn default() -> Self {
+        Self {
+            workspace_label: r"C:\Users\".to_owned(),
+            model_id: "Model ID".to_owned(),
+            model_family: "Gemini".to_owned(),
+            effort_label: Some("low".to_owned()),
+            context_used: 2,
+            context_capacity: 10,
+            active_mode: AgentMode::Regular,
+            runtime_label: "MOCK / NOT CONNECTED".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UserRequest {
+    intent: String,
+    mode: AgentMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LbeError {
+    message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LbeEvent {
+    SnapshotUpdated { snapshot: LbeSnapshot },
+    ProposalCreated { proposal: String },
+    PlanUpdated { text: String },
+    AuditVerdict { verdict: String },
+    ExecutionStarted,
+    ExecutionOutput { text: String },
+    ValidationCompleted { result: String },
+    ExecutionCompleted { receipt_id: String },
+    ExecutionRejected,
+}
+
+#[derive(Debug)]
+struct ScheduledLbeEvent {
+    due_at: Instant,
+    event: LbeEvent,
+}
+
+trait LbeWrapper {
+    fn snapshot(&self) -> LbeSnapshot;
+    fn submit(&mut self, request: UserRequest, now: Instant) -> Result<(), LbeError>;
+    fn approve(&mut self, approval_id: &str, now: Instant) -> Result<(), LbeError>;
+    fn reject(&mut self, approval_id: &str) -> Result<(), LbeError>;
+    fn set_mode(&mut self, mode: AgentMode) -> Result<(), LbeError>;
+    fn poll_event(&mut self, now: Instant) -> Result<Option<LbeEvent>, LbeError>;
+    fn abort(&mut self) -> Result<(), LbeError>;
+    fn next_wake(&self, now: Instant) -> Option<Duration>;
+}
+
+#[derive(Debug, Default)]
+struct MockLbeWrapper {
+    snapshot: LbeSnapshot,
+    scheduled: VecDeque<ScheduledLbeEvent>,
+}
+
+impl MockLbeWrapper {
+    fn emit(&mut self, event: LbeEvent) {
+        self.scheduled.push_back(ScheduledLbeEvent {
+            due_at: Instant::now(),
+            event,
+        });
+    }
+}
+
+impl LbeWrapper for MockLbeWrapper {
+    fn snapshot(&self) -> LbeSnapshot {
+        self.snapshot.clone()
+    }
+
+    fn submit(&mut self, request: UserRequest, _now: Instant) -> Result<(), LbeError> {
+        match request.mode {
+            AgentMode::Regular => self.emit(LbeEvent::ProposalCreated {
+                proposal: format!("Proposed: {}", request.intent),
+            }),
+            AgentMode::Plan => self.emit(LbeEvent::PlanUpdated {
+                text: format!(
+                    "Mock plan: investigate {}; no execution requested.",
+                    request.intent
+                ),
+            }),
+            AgentMode::Audit => self.emit(LbeEvent::AuditVerdict {
+                verdict: "INSUFFICIENT_EVIDENCE · mock runtime is not connected to LBE guards."
+                    .to_owned(),
+            }),
+        }
+        Ok(())
+    }
+
+    fn approve(&mut self, _approval_id: &str, now: Instant) -> Result<(), LbeError> {
+        self.scheduled.clear();
+        self.emit(LbeEvent::ExecutionStarted);
+        self.scheduled.extend([
+            ScheduledLbeEvent {
+                due_at: now + Duration::from_millis(250),
+                event: LbeEvent::ExecutionOutput {
+                    text: "Inspecting active workspace...".to_owned(),
+                },
+            },
+            ScheduledLbeEvent {
+                due_at: now + Duration::from_millis(650),
+                event: LbeEvent::ValidationCompleted {
+                    result: "Focused validation complete.".to_owned(),
+                },
+            },
+            ScheduledLbeEvent {
+                due_at: now + Duration::from_millis(950),
+                event: LbeEvent::ExecutionCompleted {
+                    receipt_id: "rcpt_demo_7f31".to_owned(),
+                },
+            },
+        ]);
+        Ok(())
+    }
+
+    fn reject(&mut self, _approval_id: &str) -> Result<(), LbeError> {
+        self.scheduled.clear();
+        self.emit(LbeEvent::ExecutionRejected);
+        Ok(())
+    }
+
+    fn set_mode(&mut self, mode: AgentMode) -> Result<(), LbeError> {
+        self.snapshot.active_mode = mode;
+        self.emit(LbeEvent::SnapshotUpdated {
+            snapshot: self.snapshot(),
+        });
+        Ok(())
+    }
+
+    fn poll_event(&mut self, now: Instant) -> Result<Option<LbeEvent>, LbeError> {
+        if self
+            .scheduled
+            .front()
+            .is_some_and(|scheduled| scheduled.due_at <= now)
+        {
+            return Ok(self.scheduled.pop_front().map(|scheduled| scheduled.event));
+        }
+        Ok(None)
+    }
+
+    fn abort(&mut self) -> Result<(), LbeError> {
+        self.scheduled.clear();
+        self.emit(LbeEvent::ExecutionRejected);
+        Ok(())
+    }
+
+    fn next_wake(&self, now: Instant) -> Option<Duration> {
+        self.scheduled
+            .front()
+            .map(|scheduled| scheduled.due_at.saturating_duration_since(now))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MockPanel {
+    Account,
+    Provider,
+    Model,
+    Mcp,
+    Tools,
+    History,
+    Session,
+    Evidence,
+    Receipts,
+    Status,
+    Undo,
+}
+
 #[derive(Debug)]
 struct App {
     input: String,
@@ -239,16 +307,7 @@ struct App {
     history_index: Option<usize>,
     should_quit: bool,
     intro_started_at: Instant,
-
-    // Presentation-only projection fields.
-    // These are deliberately explicit so the later LBE runtime adapter can
-    // replace the defaults without moving provider/session authority into TUI code.
-    workspace_label: String,
-    model_id: String,
-    model_family: String,
-    effort_label: Option<String>,
-    context_used: usize,
-    context_capacity: usize,
+    snapshot: LbeSnapshot,
 }
 
 impl Default for App {
@@ -264,23 +323,22 @@ impl Default for App {
             history_index: None,
             should_quit: false,
             intro_started_at: Instant::now(),
-            workspace_label: r"C:\Users\".to_owned(),
-            model_id: "Model ID".to_owned(),
-            model_family: "Gemini".to_owned(),
-            effort_label: Some("low".to_owned()),
-            context_used: 2,
-            context_capacity: 10,
+            snapshot: LbeSnapshot::default(),
         }
     }
 }
 
 impl App {
-    fn handle_key(&mut self, key: KeyEvent, runtime: &mut impl RuntimeClient, now: Instant) {
+    fn handle_key(&mut self, key: KeyEvent, wrapper: &mut impl LbeWrapper, now: Instant) {
         if key.kind != KeyEventKind::Press {
             return;
         }
         if matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(Modifiers::CONTROL) {
-            self.should_quit = true;
+            if matches!(self.phase, Phase::Running) {
+                self.apply_wrapper_result(wrapper.abort());
+            } else {
+                self.should_quit = true;
+            }
             return;
         }
         match key.code {
@@ -288,9 +346,9 @@ impl App {
             KeyCode::Char('?') if self.input.is_empty() => {
                 self.show_shortcuts = !self.show_shortcuts
             }
-            KeyCode::Tab => self.agent_mode = self.agent_mode.next(),
-            KeyCode::Escape => self.dismiss_or_reject(runtime),
-            KeyCode::Enter => self.submit_or_approve(runtime, now),
+            KeyCode::Tab => self.set_mode(wrapper, self.agent_mode.next()),
+            KeyCode::Escape => self.dismiss_or_reject(wrapper),
+            KeyCode::Enter => self.submit_or_approve(wrapper, now),
             KeyCode::Up => self.recall_history(true),
             KeyCode::Down => self.recall_history(false),
             KeyCode::Backspace => {
@@ -315,39 +373,58 @@ impl App {
         }
     }
 
-    fn submit_or_approve(&mut self, runtime: &mut impl RuntimeClient, now: Instant) {
+    fn submit_or_approve(&mut self, wrapper: &mut impl LbeWrapper, now: Instant) {
         match &self.phase {
-            Phase::AwaitingApproval { .. } => self.apply_runtime_events(runtime.approve(now)),
+            Phase::AwaitingApproval { .. } => {
+                self.apply_wrapper_result(wrapper.approve("mock_approval", now));
+            }
             Phase::Running => {}
             _ if self.input.trim().is_empty() => {}
             _ => {
                 let task = self.input.trim().to_owned();
                 if task.starts_with('/') {
                     self.input.clear();
-                    self.handle_command(&task);
+                    self.handle_command(&task, wrapper);
                     return;
                 }
                 self.transcript.push(format!("you        {task}"));
                 self.input_history.push(task.clone());
                 self.history_index = None;
                 self.input.clear();
-                self.apply_runtime_events(runtime.submit_intent(task, self.agent_mode, now));
+                self.apply_wrapper_result(wrapper.submit(
+                    UserRequest {
+                        intent: task,
+                        mode: self.agent_mode,
+                    },
+                    now,
+                ));
             }
         }
     }
 
-    fn dismiss_or_reject(&mut self, runtime: &mut impl RuntimeClient) {
+    fn dismiss_or_reject(&mut self, wrapper: &mut impl LbeWrapper) {
         if self.panel.is_some() || self.show_shortcuts {
             self.panel = None;
             self.show_shortcuts = false;
             return;
         }
         if matches!(self.phase, Phase::AwaitingApproval { .. }) {
-            self.apply_runtime_events(runtime.reject());
+            self.apply_wrapper_result(wrapper.reject("mock_approval"));
         }
     }
 
-    fn handle_command(&mut self, command: &str) {
+    fn set_mode(&mut self, wrapper: &mut impl LbeWrapper, mode: AgentMode) {
+        self.apply_wrapper_result(wrapper.set_mode(mode));
+    }
+
+    fn apply_wrapper_result(&mut self, result: Result<(), LbeError>) {
+        if let Err(error) = result {
+            self.transcript
+                .push(format!("LBE WRAPPER ERROR  {}", error.message));
+        }
+    }
+
+    fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWrapper) {
         let command = command
             .split_whitespace()
             .next()
@@ -376,9 +453,9 @@ impl App {
                 None
             }
             "/audit" => {
-                self.agent_mode = AgentMode::Audit;
+                self.set_mode(wrapper, AgentMode::Audit);
                 self.transcript
-                    .push("SYSTEM  switched to Lbe Audit · mock-only".to_owned());
+                    .push("SYSTEM  requested Lbe Audit mode.".to_owned());
                 None
             }
             "/compact" => {
@@ -432,44 +509,46 @@ impl App {
         self.input = self.input_history[index].clone();
     }
 
-    fn apply_runtime_events(&mut self, events: Vec<RuntimeEvent>) {
-        for event in events {
-            match event {
-                RuntimeEvent::ProposalCreated { proposal } => {
-                    self.phase = Phase::AwaitingApproval { proposal };
+    fn reduce_lbe_event(&mut self, event: LbeEvent) {
+        match event {
+            LbeEvent::SnapshotUpdated { snapshot } => {
+                self.agent_mode = snapshot.active_mode;
+                self.snapshot = snapshot;
+            }
+            LbeEvent::ProposalCreated { proposal } => {
+                self.phase = Phase::AwaitingApproval { proposal };
+            }
+            LbeEvent::PlanUpdated { text } => {
+                self.transcript.push(format!("PLAN  {text}"));
+                self.phase = Phase::Welcome;
+            }
+            LbeEvent::AuditVerdict { verdict } => {
+                self.transcript.push(format!("AUDIT  {verdict}"));
+                self.phase = Phase::Welcome;
+            }
+            LbeEvent::ExecutionStarted => {
+                if let Phase::AwaitingApproval { proposal } = &self.phase {
+                    self.transcript.push(format!("lbe runtime  {proposal}"));
                 }
-                RuntimeEvent::PlanUpdated { text } => {
-                    self.transcript.push(format!("PLAN  {text}"));
-                    self.phase = Phase::Welcome;
-                }
-                RuntimeEvent::AuditVerdict { verdict } => {
-                    self.transcript.push(format!("AUDIT  {verdict}"));
-                    self.phase = Phase::Welcome;
-                }
-                RuntimeEvent::ExecutionStarted => {
-                    if let Phase::AwaitingApproval { proposal } = &self.phase {
-                        self.transcript.push(format!("lbe runtime  {proposal}"));
-                    }
-                    self.transcript
-                        .push("lbe runtime  EXECUTION STARTED".to_owned());
-                    self.phase = Phase::Running;
-                }
-                RuntimeEvent::ExecutionOutput { text } => {
-                    self.transcript.push(format!("  {text}"));
-                }
-                RuntimeEvent::ValidationCompleted { result } => {
-                    self.transcript.push(format!("VALIDATION  {result}"));
-                }
-                RuntimeEvent::ExecutionCompleted { receipt_id } => {
-                    self.transcript
-                        .push(format!("LBE RUNTIME  COMPLETED · receipt {receipt_id}"));
-                    self.phase = Phase::Completed;
-                }
-                RuntimeEvent::ExecutionRejected => {
-                    self.transcript
-                        .push("LBE RUNTIME  REJECTED · no execution occurred.".to_owned());
-                    self.phase = Phase::Rejected;
-                }
+                self.transcript
+                    .push("lbe runtime  EXECUTION STARTED".to_owned());
+                self.phase = Phase::Running;
+            }
+            LbeEvent::ExecutionOutput { text } => {
+                self.transcript.push(format!("  {text}"));
+            }
+            LbeEvent::ValidationCompleted { result } => {
+                self.transcript.push(format!("VALIDATION  {result}"));
+            }
+            LbeEvent::ExecutionCompleted { receipt_id } => {
+                self.transcript
+                    .push(format!("LBE RUNTIME  COMPLETED · receipt {receipt_id}"));
+                self.phase = Phase::Completed;
+            }
+            LbeEvent::ExecutionRejected => {
+                self.transcript
+                    .push("LBE RUNTIME  REJECTED · no execution occurred.".to_owned());
+                self.phase = Phase::Rejected;
             }
         }
     }
@@ -574,20 +653,25 @@ fn cursor_visible(visible: bool) -> Csi {
 }
 
 fn run(terminal: &mut AppTerminal, events: &EventReader) -> io::Result<()> {
-    let mut app = App::default();
-    let mut runtime = MockRuntimeClient::default();
+    let mut wrapper = MockLbeWrapper::default();
+    let mut app = App {
+        snapshot: wrapper.snapshot(),
+        ..App::default()
+    };
     while !app.should_quit {
         terminal.draw(|frame| draw(frame, &app))?;
         let now = Instant::now();
-        let runtime_events = runtime.drain_due(now);
-        if !runtime_events.is_empty() {
-            app.apply_runtime_events(runtime_events);
+        if let Some(event) = wrapper
+            .poll_event(now)
+            .map_err(|error| io::Error::other(error.message))?
+        {
+            app.reduce_lbe_event(event);
             continue;
         }
-        let timeout = match (app.next_wake(now), runtime.next_wake(now)) {
-            (Some(app_wake), Some(runtime_wake)) => Some(app_wake.min(runtime_wake)),
+        let timeout = match (app.next_wake(now), wrapper.next_wake(now)) {
+            (Some(app_wake), Some(wrapper_wake)) => Some(app_wake.min(wrapper_wake)),
             (Some(app_wake), None) => Some(app_wake),
-            (None, Some(runtime_wake)) => Some(runtime_wake),
+            (None, Some(wrapper_wake)) => Some(wrapper_wake),
             (None, None) => None,
         };
         if events.poll(timeout, |event| {
@@ -596,7 +680,7 @@ fn run(terminal: &mut AppTerminal, events: &EventReader) -> io::Result<()> {
             if let Event::Key(key) =
                 events.read(|event| matches!(event, Event::Key(_) | Event::WindowResized(_)))?
             {
-                app.handle_key(key, &mut runtime, Instant::now());
+                app.handle_key(key, &mut wrapper, Instant::now());
             }
         }
     }
@@ -786,9 +870,9 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
         top[1],
     );
 
-    let model_status = match &app.effort_label {
-        Some(effort) if !effort.is_empty() => format!("{}· {}", app.model_id, effort),
-        _ => app.model_id.clone(),
+    let model_status = match &app.snapshot.effort_label {
+        Some(effort) if !effort.is_empty() => format!("{}· {}", app.snapshot.model_id, effort),
+        _ => app.snapshot.model_id.clone(),
     };
     frame.render_widget(
         Paragraph::new(model_status)
@@ -801,16 +885,16 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[1]);
 
     frame.render_widget(
-        Paragraph::new(app.workspace_label.clone())
+        Paragraph::new(app.snapshot.workspace_label.clone())
             .style(Style::default().fg(PALETTE.muted).bg(PALETTE.bg))
             .alignment(Alignment::Left),
         bottom[0],
     );
 
-    let meter = context_meter(app.context_used, app.context_capacity, 10);
+    let meter = context_meter(app.snapshot.context_used, app.snapshot.context_capacity, 10);
     let context_line = Line::from(vec![
         Span::styled(
-            format!("{} (Context) ", app.model_family),
+            format!("{} (Context) ", app.snapshot.model_family),
             Style::default().fg(PALETTE.faint),
         ),
         Span::styled(meter, Style::default().fg(PALETTE.red)),
@@ -1105,16 +1189,33 @@ mod tests {
     #[test]
     fn proposal_approval_lifecycle_reaches_receipt() {
         let mut app = App::default();
-        let mut runtime = MockRuntimeClient::default();
+        let mut wrapper = MockLbeWrapper::default();
         let now = Instant::now();
         app.input = "inspect workspace".to_owned();
-        app.submit_or_approve(&mut runtime, now);
+        app.submit_or_approve(&mut wrapper, now);
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert!(matches!(app.phase, Phase::AwaitingApproval { .. }));
-        app.submit_or_approve(&mut runtime, now);
+        app.submit_or_approve(&mut wrapper, now);
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert_eq!(app.phase, Phase::Running);
-        app.apply_runtime_events(runtime.drain_due(now + Duration::from_millis(250)));
-        app.apply_runtime_events(runtime.drain_due(now + Duration::from_millis(650)));
-        app.apply_runtime_events(runtime.drain_due(now + Duration::from_millis(950)));
+        app.reduce_lbe_event(
+            wrapper
+                .poll_event(now + Duration::from_millis(250))
+                .unwrap()
+                .unwrap(),
+        );
+        app.reduce_lbe_event(
+            wrapper
+                .poll_event(now + Duration::from_millis(650))
+                .unwrap()
+                .unwrap(),
+        );
+        app.reduce_lbe_event(
+            wrapper
+                .poll_event(now + Duration::from_millis(950))
+                .unwrap()
+                .unwrap(),
+        );
         assert_eq!(app.phase, Phase::Completed);
         assert!(
             app.transcript
@@ -1126,10 +1227,13 @@ mod tests {
     #[test]
     fn escape_rejects_only_a_pending_proposal() {
         let mut app = App::default();
-        let mut runtime = MockRuntimeClient::default();
+        let mut wrapper = MockLbeWrapper::default();
         app.input = "inspect workspace".to_owned();
-        app.submit_or_approve(&mut runtime, Instant::now());
-        app.dismiss_or_reject(&mut runtime);
+        let now = Instant::now();
+        app.submit_or_approve(&mut wrapper, now);
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
+        app.dismiss_or_reject(&mut wrapper);
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert_eq!(app.phase, Phase::Rejected);
         assert!(app.transcript.iter().any(|line| line.contains("REJECTED")));
     }
@@ -1137,7 +1241,8 @@ mod tests {
     #[test]
     fn commands_open_mock_panels_without_claiming_runtime_integration() {
         let mut app = App::default();
-        app.handle_command("/tools");
+        let mut wrapper = MockLbeWrapper::default();
+        app.handle_command("/tools", &mut wrapper);
         assert_eq!(app.panel, Some(MockPanel::Tools));
         let text = mock_panel_text(MockPanel::Tools).to_string();
         assert!(text.contains("MOCK / NOT CONNECTED"));
@@ -1146,13 +1251,14 @@ mod tests {
     #[test]
     fn plan_and_audit_submissions_do_not_enter_execution_flow() {
         let now = Instant::now();
-        let mut runtime = MockRuntimeClient::default();
+        let mut wrapper = MockLbeWrapper::default();
         let mut plan = App {
             agent_mode: AgentMode::Plan,
             input: "inspect architecture".to_owned(),
             ..App::default()
         };
-        plan.submit_or_approve(&mut runtime, now);
+        plan.submit_or_approve(&mut wrapper, now);
+        plan.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert_eq!(plan.phase, Phase::Welcome);
         assert!(plan.transcript.iter().any(|line| line.starts_with("PLAN")));
 
@@ -1161,7 +1267,8 @@ mod tests {
             input: "inspect workspace".to_owned(),
             ..App::default()
         };
-        audit.submit_or_approve(&mut runtime, now);
+        audit.submit_or_approve(&mut wrapper, now);
+        audit.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert_eq!(audit.phase, Phase::Welcome);
         assert!(
             audit
@@ -1186,26 +1293,42 @@ mod tests {
     #[test]
     fn tab_cycles_the_visible_agent_modes() {
         let mut app = App::default();
-        let mut runtime = MockRuntimeClient::default();
+        let mut wrapper = MockLbeWrapper::default();
         let now = Instant::now();
         assert_eq!(app.agent_mode, AgentMode::Regular);
-        app.handle_key(KeyCode::Tab.into(), &mut runtime, now);
+        app.handle_key(KeyCode::Tab.into(), &mut wrapper, now);
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert_eq!(app.agent_mode, AgentMode::Plan);
-        app.handle_key(KeyCode::Tab.into(), &mut runtime, now);
+        app.handle_key(KeyCode::Tab.into(), &mut wrapper, now);
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert_eq!(app.agent_mode, AgentMode::Audit);
-        app.handle_key(KeyCode::Tab.into(), &mut runtime, now);
+        app.handle_key(KeyCode::Tab.into(), &mut wrapper, now);
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert_eq!(app.agent_mode, AgentMode::Regular);
     }
 
     #[test]
     fn question_mark_toggles_the_shortcut_reference() {
         let mut app = App::default();
-        let mut runtime = MockRuntimeClient::default();
+        let mut wrapper = MockLbeWrapper::default();
         let now = Instant::now();
-        app.handle_key(KeyCode::Char('?').into(), &mut runtime, now);
+        app.handle_key(KeyCode::Char('?').into(), &mut wrapper, now);
         assert!(app.show_shortcuts);
-        app.handle_key(KeyCode::Char('?').into(), &mut runtime, now);
+        app.handle_key(KeyCode::Char('?').into(), &mut wrapper, now);
         assert!(!app.show_shortcuts);
+    }
+
+    #[test]
+    fn wrapper_snapshot_owns_footer_projection() {
+        let mut wrapper = MockLbeWrapper::default();
+        let snapshot = wrapper.snapshot();
+        assert_eq!(snapshot.runtime_label, "MOCK / NOT CONNECTED");
+        wrapper.set_mode(AgentMode::Plan).unwrap();
+        let event = wrapper.poll_event(Instant::now()).unwrap().unwrap();
+        let mut app = App::default();
+        app.reduce_lbe_event(event);
+        assert_eq!(app.snapshot.active_mode, AgentMode::Plan);
+        assert_eq!(app.agent_mode, AgentMode::Plan);
     }
 
     #[test]
