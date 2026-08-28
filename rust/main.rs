@@ -78,7 +78,10 @@ const PALETTE: Palette = Palette {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Phase {
     Welcome,
-    AwaitingApproval { proposal: String },
+    AwaitingApproval {
+        approval_id: String,
+        proposal: String,
+    },
     Running,
     Completed,
     Rejected,
@@ -109,37 +112,464 @@ impl AgentMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RuntimeConnection {
+    Mock,
+    Disconnected,
+    Connecting,
+    Connected,
+    Reconnecting,
+    Attached,
+    Error,
+}
+
+impl RuntimeConnection {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Mock => "MOCK / NOT CONNECTED",
+            Self::Disconnected => "DISCONNECTED",
+            Self::Connecting => "CONNECTING",
+            Self::Connected => "CONNECTED",
+            Self::Reconnecting => "RECONNECTING",
+            Self::Attached => "ATTACHED",
+            Self::Error => "CONNECTION ERROR",
+        }
+    }
+
+    fn marker(self) -> &'static str {
+        match self {
+            Self::Connected | Self::Attached => "●",
+            _ => "○",
+        }
+    }
+
+    fn color(self) -> Color {
+        match self {
+            Self::Connected | Self::Attached => PALETTE.green,
+            Self::Connecting | Self::Reconnecting => PALETTE.amber,
+            Self::Error => PALETTE.red,
+            Self::Mock | Self::Disconnected => PALETTE.muted,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LbeSnapshot {
+    runtime_id: Option<String>,
+    runtime_mode: RuntimeMode,
+    attached_client_count: usize,
+    session_id: Option<String>,
+    session_state: SessionStatus,
+    turn_id: Option<String>,
+    workspace_id: Option<String>,
     workspace_label: String,
     model_id: String,
     model_family: String,
     effort_label: Option<String>,
     context_used: usize,
     context_capacity: usize,
+    compaction_available: bool,
+    compaction_state: CompactionState,
+    retry_count: u32,
+    retry_limit: u32,
+    timeout_seconds: u64,
+    elapsed_seconds: u64,
+    diagnostics: Vec<DiagnosticCheck>,
     active_mode: AgentMode,
-    runtime_label: String,
+    connection: RuntimeConnection,
+    providers: Vec<ProviderProjection>,
+    models: Vec<ModelDescriptor>,
+    selected_model: Option<ModelRef>,
 }
 
 impl Default for LbeSnapshot {
     fn default() -> Self {
         Self {
+            runtime_id: Some("runtime_mock_tui".to_owned()),
+            runtime_mode: RuntimeMode::Mock,
+            attached_client_count: 0,
+            session_id: Some("sess_mock_7f31".to_owned()),
+            session_state: SessionStatus::Idle,
+            turn_id: Some("turn_mock_0".to_owned()),
+            workspace_id: Some("workspace_mock_lbe_tui_lab".to_owned()),
             workspace_label: r"C:\Users\".to_owned(),
             model_id: "Model ID".to_owned(),
             model_family: "Gemini".to_owned(),
             effort_label: Some("low".to_owned()),
             context_used: 2,
             context_capacity: 10,
+            compaction_available: true,
+            compaction_state: CompactionState::Idle,
+            retry_count: 0,
+            retry_limit: 3,
+            timeout_seconds: 900,
+            elapsed_seconds: 0,
+            diagnostics: mock_diagnostics(),
             active_mode: AgentMode::Regular,
-            runtime_label: "MOCK / NOT CONNECTED".to_owned(),
+            connection: RuntimeConnection::Mock,
+            providers: mock_provider_catalog(),
+            models: mock_model_catalog(),
+            selected_model: Some(ModelRef {
+                provider_id: ProviderId::Gemini,
+                model_id: "gemini-2.5-flash-preview".to_owned(),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RuntimeMode {
+    Mock,
+    Local,
+    Hub,
+    Detached,
+}
+
+impl RuntimeMode {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Mock => "MOCK",
+            Self::Local => "LOCAL",
+            Self::Hub => "HUB",
+            Self::Detached => "DETACHED",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProviderId {
+    OpenAi,
+    Anthropic,
+    Gemini,
+    Bedrock,
+    Mistral,
+    OpenAiCompatible,
+    LmStudio,
+    Ollama,
+}
+
+impl ProviderId {
+    fn label(self) -> &'static str {
+        match self {
+            Self::OpenAi => "OpenAI",
+            Self::Anthropic => "Anthropic",
+            Self::Gemini => "Google Gemini",
+            Self::Bedrock => "AWS Bedrock",
+            Self::Mistral => "Mistral",
+            Self::OpenAiCompatible => "OpenAI-compatible",
+            Self::LmStudio => "LM Studio",
+            Self::Ollama => "Ollama",
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct UserRequest {
-    intent: String,
-    mode: AgentMode,
+struct CredentialRef(String);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProviderConfig {
+    provider_id: ProviderId,
+    base_url: Option<String>,
+    credential_ref: Option<CredentialRef>,
+    headers: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuthState {
+    NotConfigured,
+    Configured,
+    Validating,
+    Ready,
+    Error,
+}
+
+impl AuthState {
+    fn label(self) -> &'static str {
+        match self {
+            Self::NotConfigured => "NOT CONFIGURED",
+            Self::Configured => "CONFIGURED",
+            Self::Validating => "VALIDATING",
+            Self::Ready => "READY",
+            Self::Error => "AUTH ERROR",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProviderHealth {
+    Unknown,
+    Ready,
+    Offline,
+    Error,
+}
+
+impl ProviderHealth {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Unknown => "UNKNOWN",
+            Self::Ready => "READY",
+            Self::Offline => "OFFLINE",
+            Self::Error => "ERROR",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProviderCapabilities {
+    streaming: bool,
+    tools: bool,
+    reasoning: bool,
+    images: bool,
+    prompt_caching: bool,
+    max_context: Option<u32>,
+    max_output: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ModelRef {
+    provider_id: ProviderId,
+    model_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ModelDescriptor {
+    provider_id: ProviderId,
+    model_id: String,
+    display_name: String,
+    context_window: Option<u32>,
+    max_output_tokens: Option<u32>,
+    capabilities: ProviderCapabilities,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProviderProjection {
+    provider_id: ProviderId,
+    auth_state: AuthState,
+    health: ProviderHealth,
+    is_local: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Message {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ToolDefinition {
+    name: String,
+    description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ModelRequest {
+    model: ModelRef,
+    messages: Vec<Message>,
+    tools: Vec<ToolDefinition>,
+    stream: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ModelEvent {
+    ResponseStarted { generation_id: String },
+    TextDelta { text: String },
+    ReasoningDelta { text: String },
+    ToolCallStarted { call_id: String, tool_name: String },
+    ToolCallArgumentsDelta { call_id: String, delta: String },
+    ToolCallCompleted { call_id: String },
+    UsageUpdated { usage: Usage },
+    ResponseCompleted { reason: FinishReason },
+    ProviderError(ProviderError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Usage {
+    input_tokens: u64,
+    output_tokens: u64,
+    cached_tokens: Option<u64>,
+    cost_micros: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FinishReason {
+    Stop,
+    ToolCall,
+    Length,
+    Cancelled,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProviderError {
+    provider_id: ProviderId,
+    code: Option<String>,
+    message: String,
+}
+
+fn mock_provider_catalog() -> Vec<ProviderProjection> {
+    vec![
+        ProviderProjection {
+            provider_id: ProviderId::Gemini,
+            auth_state: AuthState::Ready,
+            health: ProviderHealth::Ready,
+            is_local: false,
+        },
+        ProviderProjection {
+            provider_id: ProviderId::OpenAi,
+            auth_state: AuthState::NotConfigured,
+            health: ProviderHealth::Unknown,
+            is_local: false,
+        },
+        ProviderProjection {
+            provider_id: ProviderId::Anthropic,
+            auth_state: AuthState::NotConfigured,
+            health: ProviderHealth::Unknown,
+            is_local: false,
+        },
+        ProviderProjection {
+            provider_id: ProviderId::LmStudio,
+            auth_state: AuthState::Ready,
+            health: ProviderHealth::Ready,
+            is_local: true,
+        },
+        ProviderProjection {
+            provider_id: ProviderId::Ollama,
+            auth_state: AuthState::NotConfigured,
+            health: ProviderHealth::Offline,
+            is_local: true,
+        },
+    ]
+}
+
+fn mock_model_catalog() -> Vec<ModelDescriptor> {
+    vec![ModelDescriptor {
+        provider_id: ProviderId::Gemini,
+        model_id: "gemini-2.5-flash-preview".to_owned(),
+        display_name: "Gemini 2.5 Flash Preview".to_owned(),
+        context_window: Some(1_000_000),
+        max_output_tokens: Some(65_536),
+        capabilities: ProviderCapabilities {
+            streaming: true,
+            tools: true,
+            reasoning: true,
+            images: true,
+            prompt_caching: true,
+            max_context: Some(1_000_000),
+            max_output: Some(65_536),
+        },
+    }]
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionStatus {
+    Idle,
+    Running,
+    WaitingForApproval,
+    WaitingForInput,
+    Completed,
+    Failed,
+    Aborted,
+}
+
+impl SessionStatus {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Idle => "IDLE",
+            Self::Running => "RUNNING",
+            Self::WaitingForApproval => "WAITING FOR APPROVAL",
+            Self::WaitingForInput => "WAITING FOR INPUT",
+            Self::Completed => "COMPLETED",
+            Self::Failed => "FAILED",
+            Self::Aborted => "ABORTED",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CompactionState {
+    Idle,
+    Suggested,
+    Running,
+    Completed,
+    Failed,
+}
+
+impl CompactionState {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Idle => "IDLE",
+            Self::Suggested => "SUGGESTED",
+            Self::Running => "RUNNING",
+            Self::Completed => "COMPLETED",
+            Self::Failed => "FAILED",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CheckpointDescriptor {
+    checkpoint_id: String,
+    created_at: String,
+    workspace_revision: String,
+    changed_files: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiagnosticStatus {
+    Pass,
+    Warning,
+    Fail,
+}
+
+impl DiagnosticStatus {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Pass => "PASS",
+            Self::Warning => "WARNING",
+            Self::Fail => "FAIL",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DiagnosticCheck {
+    id: String,
+    category: String,
+    status: DiagnosticStatus,
+    message: String,
+    remediation_available: bool,
+}
+
+fn mock_diagnostics() -> Vec<DiagnosticCheck> {
+    vec![
+        DiagnosticCheck {
+            id: "runtime.mock".to_owned(),
+            category: "runtime".to_owned(),
+            status: DiagnosticStatus::Warning,
+            message: "Mock runtime only; no canonical wall attached.".to_owned(),
+            remediation_available: false,
+        },
+        DiagnosticCheck {
+            id: "terminal.termina".to_owned(),
+            category: "terminal".to_owned(),
+            status: DiagnosticStatus::Pass,
+            message: "Termina UI contract preview is active.".to_owned(),
+            remediation_available: false,
+        },
+    ]
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum UserRequest {
+    SubmitTask { intent: String, mode: AgentMode },
+    Continue { session_id: String, message: String },
+    RefreshProviderCatalog,
+    CompactContext,
+    RunDiagnostics,
+    Approve { approval_id: String },
+    Reject { approval_id: String },
+    SetMode { mode: AgentMode },
+    Abort,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,15 +579,211 @@ struct LbeError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum LbeEvent {
-    SnapshotUpdated { snapshot: LbeSnapshot },
-    ProposalCreated { proposal: String },
-    PlanUpdated { text: String },
-    AuditVerdict { verdict: String },
-    ExecutionStarted,
-    ExecutionOutput { text: String },
-    ValidationCompleted { result: String },
-    ExecutionCompleted { receipt_id: String },
+    SessionStarted {
+        session_id: String,
+    },
+    SessionRestored {
+        session_id: String,
+    },
+    RuntimeAttachmentUpdated {
+        connection: RuntimeConnection,
+        runtime_id: Option<String>,
+        runtime_mode: RuntimeMode,
+        attached_client_count: usize,
+    },
+    SessionStatusUpdated {
+        status: SessionStatus,
+    },
+    SnapshotUpdated {
+        snapshot: LbeSnapshot,
+    },
+    ProviderCatalogDiscovered {
+        providers: Vec<ProviderProjection>,
+    },
+    ProviderHealthUpdated {
+        provider_id: ProviderId,
+        health: ProviderHealth,
+    },
+    ProviderAuthStateUpdated {
+        provider_id: ProviderId,
+        auth_state: AuthState,
+    },
+    ModelCatalogDiscovered {
+        models: Vec<ModelDescriptor>,
+    },
+    CheckpointCreated {
+        checkpoint: CheckpointDescriptor,
+    },
+    CheckpointComparisonReady {
+        checkpoint_id: String,
+        changed_files: Vec<String>,
+    },
+    CheckpointRestoreRequested {
+        checkpoint_id: String,
+    },
+    CheckpointRestoreBlocked {
+        checkpoint_id: String,
+        reason: String,
+    },
+    CheckpointRestored {
+        checkpoint_id: String,
+    },
+    CommandStarted {
+        tool_call_id: String,
+        command_id: String,
+        command_summary: String,
+    },
+    CommandStdoutDelta {
+        tool_call_id: String,
+        command_id: String,
+        text: String,
+    },
+    CommandStderrDelta {
+        tool_call_id: String,
+        command_id: String,
+        text: String,
+    },
+    CommandCompleted {
+        tool_call_id: String,
+        command_id: String,
+        exit_code: i32,
+    },
+    CommandFailed {
+        tool_call_id: String,
+        command_id: String,
+        exit_code: Option<i32>,
+        message: String,
+    },
+    CommandDetached {
+        tool_call_id: String,
+        command_id: String,
+    },
+    DetachedCommandProgress {
+        command_id: String,
+        text: String,
+    },
+    DetachedCommandCompleted {
+        command_id: String,
+        exit_code: i32,
+    },
+    DetachedLogAvailable {
+        command_id: String,
+    },
+    ContextCompactionSuggested,
+    ContextCompactionStarted,
+    ContextCompactionCompleted {
+        context_used: usize,
+    },
+    ContextCompactionFailed {
+        message: String,
+    },
+    RetryScheduled {
+        retry_count: u32,
+        retry_limit: u32,
+    },
+    RetryLimitReached {
+        retry_limit: u32,
+    },
+    TimeoutWarning {
+        elapsed_seconds: u64,
+        timeout_seconds: u64,
+    },
+    TimedOut {
+        timeout_seconds: u64,
+    },
+    DiagnosticsUpdated {
+        checks: Vec<DiagnosticCheck>,
+    },
+    AssistantTextDelta {
+        text: String,
+    },
+    ProposalCreated {
+        approval_id: String,
+        proposal: String,
+    },
+    PlanUpdated {
+        text: String,
+    },
+    AuditVerdict {
+        verdict: String,
+    },
+    ToolRequested {
+        tool_call_id: String,
+        tool_name: String,
+        input_summary: String,
+        risk: ToolRisk,
+    },
+    ToolStarted {
+        tool_call_id: String,
+    },
+    ToolOutputDelta {
+        tool_call_id: String,
+        text: String,
+    },
+    ToolCompleted {
+        tool_call_id: String,
+        evidence_ref: Option<String>,
+    },
+    ToolFailed {
+        tool_call_id: String,
+        message: String,
+    },
+    ExecutionStarted {
+        execution_id: String,
+    },
+    AgentRequestedCompletion {
+        execution_id: String,
+    },
+    ExecutionCompleted {
+        execution_id: String,
+        receipt_id: Option<String>,
+    },
+    ValidationStarted {
+        execution_id: String,
+    },
+    ValidationCompleted {
+        status: ValidationStatus,
+        result: String,
+    },
+    LbeCompletionAccepted {
+        execution_id: String,
+        receipt_id: Option<String>,
+    },
     ExecutionRejected,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolRisk {
+    ReadOnly,
+    Governed,
+    Elevated,
+}
+
+impl ToolRisk {
+    fn label(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "READ_ONLY",
+            Self::Governed => "GOVERNED",
+            Self::Elevated => "ELEVATED",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ValidationStatus {
+    Passed,
+    Failed,
+    InsufficientEvidence,
+}
+
+impl ValidationStatus {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Passed => "PASSED",
+            Self::Failed => "FAILED",
+            Self::InsufficientEvidence => "INSUFFICIENT_EVIDENCE",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -169,11 +795,7 @@ struct ScheduledLbeEvent {
 trait LbeWrapper {
     fn snapshot(&self) -> LbeSnapshot;
     fn submit(&mut self, request: UserRequest, now: Instant) -> Result<(), LbeError>;
-    fn approve(&mut self, approval_id: &str, now: Instant) -> Result<(), LbeError>;
-    fn reject(&mut self, approval_id: &str) -> Result<(), LbeError>;
-    fn set_mode(&mut self, mode: AgentMode) -> Result<(), LbeError>;
     fn poll_event(&mut self, now: Instant) -> Result<Option<LbeEvent>, LbeError>;
-    fn abort(&mut self) -> Result<(), LbeError>;
     fn next_wake(&self, now: Instant) -> Option<Duration>;
 }
 
@@ -181,6 +803,7 @@ trait LbeWrapper {
 struct MockLbeWrapper {
     snapshot: LbeSnapshot,
     scheduled: VecDeque<ScheduledLbeEvent>,
+    pending_approval_id: Option<String>,
 }
 
 impl MockLbeWrapper {
@@ -190,6 +813,12 @@ impl MockLbeWrapper {
             event,
         });
     }
+
+    fn emit_snapshot(&mut self) {
+        self.emit(LbeEvent::SnapshotUpdated {
+            snapshot: self.snapshot(),
+        });
+    }
 }
 
 impl LbeWrapper for MockLbeWrapper {
@@ -197,62 +826,237 @@ impl LbeWrapper for MockLbeWrapper {
         self.snapshot.clone()
     }
 
-    fn submit(&mut self, request: UserRequest, _now: Instant) -> Result<(), LbeError> {
-        match request.mode {
-            AgentMode::Regular => self.emit(LbeEvent::ProposalCreated {
-                proposal: format!("Proposed: {}", request.intent),
-            }),
-            AgentMode::Plan => self.emit(LbeEvent::PlanUpdated {
-                text: format!(
-                    "Mock plan: investigate {}; no execution requested.",
-                    request.intent
-                ),
-            }),
-            AgentMode::Audit => self.emit(LbeEvent::AuditVerdict {
-                verdict: "INSUFFICIENT_EVIDENCE · mock runtime is not connected to LBE guards."
-                    .to_owned(),
-            }),
+    fn submit(&mut self, request: UserRequest, now: Instant) -> Result<(), LbeError> {
+        match request {
+            UserRequest::SubmitTask { intent, mode } => match mode {
+                AgentMode::Regular => {
+                    let approval_id = "apr_mock_7f31".to_owned();
+                    self.pending_approval_id = Some(approval_id.clone());
+                    self.emit(LbeEvent::ProposalCreated {
+                        approval_id,
+                        proposal: format!("Proposed: {intent}"),
+                    });
+                    self.snapshot.session_state = SessionStatus::WaitingForApproval;
+                    self.emit(LbeEvent::SessionStatusUpdated {
+                        status: self.snapshot.session_state,
+                    });
+                }
+                AgentMode::Plan => self.emit(LbeEvent::PlanUpdated {
+                    text: format!("Mock plan: investigate {intent}; no execution requested."),
+                }),
+                AgentMode::Audit => self.emit(LbeEvent::AuditVerdict {
+                    verdict: "INSUFFICIENT_EVIDENCE · mock runtime is not connected to LBE guards."
+                        .to_owned(),
+                }),
+            },
+            UserRequest::Continue {
+                session_id,
+                message,
+            } => {
+                if self.snapshot.session_id.as_deref() != Some(session_id.as_str()) {
+                    return Err(LbeError {
+                        message: "session ID is not active in the mock runtime".to_owned(),
+                    });
+                }
+                self.snapshot.turn_id = Some("turn_mock_1".to_owned());
+                self.emit_snapshot();
+                self.emit(LbeEvent::AssistantTextDelta {
+                    text: format!("Mock follow-up received: {message}"),
+                });
+            }
+            UserRequest::RefreshProviderCatalog => {
+                let providers = self.snapshot.providers.clone();
+                self.emit(LbeEvent::ProviderCatalogDiscovered {
+                    providers: providers.clone(),
+                });
+                for provider in providers {
+                    self.emit(LbeEvent::ProviderAuthStateUpdated {
+                        provider_id: provider.provider_id,
+                        auth_state: provider.auth_state,
+                    });
+                    self.emit(LbeEvent::ProviderHealthUpdated {
+                        provider_id: provider.provider_id,
+                        health: provider.health,
+                    });
+                }
+                self.emit(LbeEvent::ModelCatalogDiscovered {
+                    models: self.snapshot.models.clone(),
+                });
+            }
+            UserRequest::CompactContext => {
+                if !self.snapshot.compaction_available {
+                    self.emit(LbeEvent::ContextCompactionFailed {
+                        message: "Context compaction is unavailable in the mock runtime."
+                            .to_owned(),
+                    });
+                } else {
+                    self.snapshot.compaction_state = CompactionState::Suggested;
+                    self.emit(LbeEvent::ContextCompactionSuggested);
+                    self.snapshot.compaction_state = CompactionState::Running;
+                    self.emit(LbeEvent::ContextCompactionStarted);
+                    self.snapshot.context_used = 1;
+                    self.snapshot.compaction_state = CompactionState::Completed;
+                    self.emit(LbeEvent::ContextCompactionCompleted { context_used: 1 });
+                    self.emit_snapshot();
+                }
+            }
+            UserRequest::RunDiagnostics => {
+                self.emit(LbeEvent::DiagnosticsUpdated {
+                    checks: self.snapshot.diagnostics.clone(),
+                });
+            }
+            UserRequest::Approve { approval_id } => {
+                if self.pending_approval_id.as_deref() != Some(approval_id.as_str()) {
+                    return Err(LbeError {
+                        message: "approval ID is not pending in the mock runtime".to_owned(),
+                    });
+                }
+                self.pending_approval_id = None;
+                self.scheduled.clear();
+                let execution_id = "exec_mock_7f31".to_owned();
+                self.snapshot.session_state = SessionStatus::Running;
+                self.emit(LbeEvent::ExecutionStarted {
+                    execution_id: execution_id.clone(),
+                });
+                self.emit(LbeEvent::SessionStatusUpdated {
+                    status: self.snapshot.session_state,
+                });
+                self.scheduled.extend([
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(250),
+                        event: LbeEvent::CheckpointCreated {
+                            checkpoint: CheckpointDescriptor {
+                                checkpoint_id: "chk_mock_before_exec".to_owned(),
+                                created_at: "mock-time".to_owned(),
+                                workspace_revision: "mock-rev-7f31".to_owned(),
+                                changed_files: vec!["rust/main.rs".to_owned()],
+                            },
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(300),
+                        event: LbeEvent::ToolRequested {
+                            tool_call_id: "tool_mock_workspace".to_owned(),
+                            tool_name: "workspace.inspect".to_owned(),
+                            input_summary: "active workspace".to_owned(),
+                            risk: ToolRisk::ReadOnly,
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(350),
+                        event: LbeEvent::ToolStarted {
+                            tool_call_id: "tool_mock_workspace".to_owned(),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(400),
+                        event: LbeEvent::CommandStarted {
+                            tool_call_id: "tool_mock_workspace".to_owned(),
+                            command_id: "cmd_mock_check".to_owned(),
+                            command_summary: "cargo check (mock only)".to_owned(),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(450),
+                        event: LbeEvent::CommandStdoutDelta {
+                            tool_call_id: "tool_mock_workspace".to_owned(),
+                            command_id: "cmd_mock_check".to_owned(),
+                            text: "Checking mock workspace...".to_owned(),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(500),
+                        event: LbeEvent::CommandStderrDelta {
+                            tool_call_id: "tool_mock_workspace".to_owned(),
+                            command_id: "cmd_mock_check".to_owned(),
+                            text: "mock stderr is display-only".to_owned(),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(550),
+                        event: LbeEvent::CommandCompleted {
+                            tool_call_id: "tool_mock_workspace".to_owned(),
+                            command_id: "cmd_mock_check".to_owned(),
+                            exit_code: 0,
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(600),
+                        event: LbeEvent::ToolOutputDelta {
+                            tool_call_id: "tool_mock_workspace".to_owned(),
+                            text: "Inspecting active workspace...".to_owned(),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(650),
+                        event: LbeEvent::ToolCompleted {
+                            tool_call_id: "tool_mock_workspace".to_owned(),
+                            evidence_ref: Some("evidence_mock_workspace".to_owned()),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(700),
+                        event: LbeEvent::AgentRequestedCompletion {
+                            execution_id: execution_id.clone(),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(750),
+                        event: LbeEvent::ExecutionCompleted {
+                            execution_id: execution_id.clone(),
+                            receipt_id: Some("rcpt_demo_7f31".to_owned()),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(800),
+                        event: LbeEvent::ValidationStarted {
+                            execution_id: execution_id.clone(),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(900),
+                        event: LbeEvent::ValidationCompleted {
+                            status: ValidationStatus::Passed,
+                            result: "Focused validation complete.".to_owned(),
+                        },
+                    },
+                    ScheduledLbeEvent {
+                        due_at: now + Duration::from_millis(950),
+                        event: LbeEvent::LbeCompletionAccepted {
+                            execution_id,
+                            receipt_id: Some("rcpt_demo_7f31".to_owned()),
+                        },
+                    },
+                ]);
+            }
+            UserRequest::Reject { approval_id } => {
+                if self.pending_approval_id.as_deref() != Some(approval_id.as_str()) {
+                    return Err(LbeError {
+                        message: "approval ID is not pending in the mock runtime".to_owned(),
+                    });
+                }
+                self.pending_approval_id = None;
+                self.scheduled.clear();
+                self.snapshot.session_state = SessionStatus::WaitingForInput;
+                self.emit(LbeEvent::ExecutionRejected);
+                self.emit(LbeEvent::SessionStatusUpdated {
+                    status: self.snapshot.session_state,
+                });
+            }
+            UserRequest::SetMode { mode } => {
+                self.snapshot.active_mode = mode;
+                self.emit_snapshot();
+            }
+            UserRequest::Abort => {
+                self.pending_approval_id = None;
+                self.scheduled.clear();
+                self.snapshot.session_state = SessionStatus::Aborted;
+                self.emit(LbeEvent::ExecutionRejected);
+                self.emit(LbeEvent::SessionStatusUpdated {
+                    status: self.snapshot.session_state,
+                });
+            }
         }
-        Ok(())
-    }
-
-    fn approve(&mut self, _approval_id: &str, now: Instant) -> Result<(), LbeError> {
-        self.scheduled.clear();
-        self.emit(LbeEvent::ExecutionStarted);
-        self.scheduled.extend([
-            ScheduledLbeEvent {
-                due_at: now + Duration::from_millis(250),
-                event: LbeEvent::ExecutionOutput {
-                    text: "Inspecting active workspace...".to_owned(),
-                },
-            },
-            ScheduledLbeEvent {
-                due_at: now + Duration::from_millis(650),
-                event: LbeEvent::ValidationCompleted {
-                    result: "Focused validation complete.".to_owned(),
-                },
-            },
-            ScheduledLbeEvent {
-                due_at: now + Duration::from_millis(950),
-                event: LbeEvent::ExecutionCompleted {
-                    receipt_id: "rcpt_demo_7f31".to_owned(),
-                },
-            },
-        ]);
-        Ok(())
-    }
-
-    fn reject(&mut self, _approval_id: &str) -> Result<(), LbeError> {
-        self.scheduled.clear();
-        self.emit(LbeEvent::ExecutionRejected);
-        Ok(())
-    }
-
-    fn set_mode(&mut self, mode: AgentMode) -> Result<(), LbeError> {
-        self.snapshot.active_mode = mode;
-        self.emit(LbeEvent::SnapshotUpdated {
-            snapshot: self.snapshot(),
-        });
         Ok(())
     }
 
@@ -265,12 +1069,6 @@ impl LbeWrapper for MockLbeWrapper {
             return Ok(self.scheduled.pop_front().map(|scheduled| scheduled.event));
         }
         Ok(None)
-    }
-
-    fn abort(&mut self) -> Result<(), LbeError> {
-        self.scheduled.clear();
-        self.emit(LbeEvent::ExecutionRejected);
-        Ok(())
     }
 
     fn next_wake(&self, now: Instant) -> Option<Duration> {
@@ -293,6 +1091,7 @@ enum MockPanel {
     Receipts,
     Status,
     Undo,
+    Doctor,
 }
 
 #[derive(Debug)]
@@ -335,7 +1134,7 @@ impl App {
         }
         if matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(Modifiers::CONTROL) {
             if matches!(self.phase, Phase::Running) {
-                self.apply_wrapper_result(wrapper.abort());
+                self.apply_wrapper_result(wrapper.submit(UserRequest::Abort, Instant::now()));
             } else {
                 self.should_quit = true;
             }
@@ -375,8 +1174,13 @@ impl App {
 
     fn submit_or_approve(&mut self, wrapper: &mut impl LbeWrapper, now: Instant) {
         match &self.phase {
-            Phase::AwaitingApproval { .. } => {
-                self.apply_wrapper_result(wrapper.approve("mock_approval", now));
+            Phase::AwaitingApproval { approval_id, .. } => {
+                self.apply_wrapper_result(wrapper.submit(
+                    UserRequest::Approve {
+                        approval_id: approval_id.clone(),
+                    },
+                    now,
+                ));
             }
             Phase::Running => {}
             _ if self.input.trim().is_empty() => {}
@@ -392,7 +1196,7 @@ impl App {
                 self.history_index = None;
                 self.input.clear();
                 self.apply_wrapper_result(wrapper.submit(
-                    UserRequest {
+                    UserRequest::SubmitTask {
                         intent: task,
                         mode: self.agent_mode,
                     },
@@ -408,13 +1212,18 @@ impl App {
             self.show_shortcuts = false;
             return;
         }
-        if matches!(self.phase, Phase::AwaitingApproval { .. }) {
-            self.apply_wrapper_result(wrapper.reject("mock_approval"));
+        if let Phase::AwaitingApproval { approval_id, .. } = &self.phase {
+            self.apply_wrapper_result(wrapper.submit(
+                UserRequest::Reject {
+                    approval_id: approval_id.clone(),
+                },
+                Instant::now(),
+            ));
         }
     }
 
     fn set_mode(&mut self, wrapper: &mut impl LbeWrapper, mode: AgentMode) {
-        self.apply_wrapper_result(wrapper.set_mode(mode));
+        self.apply_wrapper_result(wrapper.submit(UserRequest::SetMode { mode }, Instant::now()));
     }
 
     fn apply_wrapper_result(&mut self, result: Result<(), LbeError>) {
@@ -437,8 +1246,18 @@ impl App {
                 None
             }
             "/account" => Some(MockPanel::Account),
-            "/provider" => Some(MockPanel::Provider),
-            "/model" => Some(MockPanel::Model),
+            "/provider" => {
+                self.apply_wrapper_result(
+                    wrapper.submit(UserRequest::RefreshProviderCatalog, Instant::now()),
+                );
+                Some(MockPanel::Provider)
+            }
+            "/model" => {
+                self.apply_wrapper_result(
+                    wrapper.submit(UserRequest::RefreshProviderCatalog, Instant::now()),
+                );
+                Some(MockPanel::Model)
+            }
             "/mcp" => Some(MockPanel::Mcp),
             "/tools" => Some(MockPanel::Tools),
             "/history" => Some(MockPanel::History),
@@ -446,6 +1265,12 @@ impl App {
             "/evidence" => Some(MockPanel::Evidence),
             "/receipts" => Some(MockPanel::Receipts),
             "/status" => Some(MockPanel::Status),
+            "/doctor" => {
+                self.apply_wrapper_result(
+                    wrapper.submit(UserRequest::RunDiagnostics, Instant::now()),
+                );
+                Some(MockPanel::Doctor)
+            }
             "/undo" => Some(MockPanel::Undo),
             "/mode" => {
                 self.transcript
@@ -459,9 +1284,8 @@ impl App {
                 None
             }
             "/compact" => {
-                self.transcript.push(
-                    "SYSTEM  compact requested; unavailable until runtime/session integration."
-                        .to_owned(),
+                self.apply_wrapper_result(
+                    wrapper.submit(UserRequest::CompactContext, Instant::now()),
                 );
                 None
             }
@@ -511,12 +1335,217 @@ impl App {
 
     fn reduce_lbe_event(&mut self, event: LbeEvent) {
         match event {
+            LbeEvent::SessionStarted { session_id } => {
+                self.transcript
+                    .push(format!("SESSION  started · {session_id}"));
+            }
+            LbeEvent::SessionRestored { session_id } => {
+                self.transcript
+                    .push(format!("SESSION  restored · {session_id}"));
+            }
+            LbeEvent::RuntimeAttachmentUpdated {
+                connection,
+                runtime_id,
+                runtime_mode,
+                attached_client_count,
+            } => {
+                self.snapshot.connection = connection;
+                self.snapshot.runtime_id = runtime_id;
+                self.snapshot.runtime_mode = runtime_mode;
+                self.snapshot.attached_client_count = attached_client_count;
+            }
+            LbeEvent::SessionStatusUpdated { status } => {
+                self.snapshot.session_state = status;
+            }
             LbeEvent::SnapshotUpdated { snapshot } => {
                 self.agent_mode = snapshot.active_mode;
                 self.snapshot = snapshot;
             }
-            LbeEvent::ProposalCreated { proposal } => {
-                self.phase = Phase::AwaitingApproval { proposal };
+            LbeEvent::ProviderCatalogDiscovered { providers } => {
+                self.snapshot.providers = providers;
+            }
+            LbeEvent::ProviderHealthUpdated {
+                provider_id,
+                health,
+            } => {
+                if let Some(provider) = self
+                    .snapshot
+                    .providers
+                    .iter_mut()
+                    .find(|provider| provider.provider_id == provider_id)
+                {
+                    provider.health = health;
+                }
+            }
+            LbeEvent::ProviderAuthStateUpdated {
+                provider_id,
+                auth_state,
+            } => {
+                if let Some(provider) = self
+                    .snapshot
+                    .providers
+                    .iter_mut()
+                    .find(|provider| provider.provider_id == provider_id)
+                {
+                    provider.auth_state = auth_state;
+                }
+            }
+            LbeEvent::ModelCatalogDiscovered { models } => {
+                self.snapshot.models = models;
+            }
+            LbeEvent::CheckpointCreated { checkpoint } => {
+                self.transcript.push(format!(
+                    "CHECKPOINT  created · {} · {} file(s)",
+                    checkpoint.checkpoint_id,
+                    checkpoint.changed_files.len()
+                ));
+            }
+            LbeEvent::CheckpointComparisonReady {
+                checkpoint_id,
+                changed_files,
+            } => {
+                self.transcript.push(format!(
+                    "CHECKPOINT  comparison ready · {checkpoint_id} · {} file(s)",
+                    changed_files.len()
+                ));
+            }
+            LbeEvent::CheckpointRestoreRequested { checkpoint_id } => {
+                self.transcript
+                    .push(format!("CHECKPOINT  restore requested · {checkpoint_id}"));
+            }
+            LbeEvent::CheckpointRestoreBlocked {
+                checkpoint_id,
+                reason,
+            } => {
+                self.transcript.push(format!(
+                    "CHECKPOINT  restore blocked · {checkpoint_id} · {reason}"
+                ));
+            }
+            LbeEvent::CheckpointRestored { checkpoint_id } => {
+                self.transcript
+                    .push(format!("CHECKPOINT  restored · {checkpoint_id}"));
+            }
+            LbeEvent::CommandStarted {
+                tool_call_id,
+                command_id,
+                command_summary,
+            } => {
+                self.transcript.push(format!(
+                    "COMMAND  started · {command_id} · {tool_call_id} · {command_summary}"
+                ));
+            }
+            LbeEvent::CommandStdoutDelta {
+                command_id, text, ..
+            } => self
+                .transcript
+                .push(format!("  STDOUT {command_id} · {text}")),
+            LbeEvent::CommandStderrDelta {
+                command_id, text, ..
+            } => self
+                .transcript
+                .push(format!("  STDERR {command_id} · {text}")),
+            LbeEvent::CommandCompleted {
+                command_id,
+                exit_code,
+                ..
+            } => self.transcript.push(format!(
+                "COMMAND  completed · {command_id} · exit {exit_code}"
+            )),
+            LbeEvent::CommandFailed {
+                command_id,
+                exit_code,
+                message,
+                ..
+            } => self.transcript.push(format!(
+                "COMMAND  failed · {command_id} · exit {} · {message}",
+                exit_code.map_or_else(|| "unknown".to_owned(), |code| code.to_string())
+            )),
+            LbeEvent::CommandDetached {
+                command_id,
+                tool_call_id,
+            } => self
+                .transcript
+                .push(format!("COMMAND  detached · {command_id} · {tool_call_id}")),
+            LbeEvent::DetachedCommandProgress { command_id, text } => self
+                .transcript
+                .push(format!("  DETACHED {command_id} · {text}")),
+            LbeEvent::DetachedCommandCompleted {
+                command_id,
+                exit_code,
+            } => self.transcript.push(format!(
+                "DETACHED COMMAND  completed · {command_id} · exit {exit_code}"
+            )),
+            LbeEvent::DetachedLogAvailable { command_id } => self
+                .transcript
+                .push(format!("DETACHED COMMAND  log available · {command_id}")),
+            LbeEvent::ContextCompactionSuggested => {
+                self.snapshot.compaction_state = CompactionState::Suggested;
+                self.transcript
+                    .push("CONTEXT  compaction suggested (mock only)".to_owned());
+            }
+            LbeEvent::ContextCompactionStarted => {
+                self.snapshot.compaction_state = CompactionState::Running;
+                self.transcript
+                    .push("CONTEXT  compaction started (mock only)".to_owned());
+            }
+            LbeEvent::ContextCompactionCompleted { context_used } => {
+                self.snapshot.context_used = context_used;
+                self.snapshot.compaction_state = CompactionState::Completed;
+                self.transcript.push(format!(
+                    "CONTEXT  compaction completed · {context_used}/{}",
+                    self.snapshot.context_capacity
+                ));
+            }
+            LbeEvent::ContextCompactionFailed { message } => {
+                self.snapshot.compaction_state = CompactionState::Failed;
+                self.transcript
+                    .push(format!("CONTEXT  compaction failed · {message}"));
+            }
+            LbeEvent::RetryScheduled {
+                retry_count,
+                retry_limit,
+            } => {
+                self.snapshot.retry_count = retry_count;
+                self.snapshot.retry_limit = retry_limit;
+                self.transcript
+                    .push(format!("RETRY  scheduled · {retry_count}/{retry_limit}"));
+            }
+            LbeEvent::RetryLimitReached { retry_limit } => {
+                self.snapshot.retry_count = retry_limit;
+                self.transcript
+                    .push(format!("RETRY  limit reached · {retry_limit}"));
+            }
+            LbeEvent::TimeoutWarning {
+                elapsed_seconds,
+                timeout_seconds,
+            } => {
+                self.snapshot.elapsed_seconds = elapsed_seconds;
+                self.snapshot.timeout_seconds = timeout_seconds;
+                self.transcript.push(format!(
+                    "TIMEOUT  warning · {elapsed_seconds}s/{timeout_seconds}s"
+                ));
+            }
+            LbeEvent::TimedOut { timeout_seconds } => {
+                self.snapshot.elapsed_seconds = timeout_seconds;
+                self.snapshot.timeout_seconds = timeout_seconds;
+                self.snapshot.session_state = SessionStatus::Failed;
+                self.transcript
+                    .push(format!("TIMEOUT  reached · {timeout_seconds}s"));
+            }
+            LbeEvent::DiagnosticsUpdated { checks } => {
+                self.snapshot.diagnostics = checks;
+            }
+            LbeEvent::AssistantTextDelta { text } => {
+                self.transcript.push(format!("lbe agent  {text}"));
+            }
+            LbeEvent::ProposalCreated {
+                approval_id,
+                proposal,
+            } => {
+                self.phase = Phase::AwaitingApproval {
+                    approval_id,
+                    proposal,
+                };
             }
             LbeEvent::PlanUpdated { text } => {
                 self.transcript.push(format!("PLAN  {text}"));
@@ -526,23 +1555,77 @@ impl App {
                 self.transcript.push(format!("AUDIT  {verdict}"));
                 self.phase = Phase::Welcome;
             }
-            LbeEvent::ExecutionStarted => {
-                if let Phase::AwaitingApproval { proposal } = &self.phase {
+            LbeEvent::ToolRequested {
+                tool_call_id,
+                tool_name,
+                input_summary,
+                risk,
+            } => {
+                self.transcript.push(format!(
+                    "TOOL  REQUESTED · {tool_name} · {} · {input_summary} · {tool_call_id}",
+                    risk.label()
+                ));
+            }
+            LbeEvent::ToolStarted { tool_call_id } => {
+                self.transcript
+                    .push(format!("TOOL  STARTED · {tool_call_id}"));
+            }
+            LbeEvent::ToolOutputDelta { tool_call_id, text } => {
+                self.transcript
+                    .push(format!("  TOOL {tool_call_id} · {text}"));
+            }
+            LbeEvent::ToolCompleted {
+                tool_call_id,
+                evidence_ref,
+            } => {
+                let evidence = evidence_ref.as_deref().unwrap_or("no evidence ref");
+                self.transcript
+                    .push(format!("TOOL  COMPLETED · {tool_call_id} · {evidence}"));
+            }
+            LbeEvent::ToolFailed {
+                tool_call_id,
+                message,
+            } => {
+                self.transcript
+                    .push(format!("TOOL  FAILED · {tool_call_id} · {message}"));
+            }
+            LbeEvent::ExecutionStarted { execution_id } => {
+                if let Phase::AwaitingApproval { proposal, .. } = &self.phase {
                     self.transcript.push(format!("lbe runtime  {proposal}"));
                 }
                 self.transcript
-                    .push("lbe runtime  EXECUTION STARTED".to_owned());
+                    .push(format!("lbe runtime  EXECUTION STARTED · {execution_id}"));
                 self.phase = Phase::Running;
             }
-            LbeEvent::ExecutionOutput { text } => {
-                self.transcript.push(format!("  {text}"));
-            }
-            LbeEvent::ValidationCompleted { result } => {
-                self.transcript.push(format!("VALIDATION  {result}"));
-            }
-            LbeEvent::ExecutionCompleted { receipt_id } => {
+            LbeEvent::AgentRequestedCompletion { execution_id } => {
                 self.transcript
-                    .push(format!("LBE RUNTIME  COMPLETED · receipt {receipt_id}"));
+                    .push(format!("AGENT  requested completion · {execution_id}"));
+            }
+            LbeEvent::ExecutionCompleted {
+                execution_id,
+                receipt_id,
+            } => {
+                let receipt = receipt_id.as_deref().unwrap_or("no receipt");
+                self.transcript.push(format!(
+                    "EXECUTION  completed · {execution_id} · receipt {receipt}"
+                ));
+            }
+            LbeEvent::ValidationStarted { execution_id } => {
+                self.transcript
+                    .push(format!("VALIDATION  started · {execution_id}"));
+            }
+            LbeEvent::ValidationCompleted { status, result } => {
+                self.transcript
+                    .push(format!("VALIDATION  {} · {result}", status.label()));
+            }
+            LbeEvent::LbeCompletionAccepted {
+                execution_id,
+                receipt_id,
+            } => {
+                let receipt = receipt_id.as_deref().unwrap_or("no receipt");
+                self.transcript.push(format!(
+                    "LBE RUNTIME  COMPLETION ACCEPTED · {execution_id} · receipt {receipt}"
+                ));
                 self.phase = Phase::Completed;
             }
             LbeEvent::ExecutionRejected => {
@@ -721,7 +1804,7 @@ fn draw(frame: &mut Frame, app: &App) {
     ])
     .split(area);
     draw_chrome(frame, sections[0]);
-    draw_header(frame, sections[1]);
+    draw_header(frame, sections[1], app);
     draw_body(frame, sections[2], app);
     draw_composer(frame, sections[3], app);
     draw_footer(frame, sections[4], app);
@@ -742,7 +1825,8 @@ fn draw_chrome(frame: &mut Frame, area: Rect) {
     );
 }
 
-fn draw_header(frame: &mut Frame, area: Rect) {
+fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
+    let connection = app.snapshot.connection;
     let line = Line::from(vec![
         Span::styled(
             "LETTER",
@@ -763,8 +1847,12 @@ fn draw_header(frame: &mut Frame, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            "                              ● runtime connected",
-            Style::default().fg(PALETTE.green),
+            format!(
+                "                 {} {} · UI CONTRACT PREVIEW",
+                connection.marker(),
+                connection.label()
+            ),
+            Style::default().fg(connection.color()),
         ),
     ]);
     frame.render_widget(
@@ -775,7 +1863,7 @@ fn draw_header(frame: &mut Frame, area: Rect) {
 
 fn draw_body(frame: &mut Frame, area: Rect, app: &App) {
     let content = if let Some(panel) = app.panel {
-        mock_panel_text(panel)
+        mock_panel_text(panel, &app.snapshot)
     } else if app.show_shortcuts {
         shortcut_text()
     } else if app.transcript.is_empty() {
@@ -807,7 +1895,7 @@ fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
     );
 
     let composer_text = match &app.phase {
-        Phase::AwaitingApproval { proposal } => {
+        Phase::AwaitingApproval { proposal, .. } => {
             format!("> {proposal}   [Enter] approve   [Esc] reject")
         }
         Phase::Running => "> Execution in progress…".to_owned(),
@@ -961,86 +2049,158 @@ fn mode_placeholder(mode: AgentMode) -> &'static str {
     }
 }
 
-fn mock_panel_text(panel: MockPanel) -> Text<'static> {
-    let (title, rows): (&str, &[&str]) = match panel {
+fn mock_panel_text(panel: MockPanel, snapshot: &LbeSnapshot) -> Text<'static> {
+    let (title, rows): (&str, Vec<String>) = match panel {
         MockPanel::Account => (
             "Account",
-            &[
-                "MOCK / NOT CONNECTED",
-                "Canonical account/auth state is runtime-owned.",
+            vec![
+                "MOCK / NOT CONNECTED".to_owned(),
+                "Canonical account/auth state is runtime-owned.".to_owned(),
             ],
         ),
-        MockPanel::Provider => (
-            "Provider",
-            &[
-                "MOCK / NOT CONNECTED",
-                "No canonical provider registry is connected.",
-            ],
-        ),
-        MockPanel::Model => (
-            "Choose model",
-            &[
-                "MOCK / NOT CONNECTED",
-                "Model ID · low",
-                "Gemini context projection is presentation-only.",
-            ],
-        ),
+        MockPanel::Provider => {
+            let mut rows = vec![
+                "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
+                "Mock provider catalog; no credentials, network, or provider calls.".to_owned(),
+                String::new(),
+            ];
+            rows.extend(snapshot.providers.iter().map(|provider| {
+                let local = if provider.is_local { " · LOCAL" } else { "" };
+                format!(
+                    "{}  {} · {}{}",
+                    provider.provider_id.label(),
+                    provider.auth_state.label(),
+                    provider.health.label(),
+                    local
+                )
+            }));
+            ("Providers", rows)
+        }
+        MockPanel::Model => {
+            let mut rows = vec![
+                "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
+                "Mock provider-discovered catalog; capability values are not live.".to_owned(),
+                String::new(),
+            ];
+            rows.extend(snapshot.models.iter().map(|model| {
+                format!(
+                    "{} · {} · context {} · output {}",
+                    model.provider_id.label(),
+                    model.display_name,
+                    model
+                        .context_window
+                        .map_or_else(|| "unknown".to_owned(), |value| value.to_string()),
+                    model
+                        .max_output_tokens
+                        .map_or_else(|| "unknown".to_owned(), |value| value.to_string())
+                )
+            }));
+            rows.extend(snapshot.models.iter().map(|model| {
+                format!(
+                    "  streaming {} · tools {} · reasoning {} · images {} · caching {}",
+                    capability_marker(model.capabilities.streaming),
+                    capability_marker(model.capabilities.tools),
+                    capability_marker(model.capabilities.reasoning),
+                    capability_marker(model.capabilities.images),
+                    capability_marker(model.capabilities.prompt_caching),
+                )
+            }));
+            ("Models", rows)
+        }
         MockPanel::Mcp => (
             "MCP",
-            &[
-                "MOCK / NOT CONNECTED",
-                "No MCP server registry or transport is connected.",
+            vec![
+                "MOCK / NOT CONNECTED".to_owned(),
+                "No MCP server registry or transport is connected.".to_owned(),
             ],
         ),
         MockPanel::Tools => (
             "Tools",
-            &[
-                "MOCK / NOT CONNECTED",
-                "No canonical typed tool registry or policy is connected.",
+            vec![
+                "MOCK / NOT CONNECTED".to_owned(),
+                "No canonical typed tool registry or policy is connected.".to_owned(),
             ],
         ),
         MockPanel::History => (
             "History",
-            &[
-                "MOCK / NOT CONNECTED",
-                "Only in-memory composer recall is available.",
+            vec![
+                "MOCK / NOT CONNECTED".to_owned(),
+                "Only in-memory composer recall is available.".to_owned(),
             ],
         ),
         MockPanel::Session => (
             "Session",
-            &[
-                "MOCK / NOT CONNECTED",
-                "No durable session owner is connected.",
+            vec![
+                "MOCK / NOT CONNECTED".to_owned(),
+                "No durable session owner is connected.".to_owned(),
             ],
         ),
         MockPanel::Evidence => (
             "Evidence",
-            &[
-                "MOCK / NOT CONNECTED",
-                "Current evidence refs require canonical LBE runtime output.",
+            vec![
+                "MOCK / NOT CONNECTED".to_owned(),
+                "Current evidence refs require canonical LBE runtime output.".to_owned(),
             ],
         ),
         MockPanel::Receipts => (
             "Receipts",
-            &[
-                "MOCK / NOT CONNECTED",
-                "Mock receipt rcpt_demo_7f31 is not a canonical receipt.",
+            vec![
+                "MOCK / NOT CONNECTED".to_owned(),
+                "Mock receipt rcpt_demo_7f31 is not a canonical receipt.".to_owned(),
             ],
         ),
         MockPanel::Status => (
             "Status",
-            &[
-                "MOCK / NOT CONNECTED",
-                "Workspace, provider, and context values are local projections.",
+            vec![
+                "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
+                format!(
+                    "Runtime {} · {} · attached clients {}",
+                    snapshot.runtime_id.as_deref().unwrap_or("not attached"),
+                    snapshot.runtime_mode.label(),
+                    snapshot.attached_client_count
+                ),
+                format!(
+                    "Session {} · compaction {} · retry {}/{} · timeout {}/{}s",
+                    snapshot.session_state.label(),
+                    snapshot.compaction_state.label(),
+                    snapshot.retry_count,
+                    snapshot.retry_limit,
+                    snapshot.elapsed_seconds,
+                    snapshot.timeout_seconds
+                ),
+                "All values are mock projections; no runtime is attached.".to_owned(),
             ],
         ),
         MockPanel::Undo => (
             "Undo",
-            &[
-                "MOCK / NOT CONNECTED",
-                "Checkpoint restore must be requested from canonical LBE runtime.",
+            vec![
+                "MOCK / NOT CONNECTED".to_owned(),
+                "Checkpoint restore must be requested from canonical LBE runtime.".to_owned(),
             ],
         ),
+        MockPanel::Doctor => {
+            let mut rows = vec![
+                "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
+                "Mock diagnostics; no live checks are executed.".to_owned(),
+                String::new(),
+            ];
+            rows.extend(snapshot.diagnostics.iter().map(|check| {
+                let remediation = if check.remediation_available {
+                    " · remediation available"
+                } else {
+                    ""
+                };
+                format!(
+                    "{}  {} · {} · {}{}",
+                    check.status.label(),
+                    check.category,
+                    check.id,
+                    check.message,
+                    remediation
+                )
+            }));
+            ("Doctor", rows)
+        }
     };
     let mut lines = vec![
         Line::from(Span::styled(
@@ -1052,8 +2212,8 @@ fn mock_panel_text(panel: MockPanel) -> Text<'static> {
         Line::default(),
     ];
     lines.extend(
-        rows.iter()
-            .map(|row| Line::from(Span::styled(*row, Style::default().fg(PALETTE.muted)))),
+        rows.into_iter()
+            .map(|row| Line::from(Span::styled(row, Style::default().fg(PALETTE.muted)))),
     );
     lines.push(Line::default());
     lines.push(Line::from(Span::styled(
@@ -1061,6 +2221,10 @@ fn mock_panel_text(panel: MockPanel) -> Text<'static> {
         Style::default().fg(PALETTE.faint),
     )));
     Text::from(lines)
+}
+
+fn capability_marker(enabled: bool) -> &'static str {
+    if enabled { "●" } else { "○" }
 }
 
 fn welcome_text(available_height: u16, elapsed: Duration) -> Text<'static> {
@@ -1194,33 +2358,32 @@ mod tests {
         app.input = "inspect workspace".to_owned();
         app.submit_or_approve(&mut wrapper, now);
         app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
-        assert!(matches!(app.phase, Phase::AwaitingApproval { .. }));
+        assert!(matches!(
+            app.phase,
+            Phase::AwaitingApproval { ref approval_id, .. } if approval_id == "apr_mock_7f31"
+        ));
         app.submit_or_approve(&mut wrapper, now);
         app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
         assert_eq!(app.phase, Phase::Running);
-        app.reduce_lbe_event(
-            wrapper
-                .poll_event(now + Duration::from_millis(250))
-                .unwrap()
-                .unwrap(),
-        );
-        app.reduce_lbe_event(
-            wrapper
-                .poll_event(now + Duration::from_millis(650))
-                .unwrap()
-                .unwrap(),
-        );
-        app.reduce_lbe_event(
-            wrapper
-                .poll_event(now + Duration::from_millis(950))
-                .unwrap()
-                .unwrap(),
-        );
+        let finished_at = now + Duration::from_millis(950);
+        while let Some(event) = wrapper.poll_event(finished_at).unwrap() {
+            app.reduce_lbe_event(event);
+        }
         assert_eq!(app.phase, Phase::Completed);
         assert!(
             app.transcript
                 .iter()
-                .any(|line| line.contains("rcpt_demo_7f31"))
+                .any(|line| line.contains("TOOL  REQUESTED · workspace.inspect"))
+        );
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("VALIDATION  PASSED"))
+        );
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("COMPLETION ACCEPTED · exec_mock_7f31"))
         );
     }
 
@@ -1239,13 +2402,184 @@ mod tests {
     }
 
     #[test]
+    fn mock_wrapper_rejects_an_unknown_approval_id() {
+        let mut wrapper = MockLbeWrapper::default();
+        wrapper
+            .submit(
+                UserRequest::SubmitTask {
+                    intent: "inspect workspace".to_owned(),
+                    mode: AgentMode::Regular,
+                },
+                Instant::now(),
+            )
+            .unwrap();
+
+        let error = wrapper
+            .submit(
+                UserRequest::Approve {
+                    approval_id: "apr_wrong".to_owned(),
+                },
+                Instant::now(),
+            )
+            .expect_err("unknown approvals must remain runtime-owned");
+
+        assert!(error.message.contains("not pending"));
+    }
+
+    #[test]
+    fn continuation_requires_the_active_session_and_projects_assistant_text() {
+        let mut wrapper = MockLbeWrapper::default();
+        let session_id = wrapper
+            .snapshot()
+            .session_id
+            .expect("mock wrapper must project a current session ID");
+
+        wrapper
+            .submit(
+                UserRequest::Continue {
+                    session_id: session_id.clone(),
+                    message: "summarize the prior result".to_owned(),
+                },
+                Instant::now(),
+            )
+            .unwrap();
+
+        let mut app = App::default();
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
+        app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
+        assert_eq!(app.snapshot.turn_id.as_deref(), Some("turn_mock_1"));
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("Mock follow-up received"))
+        );
+
+        let error = wrapper
+            .submit(
+                UserRequest::Continue {
+                    session_id: "sess_wrong".to_owned(),
+                    message: "should fail".to_owned(),
+                },
+                Instant::now(),
+            )
+            .expect_err("continuations must remain bound to the runtime session");
+        assert!(error.message.contains("not active"));
+    }
+
+    #[test]
     fn commands_open_mock_panels_without_claiming_runtime_integration() {
         let mut app = App::default();
         let mut wrapper = MockLbeWrapper::default();
         app.handle_command("/tools", &mut wrapper);
         assert_eq!(app.panel, Some(MockPanel::Tools));
-        let text = mock_panel_text(MockPanel::Tools).to_string();
+        let text = mock_panel_text(MockPanel::Tools, &app.snapshot).to_string();
         assert!(text.contains("MOCK / NOT CONNECTED"));
+    }
+
+    #[test]
+    fn mock_provider_catalog_events_and_panels_project_safe_typed_values() {
+        let mut app = App::default();
+        let mut wrapper = MockLbeWrapper::default();
+        app.handle_command("/provider", &mut wrapper);
+        while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+            app.reduce_lbe_event(event);
+        }
+
+        let provider_text = mock_panel_text(MockPanel::Provider, &app.snapshot).to_string();
+        assert!(provider_text.contains("Google Gemini  READY · READY"));
+        assert!(provider_text.contains("LM Studio  READY · READY · LOCAL"));
+        assert!(provider_text.contains("Ollama  NOT CONFIGURED · OFFLINE · LOCAL"));
+        assert!(!provider_text.contains("credential_ref"));
+        assert!(!provider_text.contains("Authorization:"));
+
+        app.handle_command("/model", &mut wrapper);
+        while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+            app.reduce_lbe_event(event);
+        }
+        let model_text = mock_panel_text(MockPanel::Model, &app.snapshot).to_string();
+        assert!(model_text.contains("Gemini 2.5 Flash Preview"));
+        assert!(model_text.contains("streaming ● · tools ● · reasoning ● · images ●"));
+        assert_eq!(
+            app.snapshot
+                .selected_model
+                .as_ref()
+                .map(|model| model.provider_id),
+            Some(ProviderId::Gemini)
+        );
+    }
+
+    #[test]
+    fn compact_and_doctor_commands_render_mock_runtime_projections() {
+        let mut app = App::default();
+        let mut wrapper = MockLbeWrapper::default();
+
+        app.handle_command("/compact", &mut wrapper);
+        while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+            app.reduce_lbe_event(event);
+        }
+        assert_eq!(app.snapshot.context_used, 1);
+        assert_eq!(app.snapshot.compaction_state, CompactionState::Completed);
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("CONTEXT  compaction completed"))
+        );
+
+        app.handle_command("/doctor", &mut wrapper);
+        while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+            app.reduce_lbe_event(event);
+        }
+        assert_eq!(app.panel, Some(MockPanel::Doctor));
+        let doctor_text = mock_panel_text(MockPanel::Doctor, &app.snapshot).to_string();
+        assert!(doctor_text.contains("Mock diagnostics; no live checks are executed."));
+        assert!(doctor_text.contains("runtime.mock"));
+        assert!(doctor_text.contains("terminal.termina"));
+    }
+
+    #[test]
+    fn execution_projects_checkpoint_and_command_streams_without_spawning_a_process() {
+        let mut app = App::default();
+        let mut wrapper = MockLbeWrapper::default();
+        let now = Instant::now();
+        app.input = "inspect workspace".to_owned();
+        app.submit_or_approve(&mut wrapper, now);
+        while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+            app.reduce_lbe_event(event);
+        }
+        assert_eq!(
+            app.snapshot.session_state,
+            SessionStatus::WaitingForApproval
+        );
+
+        app.submit_or_approve(&mut wrapper, now);
+        while let Some(event) = wrapper
+            .poll_event(now + Duration::from_millis(950))
+            .unwrap()
+        {
+            app.reduce_lbe_event(event);
+        }
+
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("CHECKPOINT  created · chk_mock_before_exec"))
+        );
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("STDOUT cmd_mock_check"))
+        );
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("STDERR cmd_mock_check"))
+        );
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("COMMAND  completed · cmd_mock_check · exit 0"))
+        );
+        assert_eq!(app.phase, Phase::Completed);
     }
 
     #[test]
@@ -1322,8 +2656,16 @@ mod tests {
     fn wrapper_snapshot_owns_footer_projection() {
         let mut wrapper = MockLbeWrapper::default();
         let snapshot = wrapper.snapshot();
-        assert_eq!(snapshot.runtime_label, "MOCK / NOT CONNECTED");
-        wrapper.set_mode(AgentMode::Plan).unwrap();
+        assert_eq!(snapshot.connection, RuntimeConnection::Mock);
+        assert_eq!(snapshot.connection.label(), "MOCK / NOT CONNECTED");
+        wrapper
+            .submit(
+                UserRequest::SetMode {
+                    mode: AgentMode::Plan,
+                },
+                Instant::now(),
+            )
+            .unwrap();
         let event = wrapper.poll_event(Instant::now()).unwrap().unwrap();
         let mut app = App::default();
         app.reduce_lbe_event(event);
@@ -1348,6 +2690,9 @@ mod tests {
             .map(|cell| cell.symbol())
             .collect::<String>();
         assert!(rendered.contains("LETTERBLACK ENGINE"));
+        assert!(rendered.contains("○ MOCK / NOT CONNECTED"));
+        assert!(rendered.contains("UI CONTRACT PREVIEW"));
+        assert!(!rendered.contains("runtime connected"));
         assert!(rendered.contains("███████████████████████████████████████"));
         assert!(rendered.contains("? for shortcuts"));
         assert!(rendered.contains("Agent regular"));
