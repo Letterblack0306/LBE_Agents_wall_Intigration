@@ -15,4 +15,4 @@ cargo fmt --check
 cargo check
 ```
 
-The runtime remains deliberately mocked. Type a task and press Enter to create a proposal; press Enter again to approve it, or Escape to reject it. The app runs in the alternate screen and restores the terminal on normal exit, `q`, or Ctrl+C.
+The runtime remains deliberately mocked. The TUI consumes typed proposal, execution, validation, completion, and receipt events through a local `MockRuntimeClient`; this is the adapter seam for a future canonical LBE runtime client, not proof of live LBE authorization or validation. Type a task and press Enter to create a proposal; press Enter again to approve it, or Escape to reject it. The app runs in the alternate screen and restores the terminal on normal exit, `q`, or Ctrl+C.

@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     io::{self, Write as _},
     time::{Duration, Instant},
 };
@@ -77,15 +78,96 @@ const PALETTE: Palette = Palette {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Phase {
     Welcome,
-    AwaitingApproval {
-        proposal: String,
-    },
-    Running {
-        started_at: Instant,
-        outputs_shown: usize,
-    },
+    AwaitingApproval { proposal: String },
+    Running,
     Completed,
     Rejected,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RuntimeEvent {
+    ProposalCreated { proposal: String },
+    ExecutionStarted,
+    ExecutionOutput { text: String },
+    ValidationCompleted { result: String },
+    ExecutionCompleted { receipt_id: String },
+    ExecutionRejected,
+}
+
+#[derive(Debug)]
+struct ScheduledRuntimeEvent {
+    due_at: Instant,
+    event: RuntimeEvent,
+}
+
+trait RuntimeClient {
+    fn submit_intent(&mut self, intent: String, now: Instant) -> Vec<RuntimeEvent>;
+    fn approve(&mut self, now: Instant) -> Vec<RuntimeEvent>;
+    fn reject(&mut self) -> Vec<RuntimeEvent>;
+    fn drain_due(&mut self, now: Instant) -> Vec<RuntimeEvent>;
+    fn next_wake(&self, now: Instant) -> Option<Duration>;
+}
+
+#[derive(Debug, Default)]
+struct MockRuntimeClient {
+    scheduled: VecDeque<ScheduledRuntimeEvent>,
+}
+
+impl RuntimeClient for MockRuntimeClient {
+    fn submit_intent(&mut self, intent: String, _now: Instant) -> Vec<RuntimeEvent> {
+        vec![RuntimeEvent::ProposalCreated {
+            proposal: format!("Proposed: {intent}"),
+        }]
+    }
+
+    fn approve(&mut self, now: Instant) -> Vec<RuntimeEvent> {
+        self.scheduled = VecDeque::from([
+            ScheduledRuntimeEvent {
+                due_at: now + Duration::from_millis(250),
+                event: RuntimeEvent::ExecutionOutput {
+                    text: "Inspecting active workspace...".to_owned(),
+                },
+            },
+            ScheduledRuntimeEvent {
+                due_at: now + Duration::from_millis(650),
+                event: RuntimeEvent::ValidationCompleted {
+                    result: "Focused validation complete.".to_owned(),
+                },
+            },
+            ScheduledRuntimeEvent {
+                due_at: now + Duration::from_millis(950),
+                event: RuntimeEvent::ExecutionCompleted {
+                    receipt_id: "rcpt_demo_7f31".to_owned(),
+                },
+            },
+        ]);
+        vec![RuntimeEvent::ExecutionStarted]
+    }
+
+    fn reject(&mut self) -> Vec<RuntimeEvent> {
+        self.scheduled.clear();
+        vec![RuntimeEvent::ExecutionRejected]
+    }
+
+    fn drain_due(&mut self, now: Instant) -> Vec<RuntimeEvent> {
+        let mut events = Vec::new();
+        while self
+            .scheduled
+            .front()
+            .is_some_and(|scheduled| scheduled.due_at <= now)
+        {
+            if let Some(scheduled) = self.scheduled.pop_front() {
+                events.push(scheduled.event);
+            }
+        }
+        events
+    }
+
+    fn next_wake(&self, now: Instant) -> Option<Duration> {
+        self.scheduled
+            .front()
+            .map(|scheduled| scheduled.due_at.saturating_duration_since(now))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,7 +229,7 @@ impl Default for App {
 }
 
 impl App {
-    fn handle_key(&mut self, key: KeyEvent) {
+    fn handle_key(&mut self, key: KeyEvent, runtime: &mut impl RuntimeClient, now: Instant) {
         if key.kind != KeyEventKind::Press {
             return;
         }
@@ -161,8 +243,8 @@ impl App {
                 self.show_shortcuts = !self.show_shortcuts
             }
             KeyCode::Tab => self.agent_mode = self.agent_mode.next(),
-            KeyCode::Escape => self.reject(),
-            KeyCode::Enter => self.submit_or_approve(),
+            KeyCode::Escape => self.reject(runtime),
+            KeyCode::Enter => self.submit_or_approve(runtime, now),
             KeyCode::Backspace => {
                 self.input.pop();
             }
@@ -175,95 +257,69 @@ impl App {
         }
     }
 
-    fn submit_or_approve(&mut self) {
+    fn submit_or_approve(&mut self, runtime: &mut impl RuntimeClient, now: Instant) {
         match &self.phase {
-            Phase::AwaitingApproval { proposal } => {
-                self.transcript.push(format!("lbe agent  {proposal}"));
-                self.transcript
-                    .push("lbe agent  ACTIVITY · execution started".to_owned());
-                self.phase = Phase::Running {
-                    started_at: Instant::now(),
-                    outputs_shown: 0,
-                };
-            }
-            Phase::Running { .. } => {}
+            Phase::AwaitingApproval { .. } => self.apply_runtime_events(runtime.approve(now)),
+            Phase::Running => {}
             _ if self.input.trim().is_empty() => {}
             _ => {
                 let task = self.input.trim().to_owned();
                 self.transcript.push(format!("you        {task}"));
                 self.input.clear();
-                self.phase = Phase::AwaitingApproval {
-                    proposal: format!("Proposed: {task}"),
-                };
+                self.apply_runtime_events(runtime.submit_intent(task, now));
             }
         }
     }
 
-    fn reject(&mut self) {
+    fn reject(&mut self, runtime: &mut impl RuntimeClient) {
         if matches!(self.phase, Phase::AwaitingApproval { .. }) {
-            self.transcript
-                .push("lbe agent  REJECTED · no execution occurred.".to_owned());
-            self.phase = Phase::Rejected;
+            self.apply_runtime_events(runtime.reject());
         }
     }
 
-    fn advance_runtime(&mut self, now: Instant) -> bool {
-        let Phase::Running {
-            started_at,
-            outputs_shown,
-        } = &mut self.phase
-        else {
-            return false;
-        };
-        let elapsed = now.saturating_duration_since(*started_at);
-        let milestones = [
-            (
-                Duration::from_millis(250),
-                "  Inspecting active workspace...",
-            ),
-            (Duration::from_millis(650), "  Focused validation complete."),
-        ];
-        if *outputs_shown < milestones.len() && elapsed >= milestones[*outputs_shown].0 {
-            self.transcript
-                .push(milestones[*outputs_shown].1.to_owned());
-            *outputs_shown += 1;
-            return true;
+    fn apply_runtime_events(&mut self, events: Vec<RuntimeEvent>) {
+        for event in events {
+            match event {
+                RuntimeEvent::ProposalCreated { proposal } => {
+                    self.phase = Phase::AwaitingApproval { proposal };
+                }
+                RuntimeEvent::ExecutionStarted => {
+                    if let Phase::AwaitingApproval { proposal } = &self.phase {
+                        self.transcript.push(format!("lbe runtime  {proposal}"));
+                    }
+                    self.transcript
+                        .push("lbe runtime  EXECUTION STARTED".to_owned());
+                    self.phase = Phase::Running;
+                }
+                RuntimeEvent::ExecutionOutput { text } => {
+                    self.transcript.push(format!("  {text}"));
+                }
+                RuntimeEvent::ValidationCompleted { result } => {
+                    self.transcript.push(format!("VALIDATION  {result}"));
+                }
+                RuntimeEvent::ExecutionCompleted { receipt_id } => {
+                    self.transcript
+                        .push(format!("LBE RUNTIME  COMPLETED · receipt {receipt_id}"));
+                    self.phase = Phase::Completed;
+                }
+                RuntimeEvent::ExecutionRejected => {
+                    self.transcript
+                        .push("LBE RUNTIME  REJECTED · no execution occurred.".to_owned());
+                    self.phase = Phase::Rejected;
+                }
+            }
         }
-        if elapsed >= Duration::from_millis(950) {
-            self.transcript
-                .push("lbe agent  PASS · receipt rcpt_demo_7f31".to_owned());
-            self.phase = Phase::Completed;
-            return true;
-        }
-        false
     }
 
     fn next_wake(&self, now: Instant) -> Option<Duration> {
         let intro_wake = self.next_intro_wake(now);
-        let runtime_wake = self.next_runtime_wake(now);
+        let runtime_wake = None;
         match (intro_wake, runtime_wake) {
             (Some(intro), Some(runtime)) => Some(intro.min(runtime)),
             (Some(intro), None) => Some(intro),
             (None, Some(runtime)) => Some(runtime),
             (None, None) => None,
         }
-    }
-
-    fn next_runtime_wake(&self, now: Instant) -> Option<Duration> {
-        let Phase::Running {
-            started_at,
-            outputs_shown,
-        } = &self.phase
-        else {
-            return None;
-        };
-        let milestones = [
-            Duration::from_millis(250),
-            Duration::from_millis(650),
-            Duration::from_millis(950),
-        ];
-        let target = milestones[*outputs_shown.min(&(milestones.len() - 1))];
-        Some(target.saturating_sub(now.saturating_duration_since(*started_at)))
     }
 
     fn intro_elapsed(&self, now: Instant) -> Duration {
@@ -356,20 +412,28 @@ fn cursor_visible(visible: bool) -> Csi {
 
 fn run(terminal: &mut AppTerminal, events: &EventReader) -> io::Result<()> {
     let mut app = App::default();
+    let mut runtime = MockRuntimeClient::default();
     while !app.should_quit {
         terminal.draw(|frame| draw(frame, &app))?;
         let now = Instant::now();
-        if app.advance_runtime(now) {
+        let runtime_events = runtime.drain_due(now);
+        if !runtime_events.is_empty() {
+            app.apply_runtime_events(runtime_events);
             continue;
         }
-        let timeout = app.next_wake(now);
+        let timeout = match (app.next_wake(now), runtime.next_wake(now)) {
+            (Some(app_wake), Some(runtime_wake)) => Some(app_wake.min(runtime_wake)),
+            (Some(app_wake), None) => Some(app_wake),
+            (None, Some(runtime_wake)) => Some(runtime_wake),
+            (None, None) => None,
+        };
         if events.poll(timeout, |event| {
             matches!(event, Event::Key(_) | Event::WindowResized(_))
         })? {
             if let Event::Key(key) =
                 events.read(|event| matches!(event, Event::Key(_) | Event::WindowResized(_)))?
             {
-                app.handle_key(key);
+                app.handle_key(key, &mut runtime, Instant::now());
             }
         }
     }
@@ -497,12 +561,12 @@ fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
         Phase::AwaitingApproval { proposal } => {
             format!("> {proposal}   [Enter] approve   [Esc] reject")
         }
-        Phase::Running { .. } => "> Execution in progress…".to_owned(),
+        Phase::Running => "> Execution in progress…".to_owned(),
         _ if app.input.is_empty() => ">".to_owned(),
         _ => format!("> {}", app.input),
     };
 
-    let composer_style = if matches!(app.phase, Phase::Running { .. }) {
+    let composer_style = if matches!(app.phase, Phase::Running) {
         Style::default().fg(PALETTE.muted)
     } else {
         Style::default().fg(PALETTE.ink)
@@ -763,16 +827,16 @@ mod tests {
     #[test]
     fn proposal_approval_lifecycle_reaches_receipt() {
         let mut app = App::default();
+        let mut runtime = MockRuntimeClient::default();
+        let now = Instant::now();
         app.input = "inspect workspace".to_owned();
-        app.submit_or_approve();
+        app.submit_or_approve(&mut runtime, now);
         assert!(matches!(app.phase, Phase::AwaitingApproval { .. }));
-        app.submit_or_approve();
-        let Phase::Running { started_at, .. } = app.phase else {
-            panic!("app should be running after approval");
-        };
-        assert!(app.advance_runtime(started_at + Duration::from_millis(250)));
-        assert!(app.advance_runtime(started_at + Duration::from_millis(650)));
-        assert!(app.advance_runtime(started_at + Duration::from_millis(950)));
+        app.submit_or_approve(&mut runtime, now);
+        assert_eq!(app.phase, Phase::Running);
+        app.apply_runtime_events(runtime.drain_due(now + Duration::from_millis(250)));
+        app.apply_runtime_events(runtime.drain_due(now + Duration::from_millis(650)));
+        app.apply_runtime_events(runtime.drain_due(now + Duration::from_millis(950)));
         assert_eq!(app.phase, Phase::Completed);
         assert!(
             app.transcript
@@ -784,9 +848,10 @@ mod tests {
     #[test]
     fn escape_rejects_only_a_pending_proposal() {
         let mut app = App::default();
+        let mut runtime = MockRuntimeClient::default();
         app.input = "inspect workspace".to_owned();
-        app.submit_or_approve();
-        app.reject();
+        app.submit_or_approve(&mut runtime, Instant::now());
+        app.reject(&mut runtime);
         assert_eq!(app.phase, Phase::Rejected);
         assert!(app.transcript.iter().any(|line| line.contains("REJECTED")));
     }
@@ -794,21 +859,25 @@ mod tests {
     #[test]
     fn tab_cycles_the_visible_agent_modes() {
         let mut app = App::default();
+        let mut runtime = MockRuntimeClient::default();
+        let now = Instant::now();
         assert_eq!(app.agent_mode, AgentMode::Regular);
-        app.handle_key(KeyCode::Tab.into());
+        app.handle_key(KeyCode::Tab.into(), &mut runtime, now);
         assert_eq!(app.agent_mode, AgentMode::Plan);
-        app.handle_key(KeyCode::Tab.into());
+        app.handle_key(KeyCode::Tab.into(), &mut runtime, now);
         assert_eq!(app.agent_mode, AgentMode::Audit);
-        app.handle_key(KeyCode::Tab.into());
+        app.handle_key(KeyCode::Tab.into(), &mut runtime, now);
         assert_eq!(app.agent_mode, AgentMode::Regular);
     }
 
     #[test]
     fn question_mark_toggles_the_shortcut_reference() {
         let mut app = App::default();
-        app.handle_key(KeyCode::Char('?').into());
+        let mut runtime = MockRuntimeClient::default();
+        let now = Instant::now();
+        app.handle_key(KeyCode::Char('?').into(), &mut runtime, now);
         assert!(app.show_shortcuts);
-        app.handle_key(KeyCode::Char('?').into());
+        app.handle_key(KeyCode::Char('?').into(), &mut runtime, now);
         assert!(!app.show_shortcuts);
     }
 
