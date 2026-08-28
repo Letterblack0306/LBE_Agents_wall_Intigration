@@ -87,6 +87,8 @@ enum Phase {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum RuntimeEvent {
     ProposalCreated { proposal: String },
+    PlanUpdated { text: String },
+    AuditVerdict { verdict: String },
     ExecutionStarted,
     ExecutionOutput { text: String },
     ValidationCompleted { result: String },
@@ -101,7 +103,8 @@ struct ScheduledRuntimeEvent {
 }
 
 trait RuntimeClient {
-    fn submit_intent(&mut self, intent: String, now: Instant) -> Vec<RuntimeEvent>;
+    fn submit_intent(&mut self, intent: String, mode: AgentMode, now: Instant)
+    -> Vec<RuntimeEvent>;
     fn approve(&mut self, now: Instant) -> Vec<RuntimeEvent>;
     fn reject(&mut self) -> Vec<RuntimeEvent>;
     fn drain_due(&mut self, now: Instant) -> Vec<RuntimeEvent>;
@@ -114,10 +117,24 @@ struct MockRuntimeClient {
 }
 
 impl RuntimeClient for MockRuntimeClient {
-    fn submit_intent(&mut self, intent: String, _now: Instant) -> Vec<RuntimeEvent> {
-        vec![RuntimeEvent::ProposalCreated {
-            proposal: format!("Proposed: {intent}"),
-        }]
+    fn submit_intent(
+        &mut self,
+        intent: String,
+        mode: AgentMode,
+        _now: Instant,
+    ) -> Vec<RuntimeEvent> {
+        match mode {
+            AgentMode::Regular => vec![RuntimeEvent::ProposalCreated {
+                proposal: format!("Proposed: {intent}"),
+            }],
+            AgentMode::Plan => vec![RuntimeEvent::PlanUpdated {
+                text: format!("Mock plan: investigate {intent}; no execution requested."),
+            }],
+            AgentMode::Audit => vec![RuntimeEvent::AuditVerdict {
+                verdict: "INSUFFICIENT_EVIDENCE · mock runtime is not connected to LBE guards."
+                    .to_owned(),
+            }],
+        }
     }
 
     fn approve(&mut self, now: Instant) -> Vec<RuntimeEvent> {
@@ -177,12 +194,35 @@ enum AgentMode {
     Plan,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MockPanel {
+    Account,
+    Provider,
+    Model,
+    Mcp,
+    Tools,
+    History,
+    Session,
+    Evidence,
+    Receipts,
+    Status,
+    Undo,
+}
+
 impl AgentMode {
     fn next(self) -> Self {
         match self {
             Self::Audit => Self::Regular,
             Self::Regular => Self::Plan,
             Self::Plan => Self::Audit,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Audit => "Lbe Audit",
+            Self::Regular => "Agent regular",
+            Self::Plan => "Plan",
         }
     }
 }
@@ -194,6 +234,9 @@ struct App {
     phase: Phase,
     agent_mode: AgentMode,
     show_shortcuts: bool,
+    panel: Option<MockPanel>,
+    input_history: Vec<String>,
+    history_index: Option<usize>,
     should_quit: bool,
     intro_started_at: Instant,
 
@@ -216,6 +259,9 @@ impl Default for App {
             phase: Phase::Welcome,
             agent_mode: AgentMode::Regular,
             show_shortcuts: false,
+            panel: None,
+            input_history: Vec::new(),
+            history_index: None,
             should_quit: false,
             intro_started_at: Instant::now(),
             workspace_label: r"C:\Users\".to_owned(),
@@ -243,8 +289,10 @@ impl App {
                 self.show_shortcuts = !self.show_shortcuts
             }
             KeyCode::Tab => self.agent_mode = self.agent_mode.next(),
-            KeyCode::Escape => self.reject(runtime),
+            KeyCode::Escape => self.dismiss_or_reject(runtime),
             KeyCode::Enter => self.submit_or_approve(runtime, now),
+            KeyCode::Up => self.recall_history(true),
+            KeyCode::Down => self.recall_history(false),
             KeyCode::Backspace => {
                 self.input.pop();
             }
@@ -252,6 +300,16 @@ impl App {
                 if !matches!(self.phase, Phase::Running { .. }) {
                     self.input.push(character);
                 }
+            }
+            KeyCode::Char('d')
+                if key.modifiers.contains(Modifiers::CONTROL) && self.input.is_empty() =>
+            {
+                self.should_quit = true;
+            }
+            KeyCode::Char('l') if key.modifiers.contains(Modifiers::CONTROL) => {
+                self.transcript.clear();
+                self.panel = None;
+                self.show_shortcuts = false;
             }
             _ => {}
         }
@@ -264,17 +322,114 @@ impl App {
             _ if self.input.trim().is_empty() => {}
             _ => {
                 let task = self.input.trim().to_owned();
+                if task.starts_with('/') {
+                    self.input.clear();
+                    self.handle_command(&task);
+                    return;
+                }
                 self.transcript.push(format!("you        {task}"));
+                self.input_history.push(task.clone());
+                self.history_index = None;
                 self.input.clear();
-                self.apply_runtime_events(runtime.submit_intent(task, now));
+                self.apply_runtime_events(runtime.submit_intent(task, self.agent_mode, now));
             }
         }
     }
 
-    fn reject(&mut self, runtime: &mut impl RuntimeClient) {
+    fn dismiss_or_reject(&mut self, runtime: &mut impl RuntimeClient) {
+        if self.panel.is_some() || self.show_shortcuts {
+            self.panel = None;
+            self.show_shortcuts = false;
+            return;
+        }
         if matches!(self.phase, Phase::AwaitingApproval { .. }) {
             self.apply_runtime_events(runtime.reject());
         }
+    }
+
+    fn handle_command(&mut self, command: &str) {
+        let command = command
+            .split_whitespace()
+            .next()
+            .unwrap_or(command)
+            .to_ascii_lowercase();
+        self.show_shortcuts = false;
+        self.panel = match command.as_str() {
+            "/help" => {
+                self.show_shortcuts = true;
+                None
+            }
+            "/account" => Some(MockPanel::Account),
+            "/provider" => Some(MockPanel::Provider),
+            "/model" => Some(MockPanel::Model),
+            "/mcp" => Some(MockPanel::Mcp),
+            "/tools" => Some(MockPanel::Tools),
+            "/history" => Some(MockPanel::History),
+            "/session" => Some(MockPanel::Session),
+            "/evidence" => Some(MockPanel::Evidence),
+            "/receipts" => Some(MockPanel::Receipts),
+            "/status" => Some(MockPanel::Status),
+            "/undo" => Some(MockPanel::Undo),
+            "/mode" => {
+                self.transcript
+                    .push(format!("SYSTEM  active mode: {}", self.agent_mode.label()));
+                None
+            }
+            "/audit" => {
+                self.agent_mode = AgentMode::Audit;
+                self.transcript
+                    .push("SYSTEM  switched to Lbe Audit · mock-only".to_owned());
+                None
+            }
+            "/compact" => {
+                self.transcript.push(
+                    "SYSTEM  compact requested; unavailable until runtime/session integration."
+                        .to_owned(),
+                );
+                None
+            }
+            "/clear" => {
+                self.transcript.clear();
+                None
+            }
+            "/new" => {
+                self.transcript.clear();
+                self.phase = Phase::Welcome;
+                self.transcript
+                    .push("SYSTEM  new mock session started.".to_owned());
+                None
+            }
+            "/quit" => {
+                self.should_quit = true;
+                None
+            }
+            _ => {
+                self.transcript.push(format!(
+                    "SYSTEM  unsupported command: {command}; use /help."
+                ));
+                None
+            }
+        };
+    }
+
+    fn recall_history(&mut self, older: bool) {
+        if self.input_history.is_empty() {
+            return;
+        }
+        let last = self.input_history.len() - 1;
+        let index = match (self.history_index, older) {
+            (None, true) => last,
+            (Some(index), true) => index.saturating_sub(1),
+            (None, false) => return,
+            (Some(index), false) if index >= last => {
+                self.history_index = None;
+                self.input.clear();
+                return;
+            }
+            (Some(index), false) => index + 1,
+        };
+        self.history_index = Some(index);
+        self.input = self.input_history[index].clone();
     }
 
     fn apply_runtime_events(&mut self, events: Vec<RuntimeEvent>) {
@@ -282,6 +437,14 @@ impl App {
             match event {
                 RuntimeEvent::ProposalCreated { proposal } => {
                     self.phase = Phase::AwaitingApproval { proposal };
+                }
+                RuntimeEvent::PlanUpdated { text } => {
+                    self.transcript.push(format!("PLAN  {text}"));
+                    self.phase = Phase::Welcome;
+                }
+                RuntimeEvent::AuditVerdict { verdict } => {
+                    self.transcript.push(format!("AUDIT  {verdict}"));
+                    self.phase = Phase::Welcome;
                 }
                 RuntimeEvent::ExecutionStarted => {
                     if let Phase::AwaitingApproval { proposal } = &self.phase {
@@ -527,7 +690,9 @@ fn draw_header(frame: &mut Frame, area: Rect) {
 }
 
 fn draw_body(frame: &mut Frame, area: Rect, app: &App) {
-    let content = if app.show_shortcuts {
+    let content = if let Some(panel) = app.panel {
+        mock_panel_text(panel)
+    } else if app.show_shortcuts {
         shortcut_text()
     } else if app.transcript.is_empty() {
         welcome_text(area.height, app.intro_elapsed(Instant::now()))
@@ -562,7 +727,7 @@ fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
             format!("> {proposal}   [Enter] approve   [Esc] reject")
         }
         Phase::Running => "> Execution in progress…".to_owned(),
-        _ if app.input.is_empty() => ">".to_owned(),
+        _ if app.input.is_empty() => format!("> {}", mode_placeholder(app.agent_mode)),
         _ => format!("> {}", app.input),
     };
 
@@ -695,10 +860,123 @@ fn shortcut_text() -> Text<'static> {
         Line::from("Enter   propose a task / approve a pending proposal"),
         Line::from("Esc     reject a pending proposal / close active overlay"),
         Line::from("Tab     cycle LBE Audit, Agent regular, and Plan"),
+        Line::from("↑/↓     recall submitted mock input history"),
+        Line::from("Ctrl+L  clear rendered mock transcript"),
+        Line::from("Ctrl+D  exit when the composer is empty"),
         Line::from("?       close this shortcut reference"),
         Line::from("q       quit when the task input is empty"),
         Line::from("Ctrl+C  quit cleanly"),
     ])
+}
+
+fn mode_placeholder(mode: AgentMode) -> &'static str {
+    match mode {
+        AgentMode::Audit => "Inspect workspace evidence (mock-only)",
+        AgentMode::Regular => "Describe a governed task",
+        AgentMode::Plan => "Investigate or propose a plan (no execution)",
+    }
+}
+
+fn mock_panel_text(panel: MockPanel) -> Text<'static> {
+    let (title, rows): (&str, &[&str]) = match panel {
+        MockPanel::Account => (
+            "Account",
+            &[
+                "MOCK / NOT CONNECTED",
+                "Canonical account/auth state is runtime-owned.",
+            ],
+        ),
+        MockPanel::Provider => (
+            "Provider",
+            &[
+                "MOCK / NOT CONNECTED",
+                "No canonical provider registry is connected.",
+            ],
+        ),
+        MockPanel::Model => (
+            "Choose model",
+            &[
+                "MOCK / NOT CONNECTED",
+                "Model ID · low",
+                "Gemini context projection is presentation-only.",
+            ],
+        ),
+        MockPanel::Mcp => (
+            "MCP",
+            &[
+                "MOCK / NOT CONNECTED",
+                "No MCP server registry or transport is connected.",
+            ],
+        ),
+        MockPanel::Tools => (
+            "Tools",
+            &[
+                "MOCK / NOT CONNECTED",
+                "No canonical typed tool registry or policy is connected.",
+            ],
+        ),
+        MockPanel::History => (
+            "History",
+            &[
+                "MOCK / NOT CONNECTED",
+                "Only in-memory composer recall is available.",
+            ],
+        ),
+        MockPanel::Session => (
+            "Session",
+            &[
+                "MOCK / NOT CONNECTED",
+                "No durable session owner is connected.",
+            ],
+        ),
+        MockPanel::Evidence => (
+            "Evidence",
+            &[
+                "MOCK / NOT CONNECTED",
+                "Current evidence refs require canonical LBE runtime output.",
+            ],
+        ),
+        MockPanel::Receipts => (
+            "Receipts",
+            &[
+                "MOCK / NOT CONNECTED",
+                "Mock receipt rcpt_demo_7f31 is not a canonical receipt.",
+            ],
+        ),
+        MockPanel::Status => (
+            "Status",
+            &[
+                "MOCK / NOT CONNECTED",
+                "Workspace, provider, and context values are local projections.",
+            ],
+        ),
+        MockPanel::Undo => (
+            "Undo",
+            &[
+                "MOCK / NOT CONNECTED",
+                "Checkpoint restore must be requested from canonical LBE runtime.",
+            ],
+        ),
+    };
+    let mut lines = vec![
+        Line::from(Span::styled(
+            title,
+            Style::default()
+                .fg(PALETTE.ink)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::default(),
+    ];
+    lines.extend(
+        rows.iter()
+            .map(|row| Line::from(Span::styled(*row, Style::default().fg(PALETTE.muted)))),
+    );
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        "Esc closes this view",
+        Style::default().fg(PALETTE.faint),
+    )));
+    Text::from(lines)
 }
 
 fn welcome_text(available_height: u16, elapsed: Duration) -> Text<'static> {
@@ -851,9 +1129,58 @@ mod tests {
         let mut runtime = MockRuntimeClient::default();
         app.input = "inspect workspace".to_owned();
         app.submit_or_approve(&mut runtime, Instant::now());
-        app.reject(&mut runtime);
+        app.dismiss_or_reject(&mut runtime);
         assert_eq!(app.phase, Phase::Rejected);
         assert!(app.transcript.iter().any(|line| line.contains("REJECTED")));
+    }
+
+    #[test]
+    fn commands_open_mock_panels_without_claiming_runtime_integration() {
+        let mut app = App::default();
+        app.handle_command("/tools");
+        assert_eq!(app.panel, Some(MockPanel::Tools));
+        let text = mock_panel_text(MockPanel::Tools).to_string();
+        assert!(text.contains("MOCK / NOT CONNECTED"));
+    }
+
+    #[test]
+    fn plan_and_audit_submissions_do_not_enter_execution_flow() {
+        let now = Instant::now();
+        let mut runtime = MockRuntimeClient::default();
+        let mut plan = App {
+            agent_mode: AgentMode::Plan,
+            input: "inspect architecture".to_owned(),
+            ..App::default()
+        };
+        plan.submit_or_approve(&mut runtime, now);
+        assert_eq!(plan.phase, Phase::Welcome);
+        assert!(plan.transcript.iter().any(|line| line.starts_with("PLAN")));
+
+        let mut audit = App {
+            agent_mode: AgentMode::Audit,
+            input: "inspect workspace".to_owned(),
+            ..App::default()
+        };
+        audit.submit_or_approve(&mut runtime, now);
+        assert_eq!(audit.phase, Phase::Welcome);
+        assert!(
+            audit
+                .transcript
+                .iter()
+                .any(|line| line.starts_with("AUDIT"))
+        );
+    }
+
+    #[test]
+    fn history_recall_returns_submitted_input() {
+        let mut app = App::default();
+        app.input_history = vec!["first task".to_owned(), "second task".to_owned()];
+        app.recall_history(true);
+        assert_eq!(app.input, "second task");
+        app.recall_history(true);
+        assert_eq!(app.input, "first task");
+        app.recall_history(false);
+        assert_eq!(app.input, "second task");
     }
 
     #[test]
