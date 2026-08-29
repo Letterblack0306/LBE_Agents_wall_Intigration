@@ -1006,6 +1006,7 @@ pub(crate) struct RealLbeWrapper {
     target_workspace: Option<PathBuf>,
     wall_database: Option<PathBuf>,
     session_id: Option<String>,
+    task_id: Option<String>,
     pending_events: VecDeque<LbeEvent>,
 }
 
@@ -1027,6 +1028,8 @@ impl RealLbeWrapper {
         let wall_database = std::env::var_os("LBE_WALL_DATABASE").map(PathBuf::from);
         let session_id =
             std::env::var_os("LBE_SESSION_ID").map(|value| value.to_string_lossy().into_owned());
+        let task_id =
+            std::env::var_os("LBE_TASK_ID").map(|value| value.to_string_lossy().into_owned());
         let connection = RuntimeConnection::Disconnected;
 
         let mut snapshot = LbeSnapshot::default();
@@ -1050,6 +1053,7 @@ impl RealLbeWrapper {
         snapshot.project_truth = None;
         snapshot.session_context = None;
         snapshot.provenance = None;
+        snapshot.validation = None;
 
         Self {
             snapshot,
@@ -1058,6 +1062,7 @@ impl RealLbeWrapper {
             target_workspace,
             wall_database,
             session_id,
+            task_id,
             pending_events: VecDeque::new(),
         }
     }
@@ -1082,10 +1087,14 @@ impl RealLbeWrapper {
     pub(crate) fn attach(&mut self) -> Result<(), LbeError> {
         // Step 1 — validate LBE_WALL_ROOT
         let wall_root = match self.wall_root.clone() {
-            Some(value) => value,
+            Some(value) if !value.as_os_str().is_empty() => value,
             None => {
                 self.fail_closed();
                 return Err(LbeError::new("LBE_WALL_ROOT is not configured"));
+            }
+            Some(_) => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_WALL_ROOT is empty"));
             }
         };
         let wall_root = match require_directory(&wall_root, "LBE_WALL_ROOT") {
@@ -1098,10 +1107,14 @@ impl RealLbeWrapper {
 
         // Step 2 — validate LBE_TARGET_WORKSPACE
         let target = match self.target_workspace.clone() {
-            Some(value) => value,
+            Some(value) if !value.as_os_str().is_empty() => value,
             None => {
                 self.fail_closed();
                 return Err(LbeError::new("LBE_TARGET_WORKSPACE is not configured"));
+            }
+            Some(_) => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_TARGET_WORKSPACE is empty"));
             }
         };
         let target = match require_directory(&target, "LBE_TARGET_WORKSPACE") {
@@ -1179,19 +1192,27 @@ impl RealLbeWrapper {
 
         // Step 7 — require LBE_WALL_DATABASE
         let database = match self.wall_database.clone() {
-            Some(value) => value,
+            Some(value) if !value.as_os_str().is_empty() => value,
             None => {
                 self.fail_closed();
                 return Err(LbeError::new("LBE_WALL_DATABASE is not configured"));
+            }
+            Some(_) => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_WALL_DATABASE is empty"));
             }
         };
 
         // Step 8 — require LBE_SESSION_ID
         let session_id = match self.session_id.clone() {
-            Some(value) => value,
+            Some(value) if !value.trim().is_empty() => value,
             None => {
                 self.fail_closed();
                 return Err(LbeError::new("LBE_SESSION_ID is not configured"));
+            }
+            Some(_) => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_SESSION_ID is empty"));
             }
         };
         // Step 9 — export session_context using the authoritative workspace_id
@@ -1261,8 +1282,18 @@ impl RealLbeWrapper {
             return Err(error);
         }
 
-        // Step 11 — export provenance using authoritative identities
-        let provenance_output = match Command::new(&python)
+        // Step 11 — require the configured task identity
+        let task_id = match self.task_id.clone() {
+            Some(value) if !value.trim().is_empty() => value,
+            _ => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_TASK_ID is not configured or is empty"));
+            }
+        };
+
+        // Step 12 — export provenance using authoritative identities
+        let mut provenance_command = Command::new(&python);
+        provenance_command
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -1273,10 +1304,9 @@ impl RealLbeWrapper {
             ])
             .arg(&database)
             .args(["--workspace-id", &authoritative_workspace_id])
-            .args(["--session-id", &session_id])
-            .args(["--format", "json"])
-            .output()
-        {
+            .args(["--session-id", &session_id]);
+        provenance_command.args(["--task-id", &task_id]);
+        let provenance_output = match provenance_command.args(["--format", "json"]).output() {
             Ok(output) => output,
             Err(error) => {
                 self.fail_closed();
@@ -1319,10 +1349,71 @@ impl RealLbeWrapper {
             return Err(error);
         }
 
-        // Step 12 — apply snapshot fields; all projections passed
+        // Step 13 — export validation using only authoritative identities
+        let validation_output = match Command::new(&python)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "export",
+                "validation",
+                "--database",
+            ])
+            .arg(&database)
+            .args(["--session-id", &session_context.session_id])
+            .args(["--task-id", &task_id])
+            .args(["--format", "json"])
+            .output()
+        {
+            Ok(output) => output,
+            Err(error) => {
+                self.fail_closed();
+                return Err(LbeError::new(format!(
+                    "validation process launch failed: {error}"
+                )));
+            }
+        };
+        if !validation_output.status.success() {
+            self.fail_closed();
+            return Err(LbeError::new(format!(
+                "validation process exited unsuccessfully: {}",
+                validation_output.status
+            )));
+        }
+        let validation_stdout = match String::from_utf8(validation_output.stdout) {
+            Ok(text) => text,
+            Err(_) => {
+                self.fail_closed();
+                return Err(LbeError::new("validation stdout was not UTF-8"));
+            }
+        };
+        if validation_stdout.trim().is_empty() {
+            self.fail_closed();
+            return Err(LbeError::new("validation stdout was empty"));
+        }
+        let validation: ValidationProjection = match serde_json::from_str(&validation_stdout) {
+            Ok(value) => value,
+            Err(error) => {
+                self.fail_closed();
+                return Err(LbeError::new(format!("invalid validation JSON: {error}")));
+            }
+        };
+        if let Err(error) = validate_validation(
+            &validation,
+            &authoritative_workspace_id,
+            &session_context.session_id,
+            &task_id,
+            provenance.data.task_id.as_deref(),
+        ) {
+            self.fail_closed();
+            return Err(error);
+        }
+
+        // Step 14 — apply snapshot fields; all projections passed
         self.snapshot.project_truth = Some(project_truth);
         self.snapshot.session_context = Some(session_context.clone());
         self.snapshot.provenance = Some(provenance);
+        self.snapshot.validation = Some(validation);
         self.snapshot.session_id = Some(session_context.session_id.clone());
         self.snapshot.workspace_id = Some(authoritative_workspace_id);
         self.snapshot.workspace_label = canonical_workspace_root;
@@ -1351,6 +1442,7 @@ impl RealLbeWrapper {
         self.snapshot.project_truth = None;
         self.snapshot.session_context = None;
         self.snapshot.provenance = None;
+        self.snapshot.validation = None;
     }
 
     /// Returns the current connection state.
@@ -1700,4 +1792,96 @@ pub(crate) fn validate_provenance(
         }
     }
     Ok(())
+}
+
+pub(crate) fn validate_validation(
+    projection: &ValidationProjection,
+    authoritative_workspace_id: &str,
+    authoritative_session_id: &str,
+    configured_task_id: &str,
+    provenance_task_id: Option<&str>,
+) -> Result<(), LbeError> {
+    if projection.schema_version != "1.0" {
+        return Err(LbeError::new("validation schema_version must be 1.0"));
+    }
+    if projection.projection_type != "validation" {
+        return Err(LbeError::new("validation projection_type is invalid"));
+    }
+    if !projection.read_only {
+        return Err(LbeError::new("validation projection is not read-only"));
+    }
+    if projection.workspace_id.trim().is_empty()
+        || projection.workspace_id != authoritative_workspace_id
+    {
+        return Err(LbeError::new(
+            "validation workspace_id does not match project_truth",
+        ));
+    }
+    if projection.session_id.trim().is_empty() || projection.session_id != authoritative_session_id
+    {
+        return Err(LbeError::new(
+            "validation session_id does not match session_context",
+        ));
+    }
+    if configured_task_id.trim().is_empty() || projection.data.task_id.trim().is_empty() {
+        return Err(LbeError::new("validation task_id is missing"));
+    }
+    if projection.data.task_id != configured_task_id {
+        return Err(LbeError::new(
+            "validation task_id does not match configured LBE_TASK_ID",
+        ));
+    }
+    if let Some(provenance_task_id) = provenance_task_id {
+        if provenance_task_id != configured_task_id {
+            return Err(LbeError::new(
+                "provenance task_id does not match configured LBE_TASK_ID",
+            ));
+        }
+    }
+    if projection.data.operation_id.trim().is_empty() {
+        return Err(LbeError::new("validation operation_id is empty"));
+    }
+    for (i, requirement) in projection.data.requirements.iter().enumerate() {
+        if requirement.requirement_id.trim().is_empty()
+            || requirement.evidence_kind.trim().is_empty()
+        {
+            return Err(LbeError::new(format!(
+                "validation requirements[{i}] is malformed"
+            )));
+        }
+    }
+    for (i, policy) in projection.data.policies.iter().enumerate() {
+        if policy.policy_id.trim().is_empty()
+            || policy.operation_id.trim().is_empty()
+            || policy.evidence_kind.trim().is_empty()
+            || policy.command.is_empty()
+            || policy.command.iter().any(|part| part.trim().is_empty())
+            || !positive_json_number(&policy.timeout_seconds)
+        {
+            return Err(LbeError::new(format!(
+                "validation policies[{i}] is malformed"
+            )));
+        }
+    }
+    for (i, evidence) in projection.data.evidence.iter().enumerate() {
+        if evidence.evidence_id.trim().is_empty()
+            || evidence.kind.trim().is_empty()
+            || evidence.producer_id.trim().is_empty()
+            || evidence.operation_id.trim().is_empty()
+            || evidence.details.owner_payload_version != "1.0"
+            || !evidence.details.opaque
+        {
+            return Err(LbeError::new(format!(
+                "validation evidence[{i}] is malformed"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn positive_json_number(number: &serde_json::Number) -> bool {
+    number.as_u64().is_some_and(|value| value > 0)
+        || number
+            .as_f64()
+            .is_some_and(|value| value.is_finite() && value > 0.0)
 }

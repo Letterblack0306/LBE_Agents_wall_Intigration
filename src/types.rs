@@ -258,6 +258,7 @@ pub(crate) struct LbeSnapshot {
     pub(crate) project_truth: Option<ProjectTruthProjection>,
     pub(crate) session_context: Option<SessionContextProjection>,
     pub(crate) provenance: Option<ProvenanceProjection>,
+    pub(crate) validation: Option<ValidationProjection>,
     pub(crate) model_id: String,
     pub(crate) model_family: String,
     pub(crate) effort_label: Option<String>,
@@ -301,6 +302,7 @@ impl Default for LbeSnapshot {
             project_truth: None,
             session_context: None,
             provenance: None,
+            validation: None,
             model_id: "Model ID".to_owned(),
             model_family: "Gemini".to_owned(),
             effort_label: Some("low".to_owned()),
@@ -638,6 +640,82 @@ pub(crate) struct ProvenanceProjection {
     pub(crate) session_id: Option<String>,
     pub(crate) read_only: bool,
     pub(crate) data: ProvenanceData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ValidationProjection {
+    pub(crate) schema_version: String,
+    pub(crate) projection_type: String,
+    pub(crate) generated_at: String,
+    pub(crate) workspace_id: String,
+    pub(crate) session_id: String,
+    pub(crate) read_only: bool,
+    pub(crate) data: ValidationData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ValidationData {
+    pub(crate) task_id: String,
+    pub(crate) operation_id: String,
+    pub(crate) mode: ValidationMode,
+    pub(crate) requirements: Vec<ValidationRequirement>,
+    pub(crate) policies: Vec<ValidationPolicy>,
+    pub(crate) evidence: Vec<ValidationEvidence>,
+    pub(crate) task_status: Option<ValidationTaskStatus>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ValidationMode {
+    Coding,
+    Audit,
+    Investigation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ValidationRequirement {
+    pub(crate) requirement_id: String,
+    pub(crate) evidence_kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ValidationPolicy {
+    pub(crate) policy_id: String,
+    pub(crate) operation_id: String,
+    pub(crate) applicable_mode: ValidationMode,
+    pub(crate) evidence_kind: String,
+    pub(crate) command: Vec<String>,
+    pub(crate) timeout_seconds: serde_json::Number,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ValidationEvidence {
+    pub(crate) evidence_id: String,
+    pub(crate) kind: String,
+    pub(crate) status: ValidationEvidenceStatus,
+    pub(crate) producer_id: String,
+    pub(crate) operation_id: String,
+    pub(crate) details: OpaqueOwnerPayload,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+pub(crate) enum ValidationEvidenceStatus {
+    #[serde(rename = "PASS")]
+    Pass,
+    #[serde(rename = "FAIL")]
+    Fail,
+    #[serde(rename = "STALE")]
+    Stale,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ValidationTaskStatus {
+    Created,
+    Running,
+    Completed,
+    Failed,
+    Blocked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]

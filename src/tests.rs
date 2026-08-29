@@ -4,7 +4,9 @@ use crate::{
     requests::UserRequest,
     types::*,
     ui::*,
-    wrapper::{LbeWrapper, MockLbeWrapper, RealLbeWrapper, validate_provenance},
+    wrapper::{
+        LbeWrapper, MockLbeWrapper, RealLbeWrapper, validate_provenance, validate_validation,
+    },
 };
 
 use ratatui::termina::event::KeyCode;
@@ -1806,4 +1808,157 @@ fn provenance_is_not_present_in_initial_or_unconnected_real_snapshot() {
     assert!(snapshot.latest_checkpoint.is_none());
     assert_eq!(snapshot.runtime_id, None);
     assert_eq!(snapshot.turn_id, None);
+}
+
+fn valid_validation(mode: ValidationMode) -> ValidationProjection {
+    ValidationProjection {
+        schema_version: "1.0".to_owned(),
+        projection_type: "validation".to_owned(),
+        generated_at: "2026-01-01T00:00:00Z".to_owned(),
+        workspace_id: "ws_abc".to_owned(),
+        session_id: "sess_xyz".to_owned(),
+        read_only: true,
+        data: ValidationData {
+            task_id: "task_123".to_owned(),
+            operation_id: "op_123".to_owned(),
+            mode,
+            requirements: vec![ValidationRequirement {
+                requirement_id: "req_1".to_owned(),
+                evidence_kind: "test".to_owned(),
+            }],
+            policies: vec![ValidationPolicy {
+                policy_id: "policy_1".to_owned(),
+                operation_id: "op_123".to_owned(),
+                applicable_mode: mode,
+                evidence_kind: "test".to_owned(),
+                command: vec!["never-run".to_owned()],
+                timeout_seconds: serde_json::Number::from(1),
+            }],
+            evidence: vec![ValidationEvidence {
+                evidence_id: "evidence_1".to_owned(),
+                kind: "test".to_owned(),
+                status: ValidationEvidenceStatus::Pass,
+                producer_id: "producer_1".to_owned(),
+                operation_id: "op_123".to_owned(),
+                details: OpaqueOwnerPayload {
+                    owner_payload_version: "1.0".to_owned(),
+                    opaque: true,
+                    payload: serde_json::json!({"owned": true}),
+                },
+            }],
+            task_status: Some(ValidationTaskStatus::Completed),
+        },
+    }
+}
+
+#[test]
+fn validation_projection_strictly_validates_identity_content_and_statuses() {
+    for mode in [
+        ValidationMode::Coding,
+        ValidationMode::Audit,
+        ValidationMode::Investigation,
+    ] {
+        let projection = valid_validation(mode);
+        assert!(validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", None).is_ok());
+    }
+    for status in [
+        ValidationEvidenceStatus::Pass,
+        ValidationEvidenceStatus::Fail,
+        ValidationEvidenceStatus::Stale,
+    ] {
+        let mut projection = valid_validation(ValidationMode::Coding);
+        projection.data.evidence[0].status = status;
+        assert!(validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", None).is_ok());
+    }
+    for status in [
+        ValidationTaskStatus::Created,
+        ValidationTaskStatus::Running,
+        ValidationTaskStatus::Completed,
+        ValidationTaskStatus::Failed,
+        ValidationTaskStatus::Blocked,
+    ] {
+        let mut projection = valid_validation(ValidationMode::Coding);
+        projection.data.task_status = Some(status);
+        assert!(validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", None).is_ok());
+    }
+    let mut projection = valid_validation(ValidationMode::Coding);
+    projection.data.task_status = None;
+    assert!(validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", None).is_ok());
+}
+
+#[test]
+fn validation_projection_rejects_identity_and_malformed_content() {
+    let cases = [
+        |p: &mut ValidationProjection| p.schema_version = "2.0".to_owned(),
+        |p: &mut ValidationProjection| p.projection_type = "other".to_owned(),
+        |p: &mut ValidationProjection| p.read_only = false,
+        |p: &mut ValidationProjection| p.workspace_id.clear(),
+        |p: &mut ValidationProjection| p.session_id.clear(),
+        |p: &mut ValidationProjection| p.data.task_id.clear(),
+        |p: &mut ValidationProjection| p.data.operation_id.clear(),
+        |p: &mut ValidationProjection| p.data.requirements[0].requirement_id.clear(),
+        |p: &mut ValidationProjection| p.data.requirements[0].evidence_kind.clear(),
+        |p: &mut ValidationProjection| p.data.policies[0].policy_id.clear(),
+        |p: &mut ValidationProjection| p.data.policies[0].operation_id.clear(),
+        |p: &mut ValidationProjection| p.data.policies[0].evidence_kind.clear(),
+        |p: &mut ValidationProjection| p.data.policies[0].command.clear(),
+        |p: &mut ValidationProjection| p.data.policies[0].command[0].clear(),
+        |p: &mut ValidationProjection| {
+            p.data.policies[0].timeout_seconds = serde_json::Number::from(0)
+        },
+        |p: &mut ValidationProjection| p.data.evidence[0].evidence_id.clear(),
+        |p: &mut ValidationProjection| p.data.evidence[0].kind.clear(),
+        |p: &mut ValidationProjection| p.data.evidence[0].producer_id.clear(),
+        |p: &mut ValidationProjection| p.data.evidence[0].operation_id.clear(),
+        |p: &mut ValidationProjection| {
+            p.data.evidence[0].details.owner_payload_version = "2.0".to_owned()
+        },
+        |p: &mut ValidationProjection| p.data.evidence[0].details.opaque = false,
+    ];
+    for mutate in cases {
+        let mut projection = valid_validation(ValidationMode::Coding);
+        mutate(&mut projection);
+        assert!(validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", None).is_err());
+    }
+    let mut projection = valid_validation(ValidationMode::Coding);
+    assert!(validate_validation(&projection, "other", "sess_xyz", "task_123", None).is_err());
+    assert!(validate_validation(&projection, "ws_abc", "other", "task_123", None).is_err());
+    assert!(validate_validation(&projection, "ws_abc", "sess_xyz", "other", None).is_err());
+    assert!(
+        validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", Some("other")).is_err()
+    );
+    assert!(
+        validate_validation(
+            &projection,
+            "ws_abc",
+            "sess_xyz",
+            "task_123",
+            Some("task_123")
+        )
+        .is_ok()
+    );
+    projection.data.evidence[0].status = ValidationEvidenceStatus::Fail;
+    assert!(validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", None).is_ok());
+}
+
+#[test]
+fn validation_enums_use_strict_wire_values() {
+    let json = serde_json::json!({
+        "schema_version":"1.0","projection_type":"validation","generated_at":"now",
+        "workspace_id":"ws_abc","session_id":"sess_xyz","read_only":true,
+        "data":{"task_id":"task_123","operation_id":"op_123","mode":"coding",
+        "requirements":[],"policies":[],"evidence":[],"task_status":null}
+    });
+    let projection: ValidationProjection = serde_json::from_value(json).unwrap();
+    assert_eq!(projection.data.mode, ValidationMode::Coding);
+    for (field, value) in [("mode", "invalid"), ("task_status", "invalid")] {
+        let mut json = serde_json::json!({
+            "schema_version":"1.0","projection_type":"validation","generated_at":"now",
+            "workspace_id":"ws_abc","session_id":"sess_xyz","read_only":true,
+            "data":{"task_id":"task_123","operation_id":"op_123","mode":"coding",
+            "requirements":[],"policies":[],"evidence":[],"task_status":null}
+        });
+        json["data"][field] = serde_json::json!(value);
+        assert!(serde_json::from_value::<ValidationProjection>(json).is_err());
+    }
 }
