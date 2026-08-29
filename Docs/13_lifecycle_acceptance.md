@@ -2,34 +2,69 @@
 
 ## Status
 
-`NOT_PROVEN`
+`PARTIAL`
 
 ## Scope
 
-This module is part of the pre-integration TUI implementation. It must remain compatible with the existing `LbeWrapper` boundary and must not assume canonical LBE authority.
+This module is part of the pre-integration TUI implementation. It remains compatible with the existing `LbeWrapper` boundary and does not assume canonical LBE authority.
 
-## Work Items
+## Proven Behavior
 
-- [ ] Add PTY smoke tests for normal quit, Ctrl+C, Ctrl+D and error/panic exits.
-- [ ] Verify alternate screen, cursor and raw mode restoration.
-- [ ] Verify resize and supported suspend/resume behavior.
+- `q` with empty input sets application quit intent.
+- Ctrl+C while idle sets application quit intent.
+- Ctrl+C while an execution is running requests `UserRequest::Abort` and does not directly quit the application.
+- Ctrl+D with empty input sets application quit intent.
+- Ctrl+D with non-empty input does not quit.
+- Normal `run()` return and ordinary `run()` errors flow through `restore_terminal()` before `main()` returns.
+- The LBE terminal restore sequence leaves the alternate screen and makes the cursor visible.
+- On Windows/MSVC, Termina 0.3.3 stores the original input/output console modes and restores them from `WindowsTerminal::drop()`.
+- On panic, Termina 0.3.3 restores original Windows console modes/code pages through its panic hook, while the LBE panic callback emits alternate-screen-off and cursor-visible control sequences.
+- Resize events are accepted by the event loop and are followed by the normal next-loop redraw using the current terminal size.
 
-## Acceptance Criteria
+## Not Proven By Real PTY / ConPTY
 
-- [ ] Terminal state is restored after every supported exit path.
-- [ ] No raw-mode or alternate-screen leakage remains.
+No PTY/ConPTY harness is present in the current dependency graph. Therefore this slice does not claim a real terminal-process smoke proof for:
+
+- post-process raw-mode leakage;
+- post-process alternate-screen leakage;
+- post-process cursor visibility;
+- panic cleanup observed from an external terminal host.
+
+The deterministic tests prove the application key semantics and exact visual cleanup sequence, while Windows raw-mode restoration is supported by inspected Termina 0.3.3 implementation.
+
+## Suspend / Resume
+
+`NOT_APPLICABLE` for the current Windows/MSVC implementation slice.
+
+No `Suspend`, `Resume`, `SIGTSTP`, or `SIGCONT` handling exists in the current TUI source. This slice does not invent Unix-style suspend/resume behavior.
+
+## Acceptance Matrix
+
+| Behavior | Status |
+| --- | --- |
+| Normal `q` quit intent | PROVEN |
+| Ctrl+C idle quit intent | PROVEN |
+| Ctrl+C running abort semantics | PROVEN |
+| Ctrl+D empty-input quit intent | PROVEN |
+| Ctrl+D non-empty behavior | PROVEN |
+| Ordinary `run()` error reaches cleanup | PROVEN_BY_SOURCE |
+| Alternate-screen restore sequence | PROVEN |
+| Cursor-visible restore sequence | PROVEN |
+| Windows raw-mode restoration ownership | PROVEN_BY_DEPENDENCY_SOURCE |
+| Panic raw-mode restoration ownership | PROVEN_BY_DEPENDENCY_SOURCE |
+| Panic LBE visual restore callback | IMPLEMENTED_AND_SOURCE_PROVEN |
+| Resize acceptance/redraw model | IMPLEMENTED_AND_SOURCE_PROVEN |
+| Suspend/resume | NOT_APPLICABLE |
+| Real PTY/ConPTY end-to-end lifecycle smoke | NOT_PROVEN |
+
+## Remaining Gap
+
+A real PTY/ConPTY lifecycle smoke remains unproven. A bounded Windows ConPTY experiment using `portable-pty` 0.9.0 was attempted, but the generic `cmd.exe` control probe failed with Windows status `0xC0000142` (`STATUS_DLL_INIT_FAILED`) before command execution. Because the control executable failed identically, this is classified as a ConPTY harness/environment blocker rather than an LBE lifecycle defect. Until external-process terminal-state restoration can be observed with a working host harness, terminal lifecycle acceptance remains `PARTIAL`, not `CLOSED`.
 
 ## Out of Scope
 
 - Real LBE runtime attachment.
 - Canonical authorization/execution ownership inside the TUI.
 - Replacing `LbeWrapper` with direct runtime logic.
-
-## Evidence / Notes
-
-- The underlying mechanism is already reasonable: `init_terminal()` enables raw mode + alternate screen + hides the cursor and installs a panic hook that restores both (`alternate_screen(false)` + `cursor_visible(true)`) before unwinding; `restore_terminal()` does the same on normal exit. Ctrl+C and Ctrl+D are both handled explicitly in `handle_key`.
-- **Not yet built:** none of this is exercised by a PTY-driven test — there's no automated proof that quit / Ctrl+C / Ctrl+D / a panic actually leave the terminal clean, which is exactly why this is `NOT_PROVEN` rather than `MISSING`: the code looks right, it just isn't verified.
-
-## Completion
-
-When all work items and acceptance criteria are satisfied, change this module status to `CLOSED` and update `STATUS.md`.
+- Agent Wall changes.
+- Real read/write execution integration.

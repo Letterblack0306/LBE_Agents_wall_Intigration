@@ -46,13 +46,12 @@ pub(crate) fn init_terminal() -> io::Result<(AppTerminal, EventReader)> {
 
 pub(crate) fn restore_terminal(terminal: &mut AppTerminal) -> io::Result<()> {
     let backend = terminal.backend_mut();
-    write!(
-        backend,
-        "{}{}",
-        alternate_screen(false),
-        cursor_visible(true)
-    )?;
+    write!(backend, "{}", terminal_restore_sequence())?;
     std::io::Write::flush(backend)
+}
+
+pub(crate) fn terminal_restore_sequence() -> String {
+    format!("{}{}", alternate_screen(false), cursor_visible(true))
 }
 
 fn alternate_screen(enabled: bool) -> Csi {

@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-use ratatui::termina::event::KeyCode;
+use ratatui::termina::event::{KeyCode, KeyEvent, Modifiers};
 use ratatui::{Terminal, backend::TestBackend};
 use std::time::{Duration, Instant};
 
@@ -2213,4 +2213,113 @@ fn validation_enums_use_strict_wire_values() {
         json["data"][field] = serde_json::json!(value);
         assert!(serde_json::from_value::<ValidationProjection>(json).is_err());
     }
+}
+
+#[test]
+fn q_with_empty_input_requests_application_quit() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_key(
+        KeyEvent::new(KeyCode::Char('q'), Modifiers::NONE),
+        &mut wrapper,
+        Instant::now(),
+    );
+
+    assert!(app.should_quit());
+}
+
+#[test]
+fn ctrl_c_while_idle_requests_application_quit() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_key(
+        KeyEvent::new(KeyCode::Char('c'), Modifiers::CONTROL),
+        &mut wrapper,
+        Instant::now(),
+    );
+
+    assert!(app.should_quit());
+}
+
+#[test]
+fn ctrl_d_with_empty_input_requests_application_quit() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_key(
+        KeyEvent::new(KeyCode::Char('d'), Modifiers::CONTROL),
+        &mut wrapper,
+        Instant::now(),
+    );
+
+    assert!(app.should_quit());
+}
+
+#[test]
+fn ctrl_d_with_nonempty_input_does_not_quit() {
+    let mut app = App {
+        input: "draft".to_owned(),
+        ..App::default()
+    };
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_key(
+        KeyEvent::new(KeyCode::Char('d'), Modifiers::CONTROL),
+        &mut wrapper,
+        Instant::now(),
+    );
+
+    assert!(!app.should_quit());
+}
+
+#[test]
+fn ctrl_c_while_running_requests_abort_without_quitting() {
+    let now = Instant::now();
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.input = "inspect workspace".to_owned();
+    app.submit_or_approve(&mut wrapper, now);
+
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    app.submit_or_approve(&mut wrapper, Instant::now());
+
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    assert_eq!(app.phase, Phase::Running);
+
+    app.handle_key(
+        KeyEvent::new(KeyCode::Char('c'), Modifiers::CONTROL),
+        &mut wrapper,
+        Instant::now(),
+    );
+
+    assert!(!app.should_quit());
+
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    assert_eq!(app.snapshot.session_state, SessionStatus::Aborted);
+}
+
+#[test]
+fn terminal_restore_sequence_leaves_alt_screen_and_shows_cursor() {
+    let sequence = terminal_restore_sequence();
+
+    assert!(
+        sequence.contains("\u{1b}[?1049l"),
+        "restore sequence must leave alternate screen: {sequence:?}"
+    );
+    assert!(
+        sequence.contains("\u{1b}[?25h"),
+        "restore sequence must show cursor: {sequence:?}"
+    );
 }
