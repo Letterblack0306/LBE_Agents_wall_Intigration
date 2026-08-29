@@ -977,7 +977,7 @@ fn real_wrapper_submit_is_rejected_when_disconnected() {
 }
 
 #[test]
-fn real_wrapper_attach_requires_endpoint() {
+fn real_wrapper_attach_requires_explicit_configuration() {
     let mut wrapper = RealLbeWrapper::new();
     let result = wrapper.attach();
     assert!(result.is_err());
@@ -985,7 +985,49 @@ fn real_wrapper_attach_requires_endpoint() {
         result
             .unwrap_err()
             .message
-            .contains("LBE_WALL_ENDPOINT is not configured")
+            .contains("LBE_WALL_ROOT is not configured")
+    );
+}
+
+#[test]
+fn real_wrapper_attaches_configured_project_truth_without_mock_state() {
+    let mut wrapper = RealLbeWrapper::new();
+    if std::env::var_os("LBE_WALL_ROOT").is_none()
+        || std::env::var_os("LBE_TARGET_WORKSPACE").is_none()
+    {
+        assert_eq!(wrapper.connection_state(), RuntimeConnection::Disconnected);
+        return;
+    }
+
+    wrapper
+        .attach()
+        .expect("configured Agent Wall must export project_truth");
+    let snapshot = wrapper.snapshot();
+    let projection = snapshot
+        .project_truth
+        .as_ref()
+        .expect("real attachment must retain project_truth");
+    assert_eq!(snapshot.connection, RuntimeConnection::Connected);
+    assert_eq!(snapshot.runtime_mode, RuntimeMode::Local);
+    assert_eq!(snapshot.runtime_id, None);
+    assert_eq!(snapshot.session_id, None);
+    assert_eq!(snapshot.turn_id, None);
+    assert_eq!(
+        snapshot.workspace_id.as_deref(),
+        Some(projection.workspace_id.as_str())
+    );
+    assert_eq!(snapshot.workspace_label, projection.data.workspace_root);
+    assert!(matches!(
+        wrapper.poll_event(Instant::now()).unwrap(),
+        Some(LbeEvent::RuntimeAttachmentUpdated {
+            connection: RuntimeConnection::Connected,
+            runtime_id: None,
+            runtime_mode: RuntimeMode::Local,
+            ..
+        })
+    ));
+    assert!(
+        matches!(wrapper.poll_event(Instant::now()).unwrap(), Some(LbeEvent::SnapshotUpdated { snapshot: event_snapshot }) if event_snapshot.project_truth.is_some())
     );
 }
 

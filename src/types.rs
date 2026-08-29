@@ -4,6 +4,37 @@ use ratatui::style::Color;
 
 use crate::{browser_chat::BrowserChatProjection, memory::MemoryProjection};
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ProjectTruthProjection {
+    pub(crate) schema_version: String,
+    pub(crate) projection_type: String,
+    pub(crate) generated_at: String,
+    pub(crate) workspace_id: String,
+    pub(crate) read_only: bool,
+    pub(crate) data: ProjectTruthData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ProjectTruthData {
+    pub(crate) workspace_root: String,
+    pub(crate) target_project_root: String,
+    pub(crate) configured_root_id: Option<String>,
+    pub(crate) project_types: Vec<String>,
+    pub(crate) signals: Vec<ProjectTruthSignal>,
+    pub(crate) confidence: serde_json::Number,
+    pub(crate) outcome: String,
+    pub(crate) missing_evidence: Vec<String>,
+    pub(crate) profile_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ProjectTruthSignal {
+    pub(crate) path: String,
+    pub(crate) sha256: String,
+    pub(crate) project_type: String,
+    pub(crate) pack: String,
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -224,6 +255,7 @@ pub(crate) struct LbeSnapshot {
     pub(crate) turn_id: Option<String>,
     pub(crate) workspace_id: Option<String>,
     pub(crate) workspace_label: String,
+    pub(crate) project_truth: Option<ProjectTruthProjection>,
     pub(crate) model_id: String,
     pub(crate) model_family: String,
     pub(crate) effort_label: Option<String>,
@@ -264,6 +296,7 @@ impl Default for LbeSnapshot {
             turn_id: Some("turn_mock_0".to_owned()),
             workspace_id: Some("workspace_mock_lbe_tui_lab".to_owned()),
             workspace_label: r"C:\Users\".to_owned(),
+            project_truth: None,
             model_id: "Model ID".to_owned(),
             model_family: "Gemini".to_owned(),
             effort_label: Some("low".to_owned()),

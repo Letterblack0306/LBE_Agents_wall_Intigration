@@ -1,5 +1,7 @@
 use std::{
     collections::{HashMap, VecDeque},
+    path::{Path, PathBuf},
+    process::Command,
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
@@ -1000,38 +1002,9 @@ impl LbeWrapper for MockLbeWrapper {
 pub(crate) struct RealLbeWrapper {
     snapshot: LbeSnapshot,
     connection: RuntimeConnection,
-    wall_endpoint: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RuntimeAttachment {
-    Disconnected,
-    Connecting,
-    Connected,
-    Reconnecting,
-    Lost,
-}
-
-impl RuntimeAttachment {
-    fn to_connection(self) -> RuntimeConnection {
-        match self {
-            Self::Disconnected => RuntimeConnection::Disconnected,
-            Self::Connecting => RuntimeConnection::Connecting,
-            Self::Connected => RuntimeConnection::Connected,
-            Self::Reconnecting => RuntimeConnection::Reconnecting,
-            Self::Lost => RuntimeConnection::Lost,
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Disconnected => "DISCONNECTED",
-            Self::Connecting => "CONNECTING",
-            Self::Connected => "CONNECTED",
-            Self::Reconnecting => "RECONNECTING",
-            Self::Lost => "CONNECTION LOST",
-        }
-    }
+    wall_root: Option<PathBuf>,
+    target_workspace: Option<PathBuf>,
+    pending_events: VecDeque<LbeEvent>,
 }
 
 impl Default for RealLbeWrapper {
@@ -1041,13 +1014,14 @@ impl Default for RealLbeWrapper {
 }
 
 impl RealLbeWrapper {
-    /// Construct a real wrapper targeting the wall endpoint from
-    /// `LBE_WALL_ENDPOINT`.
+    /// Construct a real wrapper using explicit Agent Wall and target-workspace
+    /// configuration. Construction never launches a process or fabricates state.
     ///
     /// If the env var is unset, the wrapper starts in `Disconnected` with no
     /// endpoint to attempt. This never fabricates mock runtime state.
     pub(crate) fn new() -> Self {
-        let wall_endpoint = std::env::var("LBE_WALL_ENDPOINT").ok();
+        let wall_root = std::env::var_os("LBE_WALL_ROOT").map(PathBuf::from);
+        let target_workspace = std::env::var_os("LBE_TARGET_WORKSPACE").map(PathBuf::from);
         let connection = RuntimeConnection::Disconnected;
 
         let mut snapshot = LbeSnapshot::default();
@@ -1056,34 +1030,122 @@ impl RealLbeWrapper {
         snapshot.runtime_id = None;
         snapshot.session_id = None;
         snapshot.session_state = SessionStatus::Idle;
+        snapshot.turn_id = None;
+        snapshot.workspace_id = None;
+        snapshot.workspace_label = String::new();
+        snapshot.model_id = String::new();
+        snapshot.model_family = String::new();
+        snapshot.effort_label = None;
         snapshot.execution_status = None;
         snapshot.providers = Vec::new();
         snapshot.models = Vec::new();
         snapshot.selected_model = None;
         snapshot.diagnostics = Vec::new();
         snapshot.active_execution_id = None;
+        snapshot.project_truth = None;
 
         Self {
             snapshot,
             connection,
-            wall_endpoint,
+            wall_root,
+            target_workspace,
+            pending_events: VecDeque::new(),
         }
     }
 
-    /// Attempt to attach to the configured wall endpoint.
-    ///
-    /// Returns `Err` if no endpoint is configured or if the wall protocol
-    /// is not available. On a real wall, this would open the session stream
-    /// and transition to `Connected`.
+    /// Attach only the read-only project_truth projection from the committed
+    /// Agent Wall product CLI.
     pub(crate) fn attach(&mut self) -> Result<(), LbeError> {
-        match &self.wall_endpoint {
-            None => Err(LbeError::new(
-                "LBE_WALL_ENDPOINT is not configured; real wall attachment requires an endpoint",
-            )),
-            Some(endpoint) => Err(LbeError::new(format!(
-                "real wall attachment to {endpoint} is not yet implemented",
-            ))),
+        let wall_root = self.wall_root.clone().ok_or_else(|| {
+            self.fail_closed();
+            LbeError::new("LBE_WALL_ROOT is not configured")
+        })?;
+        let target = self.target_workspace.clone().ok_or_else(|| {
+            self.fail_closed();
+            LbeError::new("LBE_TARGET_WORKSPACE is not configured")
+        })?;
+        let wall_root = match require_directory(&wall_root, "LBE_WALL_ROOT") {
+            Ok(path) => path,
+            Err(error) => {
+                self.fail_closed();
+                return Err(error);
+            }
+        };
+        let target = match require_directory(&target, "LBE_TARGET_WORKSPACE") {
+            Ok(path) => path,
+            Err(error) => {
+                self.fail_closed();
+                return Err(error);
+            }
+        };
+        let python = std::env::var_os("LBE_WALL_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("python"));
+        let output = Command::new(python)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "export",
+                "project_truth",
+                "--workspace",
+            ])
+            .arg(&target)
+            .args(["--format", "json"])
+            .output()
+            .map_err(|error| {
+                LbeError::new(format!("project_truth process launch failed: {error}"))
+            })?;
+        if !output.status.success() {
+            self.fail_closed();
+            return Err(LbeError::new(format!(
+                "project_truth process exited unsuccessfully: {}",
+                output.status
+            )));
         }
+        let stdout = String::from_utf8(output.stdout).map_err(|_| {
+            self.fail_closed();
+            LbeError::new("project_truth stdout was not UTF-8")
+        })?;
+        self.attach_projection(&stdout, &target)
+    }
+
+    fn attach_projection(&mut self, stdout: &str, target: &Path) -> Result<(), LbeError> {
+        if stdout.trim().is_empty() {
+            self.fail_closed();
+            return Err(LbeError::new("project_truth stdout was empty"));
+        }
+        let projection: ProjectTruthProjection = serde_json::from_str(stdout).map_err(|error| {
+            self.fail_closed();
+            LbeError::new(format!("invalid project_truth JSON: {error}"))
+        })?;
+        validate_project_truth(&projection, target).map_err(|error| {
+            self.fail_closed();
+            error
+        })?;
+        self.snapshot.workspace_id = Some(projection.workspace_id.clone());
+        self.snapshot.workspace_label = projection.data.workspace_root.clone();
+        self.snapshot.project_truth = Some(projection);
+        self.snapshot.runtime_mode = RuntimeMode::Local;
+        self.connection = RuntimeConnection::Connected;
+        self.snapshot.connection = RuntimeConnection::Connected;
+        self.pending_events
+            .push_back(LbeEvent::RuntimeAttachmentUpdated {
+                connection: RuntimeConnection::Connected,
+                runtime_id: None,
+                runtime_mode: RuntimeMode::Local,
+                attached_client_count: 1,
+            });
+        self.pending_events.push_back(LbeEvent::SnapshotUpdated {
+            snapshot: self.snapshot.clone(),
+        });
+        Ok(())
+    }
+
+    fn fail_closed(&mut self) {
+        self.connection = RuntimeConnection::Disconnected;
+        self.snapshot.connection = RuntimeConnection::Disconnected;
+        self.snapshot.project_truth = None;
     }
 
     /// Returns the current connection state.
@@ -1114,10 +1176,75 @@ impl LbeWrapper for RealLbeWrapper {
     }
 
     fn poll_event(&mut self, _now: Instant) -> Result<Option<LbeEvent>, LbeError> {
-        Ok(None)
+        Ok(self.pending_events.pop_front())
     }
 
     fn next_wake(&self, _now: Instant) -> Option<Duration> {
         None
     }
+}
+
+fn require_directory(path: &Path, name: &str) -> Result<PathBuf, LbeError> {
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|_| LbeError::new(format!("{name} is unavailable: {}", path.display())))?;
+    if !canonical.is_dir() {
+        return Err(LbeError::new(format!(
+            "{name} is not a directory: {}",
+            path.display()
+        )));
+    }
+    Ok(canonical)
+}
+
+fn validate_project_truth(
+    projection: &ProjectTruthProjection,
+    target: &Path,
+) -> Result<(), LbeError> {
+    if projection.schema_version != "1.0" {
+        return Err(LbeError::new("project_truth schema_version must be 1.0"));
+    }
+    if projection.projection_type != "project_truth" {
+        return Err(LbeError::new("project_truth projection_type is invalid"));
+    }
+    if !projection.read_only {
+        return Err(LbeError::new("project_truth projection is not read-only"));
+    }
+    if projection.workspace_id.trim().is_empty() {
+        return Err(LbeError::new("project_truth workspace_id is missing"));
+    }
+    if projection.data.workspace_root.trim().is_empty()
+        || projection.data.target_project_root.trim().is_empty()
+        || projection.data.profile_hash.trim().is_empty()
+        || !is_hex_64(&projection.data.profile_hash)
+    {
+        return Err(LbeError::new("project_truth required data is invalid"));
+    }
+    let target = std::fs::canonicalize(target)
+        .map_err(|_| LbeError::new("target workspace is unavailable"))?;
+    for (name, value) in [
+        ("workspace_root", &projection.data.workspace_root),
+        ("target_project_root", &projection.data.target_project_root),
+    ] {
+        let root = std::fs::canonicalize(value)
+            .map_err(|_| LbeError::new(format!("project_truth {name} is unavailable")))?;
+        if root != target {
+            return Err(LbeError::new(format!(
+                "project_truth {name} does not match target workspace"
+            )));
+        }
+    }
+    for signal in &projection.data.signals {
+        if signal.path.trim().is_empty()
+            || !is_hex_64(&signal.sha256)
+            || signal.project_type.trim().is_empty()
+            || signal.pack.trim().is_empty()
+        {
+            return Err(LbeError::new("project_truth signal data is invalid"));
+        }
+    }
+    Ok(())
+}
+
+fn is_hex_64(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }

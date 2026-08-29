@@ -67,12 +67,16 @@ fn run(terminal: &mut ui::AppTerminal, events: &EventReader) -> io::Result<()> {
 
 /// Selects the `LbeWrapper` implementation based on `LBE_RUNTIME`.
 ///
-/// `LBE_RUNTIME=real` selects `RealLbeWrapper`, which targets the wall
-/// endpoint from `LBE_WALL_ENDPOINT` and never fabricates runtime state.
+/// `LBE_RUNTIME=real` selects `RealLbeWrapper`, which performs the configured
+/// read-only project_truth attachment and never fabricates runtime state.
 /// Any other value (or unset) selects `MockLbeWrapper`.
 fn build_wrapper() -> Box<dyn LbeWrapper> {
     match std::env::var("LBE_RUNTIME") {
-        Ok(value) if value == "real" => Box::new(RealLbeWrapper::default()),
+        Ok(value) if value == "real" => {
+            let mut wrapper = RealLbeWrapper::default();
+            let _ = wrapper.attach();
+            Box::new(wrapper)
+        }
         _ => Box::new(MockLbeWrapper::default()),
     }
 }
