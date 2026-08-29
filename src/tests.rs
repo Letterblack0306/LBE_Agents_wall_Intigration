@@ -4,7 +4,7 @@ use crate::{
     requests::UserRequest,
     types::*,
     ui::*,
-    wrapper::{LbeWrapper, MockLbeWrapper},
+    wrapper::{LbeWrapper, MockLbeWrapper, RealLbeWrapper},
 };
 
 use ratatui::termina::event::KeyCode;
@@ -939,4 +939,64 @@ fn below_minimum_size_shows_an_honest_fallback() {
         .map(|cell| cell.symbol())
         .collect::<String>();
     assert!(rendered.contains("LBE terminal needs at least 60×18."));
+}
+
+#[test]
+fn real_wrapper_starts_disconnected_without_endpoint() {
+    let wrapper = RealLbeWrapper::new();
+    assert_eq!(wrapper.connection_state(), RuntimeConnection::Disconnected);
+
+    let snapshot = wrapper.snapshot();
+    assert_eq!(snapshot.connection, RuntimeConnection::Disconnected);
+    assert_eq!(snapshot.runtime_mode, RuntimeMode::Local);
+    assert_eq!(snapshot.runtime_id, None);
+    assert_eq!(snapshot.session_id, None);
+    assert_eq!(snapshot.session_state, SessionStatus::Idle);
+    assert_eq!(snapshot.execution_status, None);
+    assert!(snapshot.providers.is_empty());
+    assert!(snapshot.models.is_empty());
+}
+
+#[test]
+fn real_wrapper_submit_is_rejected_when_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let result = wrapper.submit(
+        UserRequest::SubmitTask {
+            intent: "inspect workspace".to_owned(),
+            mode: AgentMode::Regular,
+        },
+        Instant::now(),
+    );
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .message
+            .contains("operation requires a connected LBE runtime")
+    );
+}
+
+#[test]
+fn real_wrapper_attach_requires_endpoint() {
+    let mut wrapper = RealLbeWrapper::new();
+    let result = wrapper.attach();
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .message
+            .contains("LBE_WALL_ENDPOINT is not configured")
+    );
+}
+
+#[test]
+fn real_wrapper_poll_returns_none_when_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    assert!(wrapper.poll_event(Instant::now()).unwrap().is_none());
+}
+
+#[test]
+fn real_wrapper_next_wake_is_none_when_disconnected() {
+    let wrapper = RealLbeWrapper::new();
+    assert!(wrapper.next_wake(Instant::now()).is_none());
 }

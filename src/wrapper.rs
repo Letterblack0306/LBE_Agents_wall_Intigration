@@ -984,3 +984,140 @@ impl LbeWrapper for MockLbeWrapper {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// RealLbeWrapper
+// ---------------------------------------------------------------------------
+
+/// Real wrapper backed by the LBE Agent Wall.
+///
+/// Unlike `MockLbeWrapper`, this struct does not fabricate runtime state.
+/// It begins in `Disconnected` and only reports events the real wall
+/// authoritatively provides. Until the wall is attached, all
+/// mutation-bearing requests return errors.
+///
+/// This is the Milestone A (P1) read-only-attachment skeleton.
+pub(crate) struct RealLbeWrapper {
+    snapshot: LbeSnapshot,
+    connection: RuntimeConnection,
+    wall_endpoint: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RuntimeAttachment {
+    Disconnected,
+    Connecting,
+    Connected,
+    Reconnecting,
+    Lost,
+}
+
+impl RuntimeAttachment {
+    fn to_connection(self) -> RuntimeConnection {
+        match self {
+            Self::Disconnected => RuntimeConnection::Disconnected,
+            Self::Connecting => RuntimeConnection::Connecting,
+            Self::Connected => RuntimeConnection::Connected,
+            Self::Reconnecting => RuntimeConnection::Reconnecting,
+            Self::Lost => RuntimeConnection::Lost,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Disconnected => "DISCONNECTED",
+            Self::Connecting => "CONNECTING",
+            Self::Connected => "CONNECTED",
+            Self::Reconnecting => "RECONNECTING",
+            Self::Lost => "CONNECTION LOST",
+        }
+    }
+}
+
+impl Default for RealLbeWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RealLbeWrapper {
+    /// Construct a real wrapper targeting the wall endpoint from
+    /// `LBE_WALL_ENDPOINT`.
+    ///
+    /// If the env var is unset, the wrapper starts in `Disconnected` with no
+    /// endpoint to attempt. This never fabricates mock runtime state.
+    pub(crate) fn new() -> Self {
+        let wall_endpoint = std::env::var("LBE_WALL_ENDPOINT").ok();
+        let connection = RuntimeConnection::Disconnected;
+
+        let mut snapshot = LbeSnapshot::default();
+        snapshot.connection = connection;
+        snapshot.runtime_mode = RuntimeMode::Local;
+        snapshot.runtime_id = None;
+        snapshot.session_id = None;
+        snapshot.session_state = SessionStatus::Idle;
+        snapshot.execution_status = None;
+        snapshot.providers = Vec::new();
+        snapshot.models = Vec::new();
+        snapshot.selected_model = None;
+        snapshot.diagnostics = Vec::new();
+        snapshot.active_execution_id = None;
+
+        Self {
+            snapshot,
+            connection,
+            wall_endpoint,
+        }
+    }
+
+    /// Attempt to attach to the configured wall endpoint.
+    ///
+    /// Returns `Err` if no endpoint is configured or if the wall protocol
+    /// is not available. On a real wall, this would open the session stream
+    /// and transition to `Connected`.
+    pub(crate) fn attach(&mut self) -> Result<(), LbeError> {
+        match &self.wall_endpoint {
+            None => Err(LbeError::new(
+                "LBE_WALL_ENDPOINT is not configured; real wall attachment requires an endpoint",
+            )),
+            Some(endpoint) => Err(LbeError::new(format!(
+                "real wall attachment to {endpoint} is not yet implemented",
+            ))),
+        }
+    }
+
+    /// Returns the current connection state.
+    pub(crate) fn connection_state(&self) -> RuntimeConnection {
+        self.connection
+    }
+
+    /// Returns `Err` if the runtime is not connected to the real wall.
+    fn require_connected(&self) -> Result<(), LbeError> {
+        if self.connection == RuntimeConnection::Connected {
+            Ok(())
+        } else {
+            Err(LbeError::new(format!(
+                "operation requires a connected LBE runtime; current state: {}",
+                self.connection.label()
+            )))
+        }
+    }
+}
+
+impl LbeWrapper for RealLbeWrapper {
+    fn snapshot(&self) -> LbeSnapshot {
+        self.snapshot.clone()
+    }
+
+    fn submit(&mut self, _request: UserRequest, _now: Instant) -> Result<(), LbeError> {
+        self.require_connected()
+    }
+
+    fn poll_event(&mut self, _now: Instant) -> Result<Option<LbeEvent>, LbeError> {
+        Ok(None)
+    }
+
+    fn next_wake(&self, _now: Instant) -> Option<Duration> {
+        None
+    }
+}

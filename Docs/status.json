@@ -13,7 +13,8 @@
     "tracks":  {
                    "existing_slices_integration":  "01-16",
                    "coding_frontend_implementation_roadmap":  "17-30",
-                   "reuse_interop_strategy":  "31"
+                   "reuse_interop_strategy":  "31",
+                   "real_cli_ide_implementation_plan":  "33"
                },
     "modules":  {
                     "01_transcript_viewport.md":  {
@@ -289,6 +290,15 @@
                                                                                   "30_file_editor_patch_review.md"
                                                                               ],
                                                                "notes":  "Missing current-source Cline adopt/adapt/wrap/native decisions for Modules 17-30. Prevents rebuilding generic coding-agent frontend features without evidence."
-                                                           }
+                                                           },
+                    "33_real_cli_ide_implementation_plan.md":  {
+                                                                   "status":  "PLANNED",
+                                                                   "relevance":  "CORE / SEQUENCING",
+                                                                   "depends_on":  [
+                                                                                      "31_cline_interop_reuse_strategy.md",
+                                                                                      "32_deterministic_runtime_state_machine.md"
+                                                                                  ],
+                                                                   "notes":  "Defines the ordered path from mock TUI contract preview to real governed CLI IDE. RealLbeWrapper must begin as a minimal read-only Agent Wall attachment before governed command/file execution, provider loop, IDE review surfaces, persistence, headless mode, background processes, and multi-agent work."
+                                                               }
                 }
 }

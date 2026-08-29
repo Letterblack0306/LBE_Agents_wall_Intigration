@@ -62,6 +62,10 @@ Modules `17`-`30` cover remaining coding-client surfaces. Build each independent
 
 Module `31` prevents rebuilding generic coding-agent frontend capabilities that can be adopted, adapted, or wrapped from Cline-compatible surfaces. Module `32` records the deterministic runtime state-machine prerequisite that must be closed before real Agent Wall attachment.
 
+### D. Real CLI IDE Implementation Plan
+
+Module `33` defines the implementation sequence from mock TUI contract preview to real governed CLI IDE. It gates `RealLbeWrapper` as a minimal read-only attachment before governed execution, provider/model integration, IDE workflows, persistence, and multi-agent features.
+
 ## Modules
 
 | Module | Area | Product Relevance | Status |
@@ -98,6 +102,7 @@ Module `31` prevents rebuilding generic coding-agent frontend capabilities that 
 | `30_file_editor_patch_review.md` | File / Patch Review | CORE | MISSING |
 | `31_cline_interop_reuse_strategy.md` | Cline Interop / Reuse Strategy | STRATEGIC | MISSING |
 | `32_deterministic_runtime_state_machine.md` | Deterministic Runtime State Machine | CORE / BLOCKING | MISSING |
+| `33_real_cli_ide_implementation_plan.md` | Real CLI IDE Implementation Plan | CORE / SEQUENCING | PLANNED |
 
 ## Status Vocabulary
 

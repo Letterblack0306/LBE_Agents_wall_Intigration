@@ -61,7 +61,7 @@ impl App {
     pub(crate) fn handle_key(
         &mut self,
         key: KeyEvent,
-        wrapper: &mut impl LbeWrapper,
+        wrapper: &mut (impl LbeWrapper + ?Sized),
         now: Instant,
     ) {
         if key.kind != KeyEventKind::Press {
@@ -107,7 +107,11 @@ impl App {
         }
     }
 
-    pub(crate) fn submit_or_approve(&mut self, wrapper: &mut impl LbeWrapper, now: Instant) {
+    pub(crate) fn submit_or_approve(
+        &mut self,
+        wrapper: &mut (impl LbeWrapper + ?Sized),
+        now: Instant,
+    ) {
         match &self.phase {
             Phase::AwaitingApproval { approval_id, .. } => {
                 self.apply_wrapper_result(wrapper.submit(
@@ -140,7 +144,7 @@ impl App {
             }
         }
     }
-    pub(crate) fn dismiss_or_reject(&mut self, wrapper: &mut impl LbeWrapper) {
+    pub(crate) fn dismiss_or_reject(&mut self, wrapper: &mut (impl LbeWrapper + ?Sized)) {
         if self.panel.is_some() || self.show_shortcuts {
             self.panel = None;
             self.show_shortcuts = false;
@@ -156,7 +160,7 @@ impl App {
         }
     }
 
-    pub(crate) fn set_mode(&mut self, wrapper: &mut impl LbeWrapper, mode: AgentMode) {
+    pub(crate) fn set_mode(&mut self, wrapper: &mut (impl LbeWrapper + ?Sized), mode: AgentMode) {
         self.apply_wrapper_result(wrapper.submit(UserRequest::SetMode { mode }, Instant::now()));
     }
 
@@ -166,7 +170,11 @@ impl App {
                 .push(format!("LBE WRAPPER ERROR  {}", error.message));
         }
     }
-    pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWrapper) {
+    pub(crate) fn handle_command(
+        &mut self,
+        command: &str,
+        wrapper: &mut (impl LbeWrapper + ?Sized),
+    ) {
         let command = command
             .split_whitespace()
             .next()

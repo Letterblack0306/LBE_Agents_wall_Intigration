@@ -36,4 +36,5 @@ Update this file only when a module changes.
 | `30_file_editor_patch_review.md` | MISSING | CORE | `17`, `22`, `29` | No proposed-edit queue, patch preview, file navigation, accept/reject edit controls, conflict state, or edit provenance view. |
 | `31_cline_interop_reuse_strategy.md` | MISSING | STRATEGIC | `17`-`30` | No module-by-module Cline adopt/adapt/wrap/native decisions have been proven yet. Prevents rebuilding generic coding-agent frontend features without evidence. |
 | `32_deterministic_runtime_state_machine.md` | MISSING | CORE / BLOCKING | `04`, `05`, `07`, `13` | Runtime/session truth is not yet governed by one deterministic state machine. Blocks real Agent Wall attachment until terminal states, transition guards, timeout enforcement, and UI projection boundaries are implemented. |
+| `33_real_cli_ide_implementation_plan.md` | PLANNED | CORE / SEQUENCING | `31`, `32` | Ordered implementation plan: finish deterministic invariants, attach RealLbeWrapper read-only first, then governed execution, policy/sandbox, provider loop, IDE review surfaces, persistence, headless mode, background processes, and multi-agent work. |
 

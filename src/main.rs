@@ -15,7 +15,7 @@ use std::{io, time::Instant};
 use ratatui::termina::{EventReader, event::Event};
 
 use app::App;
-use wrapper::{LbeWrapper, MockLbeWrapper};
+use wrapper::{LbeWrapper, MockLbeWrapper, RealLbeWrapper};
 
 fn main() -> io::Result<()> {
     let (mut terminal, events) = ui::init_terminal()?;
@@ -28,7 +28,7 @@ fn main() -> io::Result<()> {
 }
 
 fn run(terminal: &mut ui::AppTerminal, events: &EventReader) -> io::Result<()> {
-    let mut wrapper = MockLbeWrapper::default();
+    let mut wrapper = build_wrapper();
     let mut app = App::with_snapshot(wrapper.snapshot());
 
     while !app.should_quit() {
@@ -57,10 +57,22 @@ fn run(terminal: &mut ui::AppTerminal, events: &EventReader) -> io::Result<()> {
             if let Event::Key(key) =
                 events.read(|event| matches!(event, Event::Key(_) | Event::WindowResized(_)))?
             {
-                app.handle_key(key, &mut wrapper, Instant::now());
+                app.handle_key(key, &mut *wrapper, Instant::now());
             }
         }
     }
 
     Ok(())
+}
+
+/// Selects the `LbeWrapper` implementation based on `LBE_RUNTIME`.
+///
+/// `LBE_RUNTIME=real` selects `RealLbeWrapper`, which targets the wall
+/// endpoint from `LBE_WALL_ENDPOINT` and never fabricates runtime state.
+/// Any other value (or unset) selects `MockLbeWrapper`.
+fn build_wrapper() -> Box<dyn LbeWrapper> {
+    match std::env::var("LBE_RUNTIME") {
+        Ok(value) if value == "real" => Box::new(RealLbeWrapper::default()),
+        _ => Box::new(MockLbeWrapper::default()),
+    }
 }
