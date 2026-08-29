@@ -1,77 +1,294 @@
 {
-  "schema_version": 2,
-  "project": "LBE TUI pre-integration closure",
-  "integration_phase": "PRE_INTEGRATION",
-  "modules": {
-    "01_transcript_viewport.md": {
-      "status": "MISSING",
-      "depends_on": [],
-      "notes": "LbeEvent vocabulary for commands/stdout/stderr/detached exists. No scroll offset, PageUp/Down/Home/End, follow-tail preservation, or command detail view implemented."
-    },
-    "02_model_picker.md": {
-      "status": "PARTIAL",
-      "depends_on": [],
-      "notes": "UserRequest::SelectModel exists with catalog validation in MockLbeWrapper. Model catalog rendering shown in status bar. Missing: interactive picker with row selection, Up/Down navigation, Enter submits, Esc closes, error surfacing for invalid selections."
-    },
-    "03_checkpoints_restore.md": {
-      "status": "PARTIAL",
-      "depends_on": [],
-      "notes": "Full LbeEvent vocabulary for checkpoints (created, comparison, restore requested/blocked/restored) exists with transcript rendering. Missing: CheckpointCompare/Restore UserRequest contracts, checkpoint list/detail/comparison/results rendering."
-    },
-    "04_sessions.md": {
-      "status": "PARTIAL",
-      "depends_on": [],
-      "notes": "Session lineage, status projection, and SessionStatus/Origin types exist in LbeSnapshot. /session panel exists as placeholder. Missing: session list/detail projection, replacement of local-only /new reset with runtime request contract."
-    },
-    "05_background_processes.md": {
-      "status": "PARTIAL",
-      "depends_on": [],
-      "notes": "Command/detached-event vocabulary exists with transcript rendering. /processes panel not implemented. Missing: command ID/state/source/latest activity/exit-code/log-availability projection and detail view."
-    },
-    "06_provider_configuration.md": {
-      "status": "PARTIAL",
-      "depends_on": [],
-      "notes": "Provider types (ProviderId, ProviderHealth, AuthState, ProviderProjection, ProviderConfig, ProviderCapabilities) and mock catalog exist. ProviderCatalogDiscovered/Health/Auth events exist. Missing: configure/validate/remove request contracts, provider selection and base URL editing, credential state rendering without exposing raw secrets."
-    },
-    "07_tools_registry.md": {
-      "status": "PLACEHOLDER",
-      "depends_on": [],
-      "notes": "/tools panel exists but shows only a not-connected placeholder. ToolRisk and ValidationStatus types exist. LbeEvent::ToolRequested/Started/Completed/Failed exist. Missing: typed tool registry projection, name/description/owner/risk/enabled/approval-requirement rendering, read-only detail view."
-    },
-    "08_evidence_browser.md": {
-      "status": "PLACEHOLDER",
-      "depends_on": ["07_tools_registry.md"],
-      "notes": "/evidence panel exists but shows only a not-connected placeholder. No evidence record types defined. Missing: typed evidence record projection, ID/type/source/origin/timestamp/status/summary rendering, evidence-to-execution/tool/session reference links."
-    },
-    "09_receipts_browser.md": {
-      "status": "PLACEHOLDER",
-      "depends_on": ["08_evidence_browser.md"],
-      "notes": "/receipts panel exists but shows only a not-connected placeholder. Receipt IDs appear in transcripts (LbeCompletionAccepted). Missing: structured receipt projection, receipt ID/execution ID/authorization/execution/validation/completion state rendering, evidence reference exposure."
-    },
-    "10_mcp_surface.md": {
-      "status": "PLACEHOLDER",
-      "depends_on": [],
-      "notes": "/mcp panel exists but shows only a not-connected placeholder. Missing: typed MCP server projection, server identity/transport/connection-state/health/tool-count rendering. Configuration/connect actions reserved as wrapper requests."
-    },
-    "11_terminal_compatibility.md": {
-      "status": "MISSING",
-      "depends_on": [],
-      "notes": "Palette uses RGB colors; no NO_COLOR fallback. Logo uses unicode block characters; no ASCII fallback tokens. Missing: NO_COLOR handling, ASCII fallback tokens, CJK/emoji/combining-character cell-width verification, long path/model name testing."
-    },
-    "12_plain_cli_mode.md": {
-      "status": "MISSING",
-      "depends_on": [],
-      "notes": "No --no-tui command path exists. All output goes through Termina/ratatui. Missing: --no-tui flag definition, stdout-for-results/stderr-for-diagnostics contract, meaningful exit-code contract for automation."
-    },
-    "13_lifecycle_acceptance.md": {
-      "status": "NOT_PROVEN",
-      "depends_on": ["14_responsive_acceptance.md"],
-      "notes": "Unit tests exist for logo geometry, animation reveal order, context meter, and minimum-size fallback. Missing: PTY smoke tests for normal quit/Ctrl+C/Ctrl+D/panic exits, alternate-screen/cursor/raw-mode restoration verification, resize and suspend/resume behavior testing."
-    },
-    "14_responsive_acceptance.md": {
-      "status": "PARTIAL",
-      "depends_on": [],
-      "notes": "Minimum-size check (60x18) exists in unit tests. Below-minimum fallback renders honest message. Missing: pinned render tests at 60x18 and 80x24 for populated states, narrow-width panel tests for provider/model/doctor/session, long workspace path/model name overflow testing, deterministic truncation verification."
-    }
-  }
+    "schema_version":  3,
+    "project":  "LBE TUI governed coding frontend roadmap",
+    "integration_phase":  "PRE_INTEGRATION_AND_PRODUCT_ROADMAP",
+    "product_scope":  [
+                          "Governance / audit frontend",
+                          "Coding-agent frontend",
+                          "Runtime/session frontend",
+                          "Tool/process frontend",
+                          "Evidence/receipt frontend",
+                          "External interaction frontend"
+                      ],
+    "tracks":  {
+                   "existing_slices_integration":  "01-16",
+                   "coding_frontend_implementation_roadmap":  "17-30",
+                   "reuse_interop_strategy":  "31"
+               },
+    "modules":  {
+                    "01_transcript_viewport.md":  {
+                                                      "notes":  "LbeEvent vocabulary for commands/stdout/stderr/detached exists. Missing scroll offset, PageUp/Down/Home/End, follow-tail preservation, and command detail view.",
+                                                      "status":  "MISSING",
+                                                      "relevance":  "CORE",
+                                                      "depends_on":  [
+
+                                                                     ]
+                                                  },
+                    "02_model_picker.md":  {
+                                               "notes":  "UserRequest::SelectModel exists with catalog validation. Missing interactive picker navigation and selection UX.",
+                                               "status":  "PARTIAL",
+                                               "relevance":  "CORE",
+                                               "depends_on":  [
+
+                                                              ]
+                                           },
+                    "03_checkpoints_restore.md":  {
+                                                      "notes":  "Checkpoint event vocabulary exists. Missing compare/restore request contracts and detail/comparison rendering.",
+                                                      "status":  "PARTIAL",
+                                                      "relevance":  "CORE",
+                                                      "depends_on":  [
+
+                                                                     ]
+                                                  },
+                    "04_sessions.md":  {
+                                           "notes":  "Session lineage/status types exist. Missing session list/detail projection and runtime-owned new/resume flow.",
+                                           "status":  "PARTIAL",
+                                           "relevance":  "CORE",
+                                           "depends_on":  [
+
+                                                          ]
+                                       },
+                    "05_background_processes.md":  {
+                                                       "notes":  "Command/detached events exist. Missing /processes panel and process/log/detail projection.",
+                                                       "status":  "PARTIAL",
+                                                       "relevance":  "CORE",
+                                                       "depends_on":  [
+
+                                                                      ]
+                                                   },
+                    "06_provider_configuration.md":  {
+                                                         "notes":  "Provider types and mock catalog exist. Missing configure/validate/remove contracts and safe credential UX.",
+                                                         "status":  "PARTIAL",
+                                                         "relevance":  "CORE",
+                                                         "depends_on":  [
+
+                                                                        ]
+                                                     },
+                    "07_tools_registry.md":  {
+                                                 "notes":  "/tools placeholder only. Missing typed registry projection and detail view.",
+                                                 "status":  "PLACEHOLDER",
+                                                 "relevance":  "CORE",
+                                                 "depends_on":  [
+
+                                                                ]
+                                             },
+                    "08_evidence_browser.md":  {
+                                                   "notes":  "/evidence placeholder only. Missing evidence record projection and cross-links.",
+                                                   "status":  "PLACEHOLDER",
+                                                   "relevance":  "CORE",
+                                                   "depends_on":  [
+                                                                      "07_tools_registry.md"
+                                                                  ]
+                                               },
+                    "09_receipts_browser.md":  {
+                                                   "notes":  "/receipts placeholder only. Missing structured receipt projection.",
+                                                   "status":  "PLACEHOLDER",
+                                                   "relevance":  "CORE",
+                                                   "depends_on":  [
+                                                                      "08_evidence_browser.md"
+                                                                  ]
+                                               },
+                    "10_mcp_surface.md":  {
+                                              "notes":  "/mcp placeholder only. Missing MCP server projection.",
+                                              "status":  "PLACEHOLDER",
+                                              "relevance":  "CORE",
+                                              "depends_on":  [
+
+                                                             ]
+                                          },
+                    "11_terminal_compatibility.md":  {
+                                                         "notes":  "Missing NO_COLOR, ASCII fallback, cell-width verification, and long-label tests.",
+                                                         "status":  "MISSING",
+                                                         "relevance":  "CORE",
+                                                         "depends_on":  [
+
+                                                                        ]
+                                                     },
+                    "12_plain_cli_mode.md":  {
+                                                 "notes":  "Missing --no-tui, --json, stdout/stderr contract, and automation exit codes.",
+                                                 "status":  "MISSING",
+                                                 "relevance":  "CORE",
+                                                 "depends_on":  [
+
+                                                                ]
+                                             },
+                    "13_lifecycle_acceptance.md":  {
+                                                       "notes":  "Missing PTY smoke tests for quit/signal/panic/resize terminal restoration.",
+                                                       "status":  "NOT_PROVEN",
+                                                       "relevance":  "CORE",
+                                                       "depends_on":  [
+                                                                          "14_responsive_acceptance.md"
+                                                                      ]
+                                                   },
+                    "14_responsive_acceptance.md":  {
+                                                        "notes":  "Minimum size fallback tested. Missing populated-state and narrow panel render tests.",
+                                                        "status":  "PARTIAL",
+                                                        "relevance":  "CORE",
+                                                        "depends_on":  [
+
+                                                                       ]
+                                                    },
+                    "15_session_memory_recall.md":  {
+                                                        "notes":  "Memory projection and /memory panel exist. Missing context refs, automatic bounded recall, and real runtime memory owner integration.",
+                                                        "status":  "PARTIAL",
+                                                        "relevance":  "CORE",
+                                                        "depends_on":  [
+                                                                           "04_sessions.md"
+                                                                       ]
+                                                    },
+                    "16_browser_chat_bridge.md":  {
+                                                      "notes":  "Browser chat contract/UI layer closed for pre-integration; live automation/attachment remain later integration.",
+                                                      "status":  "CLOSED_PRE_INTEGRATION",
+                                                      "relevance":  "EXTERNAL INTERACTION",
+                                                      "depends_on":  [
+                                                                         "15_session_memory_recall.md"
+                                                                     ]
+                                                  },
+                    "17_policy_hooks_permissions.md":  {
+                                                           "notes":  "Missing permissions, policy, sandbox, hook, and escalation frontend.",
+                                                           "status":  "MISSING",
+                                                           "relevance":  "CORE",
+                                                           "depends_on":  [
+                                                                              "07_tools_registry.md"
+                                                                          ]
+                                                       },
+                    "18_schedules.md":  {
+                                            "notes":  "Missing schedule list/detail/run history and controls.",
+                                            "status":  "MISSING",
+                                            "relevance":  "SUPPORTING",
+                                            "depends_on":  [
+                                                               "04_sessions.md"
+                                                           ]
+                                        },
+                    "19_connectors.md":  {
+                                             "notes":  "Missing generic connector/session-thread frontend.",
+                                             "status":  "MISSING",
+                                             "relevance":  "SUPPORTING",
+                                             "depends_on":  [
+                                                                "04_sessions.md",
+                                                                "16_browser_chat_bridge.md"
+                                                            ]
+                                         },
+                    "20_agent_teams.md":  {
+                                              "notes":  "Missing team, mailbox, mission log, and task-board projections.",
+                                              "status":  "MISSING",
+                                              "relevance":  "ADVANCED CORE",
+                                              "depends_on":  [
+                                                                 "04_sessions.md",
+                                                                 "23_subagents.md"
+                                                             ]
+                                          },
+                    "21_conversation_handoff.md":  {
+                                                       "notes":  "Missing export/import/handoff and multi-client resume UI.",
+                                                       "status":  "MISSING",
+                                                       "relevance":  "CORE FOR MULTI-CLIENT USE",
+                                                       "depends_on":  [
+                                                                          "04_sessions.md",
+                                                                          "15_session_memory_recall.md"
+                                                                      ]
+                                                   },
+                    "22_artifacts_review.md":  {
+                                                   "notes":  "Missing artifact review surfaces for plans/diffs/tests.",
+                                                   "status":  "MISSING",
+                                                   "relevance":  "CORE",
+                                                   "depends_on":  [
+                                                                      "03_checkpoints_restore.md",
+                                                                      "08_evidence_browser.md",
+                                                                      "09_receipts_browser.md",
+                                                                      "29_workspace_changes_diff.md"
+                                                                  ]
+                                               },
+                    "23_subagents.md":  {
+                                            "notes":  "Missing subagent registry/status/output/control UI.",
+                                            "status":  "MISSING",
+                                            "relevance":  "CORE FOR AGENTIC CODING",
+                                            "depends_on":  [
+                                                               "05_background_processes.md",
+                                                               "07_tools_registry.md",
+                                                               "17_policy_hooks_permissions.md"
+                                                           ]
+                                        },
+                    "24_projects_settings.md":  {
+                                                    "notes":  "Missing project selector/trust/settings/config-source UI.",
+                                                    "status":  "MISSING",
+                                                    "relevance":  "CORE",
+                                                    "depends_on":  [
+                                                                       "06_provider_configuration.md",
+                                                                       "17_policy_hooks_permissions.md"
+                                                                   ]
+                                                },
+                    "25_composer_prompt_editor.md":  {
+                                                         "notes":  "Missing multiline editor, cursor movement, paste safety, Vim mode, and history search.",
+                                                         "status":  "MISSING",
+                                                         "relevance":  "CORE",
+                                                         "depends_on":  [
+
+                                                                        ]
+                                                     },
+                    "26_statusline_title.md":  {
+                                                   "notes":  "Missing statusline/title customization.",
+                                                   "status":  "MISSING",
+                                                   "relevance":  "UX SUPPORT",
+                                                   "depends_on":  [
+                                                                      "24_projects_settings.md"
+                                                                  ]
+                                               },
+                    "27_code_search.md":  {
+                                              "notes":  "Missing /codesearch command and results/navigation UI.",
+                                              "status":  "MISSING",
+                                              "relevance":  "CORE",
+                                              "depends_on":  [
+                                                                 "07_tools_registry.md",
+                                                                 "24_projects_settings.md"
+                                                             ]
+                                          },
+                    "28_usage_quotas.md":  {
+                                               "notes":  "Missing usage/credits/quota/rate-limit frontend.",
+                                               "status":  "MISSING",
+                                               "relevance":  "SUPPORTING",
+                                               "depends_on":  [
+                                                                  "06_provider_configuration.md"
+                                                              ]
+                                           },
+                    "29_workspace_changes_diff.md":  {
+                                                         "notes":  "Missing workspace status, changed-files list, diff summary, hunk navigation, and validation/checkpoint linkage.",
+                                                         "status":  "MISSING",
+                                                         "relevance":  "CORE",
+                                                         "depends_on":  [
+                                                                            "03_checkpoints_restore.md",
+                                                                            "08_evidence_browser.md"
+                                                                        ]
+                                                     },
+                    "30_file_editor_patch_review.md":  {
+                                                           "notes":  "Missing proposed edit/patch review, accept/reject, conflict, and provenance UI.",
+                                                           "status":  "MISSING",
+                                                           "relevance":  "CORE",
+                                                           "depends_on":  [
+                                                                              "17_policy_hooks_permissions.md",
+                                                                              "22_artifacts_review.md",
+                                                                              "29_workspace_changes_diff.md"
+                                                                          ]
+                                                       },
+                    "31_cline_interop_reuse_strategy.md":  {
+                                                               "status":  "MISSING",
+                                                               "relevance":  "STRATEGIC",
+                                                               "depends_on":  [
+                                                                                  "17_policy_hooks_permissions.md",
+                                                                                  "18_schedules.md",
+                                                                                  "19_connectors.md",
+                                                                                  "20_agent_teams.md",
+                                                                                  "21_conversation_handoff.md",
+                                                                                  "22_artifacts_review.md",
+                                                                                  "23_subagents.md",
+                                                                                  "24_projects_settings.md",
+                                                                                  "25_composer_prompt_editor.md",
+                                                                                  "26_statusline_title.md",
+                                                                                  "27_code_search.md",
+                                                                                  "28_usage_quotas.md",
+                                                                                  "29_workspace_changes_diff.md",
+                                                                                  "30_file_editor_patch_review.md"
+                                                                              ],
+                                                               "notes":  "Missing current-source Cline adopt/adapt/wrap/native decisions for Modules 17-30. Prevents rebuilding generic coding-agent frontend features without evidence."
+                                                           }
+                }
 }
