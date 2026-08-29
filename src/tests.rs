@@ -1139,6 +1139,22 @@ fn session_lineage_and_checkpoint_project_into_their_panels() {
 }
 
 #[test]
+fn session_panel_displays_authoritative_real_session_identity_when_connected() {
+    let mut snapshot = LbeSnapshot::default();
+    snapshot.connection = RuntimeConnection::Connected;
+    snapshot.session_id = Some("sess_real_123".to_owned());
+    snapshot.workspace_id = Some("workspace_real_456".to_owned());
+
+    let session_text = mock_panel_text(MockPanel::Session, &snapshot).to_string();
+
+    assert!(session_text.contains("CONNECTED · authoritative Agent Wall projection"));
+    assert!(session_text.contains("Session sess_real_123"));
+    assert!(session_text.contains("Workspace workspace_real_456"));
+    assert!(session_text.contains("Session identity is projected from the connected LBE runtime."));
+    assert!(!session_text.contains("MOCK / NOT CONNECTED"));
+}
+
+#[test]
 fn execution_projects_checkpoint_and_command_streams_without_spawning_a_process() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
@@ -1413,6 +1429,28 @@ fn real_wrapper_submit_is_rejected_when_disconnected() {
 }
 
 #[test]
+fn mock_wrapper_runtime_refresh_is_explicitly_unavailable() {
+    let mut wrapper = MockLbeWrapper::default();
+    let error = wrapper
+        .submit(UserRequest::RefreshRuntimeSnapshot, Instant::now())
+        .expect_err("mock mode must not claim a real runtime refresh");
+    assert!(error.message.contains("unavailable in mock mode"));
+}
+
+#[test]
+fn real_wrapper_runtime_refresh_is_rejected_when_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(UserRequest::RefreshRuntimeSnapshot, Instant::now())
+        .expect_err("refresh requires a connected real runtime");
+    assert!(
+        error
+            .message
+            .contains("operation requires a connected LBE runtime")
+    );
+}
+
+#[test]
 fn real_wrapper_attach_requires_explicit_configuration() {
     let mut wrapper = RealLbeWrapper::new();
     let result = wrapper.attach();
@@ -1439,20 +1477,36 @@ fn real_wrapper_attaches_configured_project_truth_without_mock_state() {
         .attach()
         .expect("configured Agent Wall must export project_truth");
     let snapshot = wrapper.snapshot();
-    let projection = snapshot
+    snapshot
         .project_truth
         .as_ref()
         .expect("real attachment must retain project_truth");
     assert_eq!(snapshot.connection, RuntimeConnection::Connected);
     assert_eq!(snapshot.runtime_mode, RuntimeMode::Local);
     assert_eq!(snapshot.runtime_id, None);
-    assert_eq!(snapshot.session_id, None);
+    assert_eq!(
+        snapshot.session_id,
+        snapshot
+            .session_context
+            .as_ref()
+            .map(|context| context.session_id.clone())
+    );
     assert_eq!(snapshot.turn_id, None);
     assert_eq!(
         snapshot.workspace_id.as_deref(),
-        Some(projection.workspace_id.as_str())
+        snapshot
+            .session_context
+            .as_ref()
+            .map(|context| context.workspace_id.as_str())
     );
-    assert_eq!(snapshot.workspace_label, projection.data.workspace_root);
+    assert_eq!(
+        snapshot.workspace_label,
+        snapshot
+            .session_context
+            .as_ref()
+            .map(|context| context.data.workspace.canonical_root.clone())
+            .unwrap_or_default()
+    );
     assert!(matches!(
         wrapper.poll_event(Instant::now()).unwrap(),
         Some(LbeEvent::RuntimeAttachmentUpdated {
@@ -1465,6 +1519,42 @@ fn real_wrapper_attaches_configured_project_truth_without_mock_state() {
     assert!(
         matches!(wrapper.poll_event(Instant::now()).unwrap(), Some(LbeEvent::SnapshotUpdated { snapshot: event_snapshot }) if event_snapshot.project_truth.is_some())
     );
+}
+
+#[test]
+fn real_wrapper_attaches_session_only_without_task_identity() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none())
+        || std::env::var_os("LBE_TASK_ID").is_some()
+    {
+        return;
+    }
+
+    let mut wrapper = RealLbeWrapper::new();
+    wrapper
+        .attach()
+        .expect("session-only real attachment must not require a task identity");
+    let snapshot = wrapper.snapshot();
+
+    assert_eq!(wrapper.connection_state(), RuntimeConnection::Connected);
+    assert_eq!(snapshot.connection, RuntimeConnection::Connected);
+    assert_eq!(
+        snapshot.session_id.as_deref(),
+        Some("tui-fb2fe3a87da24552910a5b2d8fb45c7d")
+    );
+    assert_eq!(
+        snapshot.workspace_id.as_deref(),
+        Some("workspace_681a91b3a62538ad")
+    );
+    assert!(snapshot.project_truth.is_some());
+    assert!(snapshot.session_context.is_some());
+    assert!(snapshot.provenance.is_none());
+    assert!(snapshot.validation.is_none());
 }
 
 #[test]
@@ -1545,9 +1635,10 @@ fn real_wrapper_reconnect_success_replaces_authority_when_real_state_exists() {
         "LBE_TARGET_WORKSPACE",
         "LBE_WALL_DATABASE",
         "LBE_SESSION_ID",
-        "LBE_TASK_ID",
     ];
-    if required.iter().any(|name| std::env::var_os(name).is_none()) {
+    if required.iter().any(|name| std::env::var_os(name).is_none())
+        || std::env::var_os("LBE_TASK_ID").is_some()
+    {
         return;
     }
     let mut wrapper = RealLbeWrapper::new();
@@ -1564,10 +1655,62 @@ fn real_wrapper_reconnect_success_replaces_authority_when_real_state_exists() {
     assert_eq!(snapshot.connection, RuntimeConnection::Connected);
     assert!(snapshot.project_truth.is_some());
     assert!(snapshot.session_context.is_some());
-    assert!(snapshot.provenance.is_some());
-    assert!(snapshot.validation.is_some());
+    assert!(snapshot.provenance.is_none());
+    assert!(snapshot.validation.is_none());
     assert_eq!(snapshot.runtime_id, None);
     assert_eq!(snapshot.turn_id, None);
+}
+
+#[test]
+fn real_wrapper_runtime_refresh_reprojects_authoritative_state_when_connected() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none())
+        || std::env::var_os("LBE_TASK_ID").is_some()
+    {
+        return;
+    }
+    let mut wrapper = RealLbeWrapper::new();
+    if wrapper.attach().is_err() {
+        return;
+    }
+    let before = wrapper.snapshot();
+    wrapper
+        .submit(UserRequest::RefreshRuntimeSnapshot, Instant::now())
+        .expect("connected real runtime should refresh read-only projections");
+    assert_eq!(wrapper.connection_state(), RuntimeConnection::Connected);
+    let after = wrapper.snapshot();
+    assert_eq!(
+        after
+            .project_truth
+            .as_ref()
+            .map(|projection| &projection.data),
+        before
+            .project_truth
+            .as_ref()
+            .map(|projection| &projection.data)
+    );
+    assert_eq!(
+        after
+            .session_context
+            .as_ref()
+            .map(|projection| &projection.data),
+        before
+            .session_context
+            .as_ref()
+            .map(|projection| &projection.data)
+    );
+    assert!(matches!(
+        wrapper.poll_event(Instant::now()).unwrap(),
+        Some(LbeEvent::RuntimeAttachmentUpdated {
+            connection: RuntimeConnection::Connected,
+            ..
+        })
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -2143,9 +2286,9 @@ fn real_wrapper_attach_retains_session_context_when_both_projections_succeed() {
     assert_eq!(
         snapshot.workspace_id,
         snapshot
-            .project_truth
+            .session_context
             .as_ref()
-            .map(|pt| pt.workspace_id.clone())
+            .map(|context| context.workspace_id.clone())
     );
     assert_eq!(snapshot.runtime_id, None);
     assert_eq!(snapshot.turn_id, None);

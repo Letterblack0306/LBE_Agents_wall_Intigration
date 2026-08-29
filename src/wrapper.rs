@@ -761,6 +761,11 @@ impl LbeWrapper for MockLbeWrapper {
                     text: format!("Mock follow-up received: {message}"),
                 });
             }
+            UserRequest::RefreshRuntimeSnapshot => {
+                return Err(LbeError::new(
+                    "runtime snapshot refresh is unavailable in mock mode",
+                ));
+            }
             UserRequest::RefreshProviderCatalog => {
                 self.emit(LbeEvent::ProviderDiscoveryStarted);
                 let providers = self.snapshot.providers.clone();
@@ -1341,9 +1346,9 @@ impl RealLbeWrapper {
             return Err(error);
         }
 
-        // Step 6 — authoritative identity from project_truth
-        let authoritative_workspace_id = project_truth.workspace_id.clone();
-        let canonical_workspace_root = project_truth.data.workspace_root.clone();
+        // Step 6 — retain the project_truth workspace root. The persisted
+        // session_context remains authoritative for the session workspace ID.
+        let canonical_workspace_root = normalize_workspace_path(&project_truth.data.workspace_root);
 
         // Step 7 — require LBE_WALL_DATABASE
         let database = match self.wall_database.clone() {
@@ -1382,9 +1387,6 @@ impl RealLbeWrapper {
             ])
             .arg(&database)
             .args(["--session-id", &session_id])
-            .args(["--workspace"])
-            .arg(&target)
-            .args(["--workspace-id", &authoritative_workspace_id])
             .args(["--format", "json"])
             .output()
         {
@@ -1420,11 +1422,18 @@ impl RealLbeWrapper {
             Ok(value) => value,
             Err(error) => {
                 self.fail_closed();
+                let stderr = String::from_utf8_lossy(&sc_output.stderr);
+                let preview = sc_stdout.trim().chars().take(512).collect::<String>();
                 return Err(LbeError::new(format!(
-                    "invalid session_context JSON: {error}"
+                    "invalid session_context JSON: {error}; session_id='{}'; child_stderr='{}'; child_stdout_prefix='{}'",
+                    session_id,
+                    stderr.trim(),
+                    preview
                 )));
             }
         };
+
+        let authoritative_workspace_id = session_context.workspace_id.clone();
 
         // Cross-validate identities between project_truth and session_context
         if let Err(error) = validate_session_context(
@@ -1437,141 +1446,149 @@ impl RealLbeWrapper {
             return Err(error);
         }
 
-        // Step 11 — require the configured task identity
-        let task_id = match self.task_id.clone() {
-            Some(value) if !value.trim().is_empty() => value,
-            _ => {
-                self.fail_closed();
-                return Err(LbeError::new("LBE_TASK_ID is not configured or is empty"));
-            }
-        };
+        // Task-scoped projections are optional for the P1 session attachment.
+        // When a task identity is configured, retain the stricter provenance
+        // and validation checks used by task-scoped consumers.
+        let task_id = self
+            .task_id
+            .clone()
+            .filter(|value| !value.trim().is_empty());
+        let mut provenance = None;
+        let mut validation = None;
 
-        // Step 12 — export provenance using authoritative identities
-        let mut provenance_command = Command::new(&python);
-        provenance_command
-            .current_dir(&wall_root)
-            .args([
-                "-m",
-                "lbe_guard_inspector.product_entry",
-                "export",
-                "provenance",
-                "--database",
-            ])
-            .arg(&database)
-            .args(["--workspace-id", &authoritative_workspace_id])
-            .args(["--session-id", &session_id]);
-        provenance_command.args(["--task-id", &task_id]);
-        let provenance_output = match provenance_command.args(["--format", "json"]).output() {
-            Ok(output) => output,
-            Err(error) => {
+        if let Some(task_id) = task_id.as_deref() {
+            // Step 11 — export provenance using authoritative identities
+            let mut provenance_command = Command::new(&python);
+            provenance_command
+                .current_dir(&wall_root)
+                .args([
+                    "-m",
+                    "lbe_guard_inspector.product_entry",
+                    "export",
+                    "provenance",
+                    "--database",
+                ])
+                .arg(&database)
+                .args(["--workspace-id", &authoritative_workspace_id])
+                .args(["--session-id", &session_id]);
+            provenance_command.args(["--task-id", &task_id]);
+            let provenance_output = match provenance_command.args(["--format", "json"]).output() {
+                Ok(output) => output,
+                Err(error) => {
+                    self.fail_closed();
+                    return Err(LbeError::new(format!(
+                        "provenance process launch failed: {error}"
+                    )));
+                }
+            };
+            if !provenance_output.status.success() {
                 self.fail_closed();
                 return Err(LbeError::new(format!(
-                    "provenance process launch failed: {error}"
+                    "provenance process exited unsuccessfully: {}",
+                    provenance_output.status
                 )));
             }
-        };
-        if !provenance_output.status.success() {
-            self.fail_closed();
-            return Err(LbeError::new(format!(
-                "provenance process exited unsuccessfully: {}",
-                provenance_output.status
-            )));
-        }
-        let provenance_stdout = match String::from_utf8(provenance_output.stdout) {
-            Ok(text) => text,
-            Err(_) => {
+            let provenance_stdout = match String::from_utf8(provenance_output.stdout) {
+                Ok(text) => text,
+                Err(_) => {
+                    self.fail_closed();
+                    return Err(LbeError::new("provenance stdout was not UTF-8"));
+                }
+            };
+            if provenance_stdout.trim().is_empty() {
                 self.fail_closed();
-                return Err(LbeError::new("provenance stdout was not UTF-8"));
+                return Err(LbeError::new("provenance stdout was empty"));
             }
-        };
-        if provenance_stdout.trim().is_empty() {
-            self.fail_closed();
-            return Err(LbeError::new("provenance stdout was empty"));
-        }
-        let provenance: ProvenanceProjection = match serde_json::from_str(&provenance_stdout) {
-            Ok(value) => value,
-            Err(error) => {
+            let parsed_provenance: ProvenanceProjection =
+                match serde_json::from_str(&provenance_stdout) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        self.fail_closed();
+                        return Err(LbeError::new(format!("invalid provenance JSON: {error}")));
+                    }
+                };
+            if let Err(error) = validate_provenance(
+                &parsed_provenance,
+                &authoritative_workspace_id,
+                &session_context.session_id,
+            ) {
                 self.fail_closed();
-                return Err(LbeError::new(format!("invalid provenance JSON: {error}")));
+                return Err(error);
             }
-        };
-        if let Err(error) = validate_provenance(
-            &provenance,
-            &authoritative_workspace_id,
-            &session_context.session_id,
-        ) {
-            self.fail_closed();
-            return Err(error);
-        }
 
-        // Step 13 — export validation using only authoritative identities
-        let validation_output = match Command::new(&python)
-            .current_dir(&wall_root)
-            .args([
-                "-m",
-                "lbe_guard_inspector.product_entry",
-                "export",
-                "validation",
-                "--database",
-            ])
-            .arg(&database)
-            .args(["--session-id", &session_context.session_id])
-            .args(["--task-id", &task_id])
-            .args(["--format", "json"])
-            .output()
-        {
-            Ok(output) => output,
-            Err(error) => {
+            // Step 12 — export validation using only authoritative identities
+            let validation_output = match Command::new(&python)
+                .current_dir(&wall_root)
+                .args([
+                    "-m",
+                    "lbe_guard_inspector.product_entry",
+                    "export",
+                    "validation",
+                    "--database",
+                ])
+                .arg(&database)
+                .args(["--session-id", &session_context.session_id])
+                .args(["--task-id", &task_id])
+                .args(["--format", "json"])
+                .output()
+            {
+                Ok(output) => output,
+                Err(error) => {
+                    self.fail_closed();
+                    return Err(LbeError::new(format!(
+                        "validation process launch failed: {error}"
+                    )));
+                }
+            };
+            if !validation_output.status.success() {
                 self.fail_closed();
                 return Err(LbeError::new(format!(
-                    "validation process launch failed: {error}"
+                    "validation process exited unsuccessfully: {}",
+                    validation_output.status
                 )));
             }
-        };
-        if !validation_output.status.success() {
-            self.fail_closed();
-            return Err(LbeError::new(format!(
-                "validation process exited unsuccessfully: {}",
-                validation_output.status
-            )));
-        }
-        let validation_stdout = match String::from_utf8(validation_output.stdout) {
-            Ok(text) => text,
-            Err(_) => {
+            let validation_stdout = match String::from_utf8(validation_output.stdout) {
+                Ok(text) => text,
+                Err(_) => {
+                    self.fail_closed();
+                    return Err(LbeError::new("validation stdout was not UTF-8"));
+                }
+            };
+            if validation_stdout.trim().is_empty() {
                 self.fail_closed();
-                return Err(LbeError::new("validation stdout was not UTF-8"));
+                return Err(LbeError::new("validation stdout was empty"));
             }
-        };
-        if validation_stdout.trim().is_empty() {
-            self.fail_closed();
-            return Err(LbeError::new("validation stdout was empty"));
-        }
-        let validation: ValidationProjection = match serde_json::from_str(&validation_stdout) {
-            Ok(value) => value,
-            Err(error) => {
+            let parsed_validation: ValidationProjection =
+                match serde_json::from_str(&validation_stdout) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        self.fail_closed();
+                        return Err(LbeError::new(format!("invalid validation JSON: {error}")));
+                    }
+                };
+            if let Err(error) = validate_validation(
+                &parsed_validation,
+                &authoritative_workspace_id,
+                &session_context.session_id,
+                &task_id,
+                parsed_provenance.data.task_id.as_deref(),
+            ) {
                 self.fail_closed();
-                return Err(LbeError::new(format!("invalid validation JSON: {error}")));
+                return Err(error);
             }
-        };
-        if let Err(error) = validate_validation(
-            &validation,
-            &authoritative_workspace_id,
-            &session_context.session_id,
-            &task_id,
-            provenance.data.task_id.as_deref(),
-        ) {
-            self.fail_closed();
-            return Err(error);
+            provenance = Some(parsed_provenance);
+            validation = Some(parsed_validation);
         }
 
-        // Step 14 — apply snapshot fields; all projections passed
+        // Step 13 — apply snapshot fields; all required projections passed
         self.snapshot.project_truth = Some(project_truth);
         self.snapshot.session_context = Some(session_context.clone());
-        self.snapshot.provenance = Some(provenance);
-        self.snapshot.validation = Some(validation);
+        self.snapshot.provenance = provenance;
+        self.snapshot.validation = validation;
         self.snapshot.session_id = Some(session_context.session_id.clone());
         self.snapshot.workspace_id = Some(authoritative_workspace_id);
-        self.snapshot.workspace_label = canonical_workspace_root;
+        self.snapshot.workspace_label =
+            normalize_workspace_path(&session_context.data.workspace.canonical_root);
         self.snapshot.runtime_mode = RuntimeMode::Local;
         self.snapshot.connection = RuntimeConnection::Connected;
         self.connection = RuntimeConnection::Connected;
@@ -1681,8 +1698,14 @@ impl LbeWrapper for RealLbeWrapper {
         self.snapshot.clone()
     }
 
-    fn submit(&mut self, _request: UserRequest, _now: Instant) -> Result<(), LbeError> {
-        self.require_connected()
+    fn submit(&mut self, request: UserRequest, _now: Instant) -> Result<(), LbeError> {
+        match request {
+            UserRequest::RefreshRuntimeSnapshot => {
+                self.require_connected()?;
+                self.attach()
+            }
+            _ => self.require_connected(),
+        }
     }
 
     fn poll_event(&mut self, _now: Instant) -> Result<Option<LbeEvent>, LbeError> {
@@ -1704,6 +1727,14 @@ fn require_directory(path: &Path, name: &str) -> Result<PathBuf, LbeError> {
         )));
     }
     Ok(canonical)
+}
+
+fn normalize_workspace_path(value: &str) -> String {
+    let mut normalized = value.replace('\\', "/");
+    if let Some(stripped) = normalized.strip_prefix("//?/") {
+        normalized = stripped.to_owned();
+    }
+    normalized.trim_end_matches('/').to_owned()
 }
 
 fn validate_project_truth(
@@ -1913,13 +1944,17 @@ pub(crate) fn validate_session_context(
             session.session_id, projection.session_id
         )));
     }
-    if &session.canonical_workspace_root != &workspace.canonical_root {
+    if normalize_workspace_path(&session.canonical_workspace_root)
+        != normalize_workspace_path(&workspace.canonical_root)
+    {
         return Err(LbeError::new(format!(
             "session_context data.session.canonical_workspace_root '{}' does not match data.workspace.canonical_root '{}'",
             session.canonical_workspace_root, workspace.canonical_root
         )));
     }
-    if &workspace.canonical_root != canonical_workspace_root {
+    if normalize_workspace_path(&workspace.canonical_root)
+        != normalize_workspace_path(canonical_workspace_root)
+    {
         return Err(LbeError::new(format!(
             "session_context data.workspace.canonical_root '{}' does not match project_truth data.workspace_root '{}'",
             workspace.canonical_root, canonical_workspace_root

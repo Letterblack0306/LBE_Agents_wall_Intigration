@@ -434,17 +434,38 @@ pub(crate) fn mock_panel_text(panel: MockPanel, snapshot: &LbeSnapshot) -> Text<
         MockPanel::Session => {
             let lineage = &snapshot.lineage;
             let parent = lineage.parent_session_id.as_deref().unwrap_or("none");
+            let connected = snapshot.connection == RuntimeConnection::Connected;
+            let status = if connected {
+                format!(
+                    "{} · authoritative Agent Wall projection",
+                    snapshot.connection.label()
+                )
+            } else {
+                format!("{} · UI contract preview", snapshot.connection.label())
+            };
             (
                 "Session",
                 vec![
-                    "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
+                    status,
+                    format!(
+                        "Session {}",
+                        snapshot.session_id.as_deref().unwrap_or("not attached")
+                    ),
+                    format!(
+                        "Workspace {}",
+                        snapshot.workspace_id.as_deref().unwrap_or("not attached")
+                    ),
                     format!(
                         "Root {} · parent {} · origin {}",
                         lineage.root_session_id,
                         parent,
                         lineage.origin.label()
                     ),
-                    "No durable session owner is connected.".to_owned(),
+                    if connected {
+                        "Session identity is projected from the connected LBE runtime.".to_owned()
+                    } else {
+                        "No durable session owner is connected.".to_owned()
+                    },
                 ],
             )
         }

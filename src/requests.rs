@@ -13,6 +13,7 @@ pub(crate) enum UserRequest {
         session_id: String,
         message: String,
     },
+    RefreshRuntimeSnapshot,
     RefreshProviderCatalog,
     SelectModel {
         model: ModelRef,
