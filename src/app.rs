@@ -296,6 +296,28 @@ impl App {
                 }
                 None
             }
+            "/patch" => {
+                let mut patch_parts = argument.splitn(3, char::is_whitespace);
+                let path = patch_parts.next().unwrap_or("").trim();
+                let expected_sha256 = patch_parts.next().unwrap_or("").trim();
+                let content = patch_parts.next().unwrap_or("");
+                if path.is_empty() || expected_sha256.is_empty() || content.is_empty() {
+                    self.transcript.push(
+                        "SYSTEM  usage: /patch <relative-path> <expected-sha256> <replacement-content>"
+                            .to_owned(),
+                    );
+                } else {
+                    self.apply_wrapper_result(wrapper.submit(
+                        UserRequest::PatchWorkspace {
+                            path: path.to_owned(),
+                            content: content.to_owned(),
+                            expected_sha256: expected_sha256.to_owned(),
+                        },
+                        Instant::now(),
+                    ));
+                }
+                None
+            }
             "/undo" => Some(MockPanel::Undo),
             "/checkpoints" => Some(MockPanel::Undo),
             "/mode" => {

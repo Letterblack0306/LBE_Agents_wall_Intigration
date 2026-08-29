@@ -26,6 +26,11 @@ pub(crate) enum UserRequest {
     SearchWorkspace {
         query: String,
     },
+    PatchWorkspace {
+        path: String,
+        content: String,
+        expected_sha256: String,
+    },
     RefreshProviderCatalog,
     SelectModel {
         model: ModelRef,

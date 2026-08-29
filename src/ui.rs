@@ -341,6 +341,7 @@ fn shortcut_text() -> Text<'static> {
         Line::from("/list   list a relative directory through Agent Wall"),
         Line::from("/glob   match relative paths through Agent Wall"),
         Line::from("/search search workspace evidence through Agent Wall"),
+        Line::from("/patch  apply a stale-checked file patch through Agent Wall"),
         Line::from("Ctrl+D  exit when the composer is empty"),
         Line::from("?       close this shortcut reference"),
         Line::from("q       quit when the task input is empty"),
