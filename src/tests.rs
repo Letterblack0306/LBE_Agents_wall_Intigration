@@ -1135,6 +1135,91 @@ fn run_command_requires_a_registered_command_id() {
 }
 
 #[test]
+fn mock_authorization_projection_fails_closed() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+    app.handle_command("/authorize modify", &mut wrapper);
+    assert!(app.transcript.iter().any(|line| {
+        line.contains("governed authorization projection is unavailable in mock mode")
+    }));
+}
+
+#[test]
+fn authorize_command_requires_a_capability() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+    app.handle_command("/authorize", &mut wrapper);
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("usage: /authorize <capability>"))
+    );
+}
+
+#[test]
+fn real_wrapper_rejects_foreign_approval_resolution() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(
+            UserRequest::Approve {
+                approval_id: "foreign-approval".to_owned(),
+            },
+            Instant::now(),
+        )
+        .expect_err("foreign approval IDs must fail closed");
+    assert!(
+        error
+            .message
+            .contains("no Agent Wall authorization is pending")
+    );
+}
+
+#[test]
+fn real_wrapper_projects_and_resolves_agent_wall_authorization() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+        "LBE_GUARD_INSPECTOR_CONFIG_PATH",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none()) {
+        return;
+    }
+
+    let mut wrapper = RealLbeWrapper::new();
+    wrapper
+        .attach()
+        .expect("configured Agent Wall must attach before authorization projection");
+    while wrapper.poll_event(Instant::now()).unwrap().is_some() {}
+    wrapper
+        .submit(
+            UserRequest::RequestAuthorization {
+                capability: "modify".to_owned(),
+            },
+            Instant::now(),
+        )
+        .expect("authorization evaluation must cross the Agent Wall boundary");
+
+    let required_event = wrapper
+        .poll_event(Instant::now())
+        .expect("authorization evaluation event polling must succeed")
+        .expect("Agent Wall must emit an authorization event");
+    let approval_id = match required_event {
+        LbeEvent::AuthorizationRequired { approval_id, .. } => approval_id,
+        other => panic!("expected AuthorizationRequired, got {other:?}"),
+    };
+
+    wrapper
+        .submit(UserRequest::Approve { approval_id }, Instant::now())
+        .expect("approval resolution must cross the Agent Wall boundary");
+    assert!(matches!(
+        wrapper.poll_event(Instant::now()).unwrap(),
+        Some(LbeEvent::AuthorizationResolved { verdict, .. }) if verdict == "ALLOW"
+    ));
+}
+
+#[test]
 fn mock_provider_catalog_events_and_panels_project_safe_typed_values() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();

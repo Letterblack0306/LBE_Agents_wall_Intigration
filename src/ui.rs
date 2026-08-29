@@ -343,6 +343,7 @@ fn shortcut_text() -> Text<'static> {
         Line::from("/search search workspace evidence through Agent Wall"),
         Line::from("/patch  apply a stale-checked file patch through Agent Wall"),
         Line::from("/run    execute a registered process through Agent Wall"),
+        Line::from("/authorize request Agent Wall permission"),
         Line::from("Ctrl+D  exit when the composer is empty"),
         Line::from("?       close this shortcut reference"),
         Line::from("q       quit when the task input is empty"),

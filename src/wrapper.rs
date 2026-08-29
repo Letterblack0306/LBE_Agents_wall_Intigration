@@ -796,6 +796,11 @@ impl LbeWrapper for MockLbeWrapper {
                     "governed registered-process execution is unavailable in mock mode",
                 ));
             }
+            UserRequest::RequestAuthorization { .. } => {
+                return Err(LbeError::new(
+                    "governed authorization projection is unavailable in mock mode",
+                ));
+            }
             UserRequest::RefreshProviderCatalog => {
                 self.emit(LbeEvent::ProviderDiscoveryStarted);
                 let providers = self.snapshot.providers.clone();
@@ -1197,6 +1202,7 @@ pub(crate) struct RealLbeWrapper {
     wall_database: Option<PathBuf>,
     session_id: Option<String>,
     task_id: Option<String>,
+    pending_authorization: Option<(String, String, String)>,
     pending_events: VecDeque<LbeEvent>,
 }
 
@@ -1253,6 +1259,7 @@ impl RealLbeWrapper {
             wall_database,
             session_id,
             task_id,
+            pending_authorization: None,
             pending_events: VecDeque::new(),
         }
     }
@@ -2545,6 +2552,229 @@ impl RealLbeWrapper {
         }
         Ok(())
     }
+
+    fn request_authorization(&mut self, capability: &str) -> Result<(), LbeError> {
+        let wall_root = self
+            .wall_root
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_ROOT is not configured"))?;
+        let database = self
+            .wall_database
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_DATABASE is not configured"))?;
+        let session_id = self
+            .session_id
+            .clone()
+            .or_else(|| self.snapshot.session_id.clone())
+            .ok_or_else(|| LbeError::new("LBE_SESSION_ID is not configured"))?;
+        let workspace_id = self
+            .snapshot
+            .workspace_id
+            .clone()
+            .ok_or_else(|| LbeError::new("authoritative workspace identity is unavailable"))?;
+        let workspace = self
+            .target_workspace
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_TARGET_WORKSPACE is not configured"))?;
+        let operation_id = format!(
+            "tui.authorization:{}:{}",
+            session_id,
+            next_real_operation_ordinal()
+        );
+        let python = std::env::var_os("LBE_WALL_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("python"));
+        let output = Command::new(&python)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "authorization",
+                "evaluate",
+                "--database",
+            ])
+            .arg(database)
+            .args([
+                "--session-id",
+                &session_id,
+                "--workspace-id",
+                &workspace_id,
+                "--workspace",
+            ])
+            .arg(workspace)
+            .args([
+                "--capability",
+                capability,
+                "--operation-id",
+                &operation_id,
+                "--format",
+                "json",
+            ])
+            .output()
+            .map_err(|error| LbeError::new(format!("authorization evaluation failed: {error}")))?;
+        let stdout = String::from_utf8(output.stdout)
+            .map_err(|_| LbeError::new("authorization evaluation stdout was not UTF-8"))?;
+        let payload: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|error| LbeError::new(format!("invalid authorization JSON: {error}")))?;
+        if payload
+            .get("operation_id")
+            .and_then(serde_json::Value::as_str)
+            != Some(operation_id.as_str())
+            || payload
+                .get("capability")
+                .and_then(serde_json::Value::as_str)
+                != Some(capability)
+        {
+            return Err(LbeError::new("authorization response identity mismatch"));
+        }
+        let verdict = payload
+            .get("verdict")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("DENY")
+            .to_owned();
+        let rationale = payload
+            .get("rationale")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("authorization did not provide a rationale")
+            .to_owned();
+        let approval_id = payload
+            .get("approval_id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        if verdict == "REQUIRE_APPROVAL" {
+            let approval_id = approval_id
+                .ok_or_else(|| LbeError::new("authorization required without approval ID"))?;
+            self.pending_authorization = Some((
+                operation_id.clone(),
+                approval_id.clone(),
+                capability.to_owned(),
+            ));
+            self.pending_events
+                .push_back(LbeEvent::AuthorizationRequired {
+                    operation_id,
+                    approval_id,
+                    capability: capability.to_owned(),
+                    rationale,
+                });
+        } else {
+            self.pending_events
+                .push_back(LbeEvent::AuthorizationResolved {
+                    operation_id,
+                    approval_id: approval_id.unwrap_or_default(),
+                    verdict,
+                    rationale,
+                });
+        }
+        Ok(())
+    }
+
+    fn resolve_authorization(
+        &mut self,
+        requested_approval_id: &str,
+        decision: &str,
+    ) -> Result<(), LbeError> {
+        let (operation_id, approval_id, capability) = self
+            .pending_authorization
+            .clone()
+            .ok_or_else(|| LbeError::new("no Agent Wall authorization is pending"))?;
+        if requested_approval_id != approval_id {
+            return Err(LbeError::new(
+                "approval ID does not match pending Agent Wall authorization",
+            ));
+        }
+        let wall_root = self
+            .wall_root
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_ROOT is not configured"))?;
+        let database = self
+            .wall_database
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_DATABASE is not configured"))?;
+        let session_id = self
+            .session_id
+            .clone()
+            .or_else(|| self.snapshot.session_id.clone())
+            .ok_or_else(|| LbeError::new("LBE_SESSION_ID is not configured"))?;
+        let workspace_id = self
+            .snapshot
+            .workspace_id
+            .clone()
+            .ok_or_else(|| LbeError::new("authoritative workspace identity is unavailable"))?;
+        let workspace = self
+            .target_workspace
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_TARGET_WORKSPACE is not configured"))?;
+        let python = std::env::var_os("LBE_WALL_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("python"));
+        let output = Command::new(&python)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "authorization",
+                "resolve",
+                "--database",
+            ])
+            .arg(database)
+            .args([
+                "--session-id",
+                &session_id,
+                "--workspace-id",
+                &workspace_id,
+                "--workspace",
+            ])
+            .arg(workspace)
+            .args([
+                "--capability",
+                &capability,
+                "--operation-id",
+                &operation_id,
+                "--approval-id",
+                &approval_id,
+                "--decision",
+                decision,
+                "--format",
+                "json",
+            ])
+            .output()
+            .map_err(|error| LbeError::new(format!("authorization resolution failed: {error}")))?;
+        let stdout = String::from_utf8(output.stdout)
+            .map_err(|_| LbeError::new("authorization resolution stdout was not UTF-8"))?;
+        let payload: serde_json::Value = serde_json::from_str(&stdout).map_err(|error| {
+            LbeError::new(format!("invalid authorization resolution JSON: {error}"))
+        })?;
+        if payload
+            .get("operation_id")
+            .and_then(serde_json::Value::as_str)
+            != Some(operation_id.as_str())
+            || payload
+                .get("approval_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(approval_id.as_str())
+        {
+            return Err(LbeError::new("authorization resolution identity mismatch"));
+        }
+        let verdict = payload
+            .get("verdict")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("DENY")
+            .to_owned();
+        let rationale = payload
+            .get("rationale")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("authorization resolution did not provide a rationale")
+            .to_owned();
+        self.pending_authorization = None;
+        self.pending_events
+            .push_back(LbeEvent::AuthorizationResolved {
+                operation_id,
+                approval_id,
+                verdict,
+                rationale,
+            });
+        Ok(())
+    }
 }
 
 fn next_real_operation_ordinal() -> u64 {
@@ -2573,6 +2803,15 @@ impl LbeWrapper for RealLbeWrapper {
             } => self.patch_workspace(&path, &content, &expected_sha256),
             UserRequest::RunRegisteredProcess { command_id } => {
                 self.run_registered_process(&command_id)
+            }
+            UserRequest::RequestAuthorization { capability } => {
+                self.request_authorization(&capability)
+            }
+            UserRequest::Approve { approval_id } => {
+                self.resolve_authorization(&approval_id, "approve")
+            }
+            UserRequest::Reject { approval_id } => {
+                self.resolve_authorization(&approval_id, "reject")
             }
             _ => self.require_connected(),
         }

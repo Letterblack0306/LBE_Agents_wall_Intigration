@@ -332,6 +332,20 @@ impl App {
                 }
                 None
             }
+            "/authorize" => {
+                if argument.is_empty() {
+                    self.transcript
+                        .push("SYSTEM  usage: /authorize <capability>".to_owned());
+                } else {
+                    self.apply_wrapper_result(wrapper.submit(
+                        UserRequest::RequestAuthorization {
+                            capability: argument.to_owned(),
+                        },
+                        Instant::now(),
+                    ));
+                }
+                None
+            }
             "/undo" => Some(MockPanel::Undo),
             "/checkpoints" => Some(MockPanel::Undo),
             "/mode" => {
@@ -693,6 +707,34 @@ impl App {
                     approval_id,
                     proposal,
                 };
+                self.active_execution_id = None;
+            }
+            LbeEvent::AuthorizationRequired {
+                operation_id,
+                approval_id,
+                capability,
+                rationale,
+            } => {
+                self.phase = Phase::AwaitingApproval {
+                    approval_id,
+                    proposal: format!("Agent Wall requires approval · {capability} · {rationale}"),
+                };
+                self.active_execution_id = Some(operation_id);
+            }
+            LbeEvent::AuthorizationResolved {
+                operation_id,
+                approval_id,
+                verdict,
+                rationale,
+            } => {
+                self.transcript.push(format!(
+                    "AUTHORIZATION  {verdict} · {operation_id} · {approval_id} · {rationale}"
+                ));
+                if verdict == "ALLOW" {
+                    self.phase = Phase::Welcome;
+                } else {
+                    self.phase = Phase::Rejected;
+                }
                 self.active_execution_id = None;
             }
             LbeEvent::PlanUpdated { text } => {

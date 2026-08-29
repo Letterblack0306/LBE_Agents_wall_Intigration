@@ -222,6 +222,18 @@ pub(crate) enum LbeEvent {
     ExecutionRejected {
         approval_id: String,
     },
+    AuthorizationRequired {
+        operation_id: String,
+        approval_id: String,
+        capability: String,
+        rationale: String,
+    },
+    AuthorizationResolved {
+        operation_id: String,
+        approval_id: String,
+        verdict: String,
+        rationale: String,
+    },
     SessionMemoryIndexed {
         session_id: String,
         session_hash: String,
