@@ -26,6 +26,7 @@ pub(crate) struct App {
     pub(crate) should_quit: bool,
     pub(crate) intro_started_at: Instant,
     pub(crate) snapshot: LbeSnapshot,
+    pub(crate) active_execution_id: Option<String>,
 }
 
 impl Default for App {
@@ -42,6 +43,7 @@ impl Default for App {
             should_quit: false,
             intro_started_at: Instant::now(),
             snapshot: LbeSnapshot::default(),
+            active_execution_id: None,
         }
     }
 }
@@ -324,7 +326,15 @@ impl App {
                 self.snapshot.runtime_mode = runtime_mode;
                 self.snapshot.attached_client_count = attached_client_count;
             }
-            LbeEvent::SessionStatusUpdated { status } => {
+            LbeEvent::SessionStatusUpdated {
+                status,
+                execution_id,
+            } => {
+                if execution_id.as_deref() != self.active_execution_id.as_deref()
+                    && execution_id.is_some()
+                {
+                    return;
+                }
                 self.snapshot.session_state = status;
                 if !matches!(self.phase, Phase::AwaitingApproval { .. })
                     || status != SessionStatus::WaitingForApproval
@@ -334,11 +344,6 @@ impl App {
             }
             LbeEvent::SnapshotUpdated { snapshot } => {
                 self.agent_mode = snapshot.active_mode;
-                if !matches!(self.phase, Phase::AwaitingApproval { .. })
-                    || snapshot.session_state != SessionStatus::WaitingForApproval
-                {
-                    self.phase = Phase::from_session_status(snapshot.session_state);
-                }
                 self.snapshot = snapshot;
             }
             LbeEvent::ProviderCatalogDiscovered { providers } => {
@@ -429,56 +434,74 @@ impl App {
                     .push(format!("CHECKPOINT  restored · {checkpoint_id}"));
             }
             LbeEvent::CommandStarted {
+                execution_id,
                 tool_call_id,
                 command_id,
                 command_summary,
-            } => {
+            } if self.owns_execution(&execution_id) => {
                 self.transcript.push(format!(
                     "COMMAND  started · {command_id} · {tool_call_id} · {command_summary}"
                 ));
             }
             LbeEvent::CommandStdoutDelta {
-                command_id, text, ..
-            } => self
+                execution_id,
+                command_id,
+                text,
+                ..
+            } if self.owns_execution(&execution_id) => self
                 .transcript
                 .push(format!("  STDOUT {command_id} · {text}")),
             LbeEvent::CommandStderrDelta {
-                command_id, text, ..
-            } => self
+                execution_id,
+                command_id,
+                text,
+                ..
+            } if self.owns_execution(&execution_id) => self
                 .transcript
                 .push(format!("  STDERR {command_id} · {text}")),
             LbeEvent::CommandCompleted {
+                execution_id,
                 command_id,
                 exit_code,
                 ..
-            } => self.transcript.push(format!(
+            } if self.owns_execution(&execution_id) => self.transcript.push(format!(
                 "COMMAND  completed · {command_id} · exit {exit_code}"
             )),
             LbeEvent::CommandFailed {
+                execution_id,
                 command_id,
                 exit_code,
                 message,
                 ..
-            } => self.transcript.push(format!(
+            } if self.owns_execution(&execution_id) => self.transcript.push(format!(
                 "COMMAND  failed · {command_id} · exit {} · {message}",
                 exit_code.map_or_else(|| "unknown".to_owned(), |code| code.to_string())
             )),
             LbeEvent::CommandDetached {
+                execution_id,
                 command_id,
                 tool_call_id,
-            } => self
+            } if self.owns_execution(&execution_id) => self
                 .transcript
                 .push(format!("COMMAND  detached · {command_id} · {tool_call_id}")),
-            LbeEvent::DetachedCommandProgress { command_id, text } => self
+            LbeEvent::DetachedCommandProgress {
+                execution_id,
+                command_id,
+                text,
+            } if self.owns_execution(&execution_id) => self
                 .transcript
                 .push(format!("  DETACHED {command_id} · {text}")),
             LbeEvent::DetachedCommandCompleted {
+                execution_id,
                 command_id,
                 exit_code,
-            } => self.transcript.push(format!(
+            } if self.owns_execution(&execution_id) => self.transcript.push(format!(
                 "DETACHED COMMAND  completed · {command_id} · exit {exit_code}"
             )),
-            LbeEvent::DetachedLogAvailable { command_id } => self
+            LbeEvent::DetachedLogAvailable {
+                execution_id,
+                command_id,
+            } if self.owns_execution(&execution_id) => self
                 .transcript
                 .push(format!("DETACHED COMMAND  log available · {command_id}")),
             LbeEvent::ContextCompactionSuggested => {
@@ -528,11 +551,16 @@ impl App {
                     "TIMEOUT  warning · {elapsed_seconds}s/{timeout_seconds}s"
                 ));
             }
-            LbeEvent::TimedOut { timeout_seconds } => {
+            LbeEvent::TimedOut {
+                execution_id,
+                timeout_seconds,
+            } if self.owns_execution(&execution_id) => {
                 self.snapshot.elapsed_seconds = timeout_seconds;
                 self.snapshot.timeout_seconds = timeout_seconds;
                 self.transcript
                     .push(format!("TIMEOUT  reached · {timeout_seconds}s"));
+                self.phase = Phase::TimedOut;
+                self.active_execution_id = None;
             }
             LbeEvent::DiagnosticsUpdated { checks } => {
                 self.snapshot.diagnostics = checks;
@@ -548,6 +576,7 @@ impl App {
                     approval_id,
                     proposal,
                 };
+                self.active_execution_id = None;
             }
             LbeEvent::PlanUpdated { text } => {
                 self.transcript.push(format!("PLAN  {text}"));
@@ -558,40 +587,54 @@ impl App {
                 self.phase = Phase::Welcome;
             }
             LbeEvent::ToolRequested {
+                execution_id,
                 tool_call_id,
                 tool_name,
                 input_summary,
                 risk,
-            } => {
+            } if self.owns_execution(&execution_id) => {
                 self.transcript.push(format!(
                     "TOOL  REQUESTED · {tool_name} · {} · {input_summary} · {tool_call_id}",
                     risk.label()
                 ));
             }
-            LbeEvent::ToolStarted { tool_call_id } => {
+            LbeEvent::ToolStarted {
+                execution_id,
+                tool_call_id,
+            } if self.owns_execution(&execution_id) => {
                 self.transcript
                     .push(format!("TOOL  STARTED · {tool_call_id}"));
             }
-            LbeEvent::ToolOutputDelta { tool_call_id, text } => {
+            LbeEvent::ToolOutputDelta {
+                execution_id,
+                tool_call_id,
+                text,
+            } if self.owns_execution(&execution_id) => {
                 self.transcript
                     .push(format!("  TOOL {tool_call_id} · {text}"));
             }
             LbeEvent::ToolCompleted {
+                execution_id,
                 tool_call_id,
                 evidence_ref,
-            } => {
+            } if self.owns_execution(&execution_id) => {
                 let evidence = evidence_ref.as_deref().unwrap_or("no evidence ref");
                 self.transcript
                     .push(format!("TOOL  COMPLETED · {tool_call_id} · {evidence}"));
             }
             LbeEvent::ToolFailed {
+                execution_id,
                 tool_call_id,
                 message,
-            } => {
+            } if self.owns_execution(&execution_id) => {
                 self.transcript
                     .push(format!("TOOL  FAILED · {tool_call_id} · {message}"));
             }
             LbeEvent::ExecutionStarted { execution_id } => {
+                if self.active_execution_id.is_some() {
+                    return;
+                }
+                self.active_execution_id = Some(execution_id.clone());
                 if let Phase::AwaitingApproval { proposal, .. } = &self.phase {
                     self.transcript.push(format!("lbe runtime  {proposal}"));
                 }
@@ -599,37 +642,49 @@ impl App {
                     .push(format!("lbe runtime  EXECUTION STARTED · {execution_id}"));
                 self.phase = Phase::Running;
             }
-            LbeEvent::AgentRequestedCompletion { execution_id } => {
+            LbeEvent::AgentRequestedCompletion { execution_id }
+                if self.owns_execution(&execution_id) =>
+            {
                 self.transcript
                     .push(format!("AGENT  requested completion · {execution_id}"));
             }
             LbeEvent::ExecutionCompleted {
                 execution_id,
                 receipt_id,
-            } => {
+            } if self.owns_execution(&execution_id) => {
                 let receipt = receipt_id.as_deref().unwrap_or("no receipt");
                 self.transcript.push(format!(
                     "EXECUTION  completed · {execution_id} · receipt {receipt}"
                 ));
             }
-            LbeEvent::ValidationStarted { execution_id } => {
+            LbeEvent::ValidationStarted { execution_id } if self.owns_execution(&execution_id) => {
                 self.transcript
                     .push(format!("VALIDATION  started · {execution_id}"));
             }
-            LbeEvent::ValidationCompleted { status, result } => {
+            LbeEvent::ValidationCompleted {
+                execution_id,
+                status,
+                result,
+            } if self.owns_execution(&execution_id) => {
                 self.transcript
                     .push(format!("VALIDATION  {} · {result}", status.label()));
             }
             LbeEvent::LbeCompletionAccepted {
                 execution_id,
                 receipt_id,
-            } => {
+            } if self.owns_execution(&execution_id) => {
                 let receipt = receipt_id.as_deref().unwrap_or("no receipt");
                 self.transcript.push(format!(
                     "LBE RUNTIME  COMPLETION ACCEPTED · {execution_id} · receipt {receipt}"
                 ));
+                self.phase = Phase::Completed;
+                self.active_execution_id = None;
             }
-            LbeEvent::ExecutionRejected => {
+            LbeEvent::ExecutionRejected { approval_id } => {
+                if !matches!(self.phase, Phase::AwaitingApproval { approval_id: ref current, .. } if current == &approval_id)
+                {
+                    return;
+                }
                 self.transcript
                     .push("LBE RUNTIME  REJECTED · no execution occurred.".to_owned());
                 self.phase = Phase::Rejected;
@@ -746,7 +801,31 @@ impl App {
                 self.transcript
                     .push(format!("BROWSER  reconnected · {browser_session_id}"));
             }
+            LbeEvent::CommandStarted { .. }
+            | LbeEvent::CommandStdoutDelta { .. }
+            | LbeEvent::CommandStderrDelta { .. }
+            | LbeEvent::CommandCompleted { .. }
+            | LbeEvent::CommandFailed { .. }
+            | LbeEvent::CommandDetached { .. }
+            | LbeEvent::DetachedCommandProgress { .. }
+            | LbeEvent::DetachedCommandCompleted { .. }
+            | LbeEvent::DetachedLogAvailable { .. }
+            | LbeEvent::ToolRequested { .. }
+            | LbeEvent::ToolStarted { .. }
+            | LbeEvent::ToolOutputDelta { .. }
+            | LbeEvent::ToolCompleted { .. }
+            | LbeEvent::ToolFailed { .. }
+            | LbeEvent::AgentRequestedCompletion { .. }
+            | LbeEvent::ExecutionCompleted { .. }
+            | LbeEvent::ValidationStarted { .. }
+            | LbeEvent::ValidationCompleted { .. }
+            | LbeEvent::LbeCompletionAccepted { .. }
+            | LbeEvent::TimedOut { .. } => {}
         }
+    }
+
+    fn owns_execution(&self, execution_id: &str) -> bool {
+        self.active_execution_id.as_deref() == Some(execution_id)
     }
 
     pub(crate) fn intro_elapsed(&self, now: Instant) -> Duration {

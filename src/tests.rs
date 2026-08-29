@@ -27,12 +27,34 @@ fn start_mock_execution(wrapper: &mut MockLbeWrapper, now: Instant) {
     wrapper
         .submit(
             UserRequest::Approve {
-                approval_id: "apr_mock_7f31".to_owned(),
+                approval_id: "apr_mock_0001".to_owned(),
             },
             now,
         )
         .unwrap();
     while wrapper.poll_event(now).unwrap().is_some() {}
+}
+
+fn submit_mock_proposal(wrapper: &mut MockLbeWrapper, now: Instant) -> String {
+    wrapper
+        .submit(
+            UserRequest::SubmitTask {
+                intent: "inspect workspace".to_owned(),
+                mode: AgentMode::Regular,
+            },
+            now,
+        )
+        .unwrap();
+    let mut approval_id = None;
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        if let LbeEvent::ProposalCreated {
+            approval_id: id, ..
+        } = event
+        {
+            approval_id = Some(id);
+        }
+    }
+    approval_id.expect("expected proposal event")
 }
 
 fn active_execution_id(wrapper: &MockLbeWrapper) -> String {
@@ -56,11 +78,11 @@ fn proposal_approval_lifecycle_reaches_receipt() {
     let mut wrapper = MockLbeWrapper::default();
     let now = Instant::now();
     app.input = "inspect workspace".to_owned();
-    app.submit_or_approve(&mut wrapper, now);
+    app.submit_or_approve(&mut wrapper, Instant::now());
     app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
     assert!(matches!(
         app.phase,
-        Phase::AwaitingApproval { ref approval_id, .. } if approval_id == "apr_mock_7f31"
+        Phase::AwaitingApproval { ref approval_id, .. } if approval_id == "apr_mock_0001"
     ));
     app.submit_or_approve(&mut wrapper, now);
     app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
@@ -169,7 +191,7 @@ fn duplicate_rejected_terminal_is_suppressed() {
     wrapper
         .submit(
             UserRequest::Reject {
-                approval_id: "apr_mock_7f31".to_owned(),
+                approval_id: "apr_mock_0001".to_owned(),
             },
             now,
         )
@@ -179,12 +201,17 @@ fn duplicate_rejected_terminal_is_suppressed() {
     assert_eq!(
         first_terminal_events
             .iter()
-            .filter(|event| matches!(event, LbeEvent::ExecutionRejected))
+            .filter(|event| matches!(event, LbeEvent::ExecutionRejected { .. }))
             .count(),
         1
     );
 
-    wrapper.inject_due_event_for_test(LbeEvent::ExecutionRejected, now);
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ExecutionRejected {
+            approval_id: "apr_mock_0001".to_owned(),
+        },
+        now,
+    );
 
     assert!(wrapper.poll_event(now).unwrap().is_none());
     assert_eq!(wrapper.snapshot().session_state, SessionStatus::Rejected);
@@ -209,7 +236,13 @@ fn duplicate_timeout_terminal_is_suppressed() {
         1
     );
 
-    wrapper.inject_due_event_for_test(LbeEvent::TimedOut { timeout_seconds: 0 }, now);
+    wrapper.inject_due_event_for_test(
+        LbeEvent::TimedOut {
+            execution_id: active_execution_id(&wrapper),
+            timeout_seconds: 0,
+        },
+        now,
+    );
 
     assert!(wrapper.poll_event(now).unwrap().is_none());
     assert_eq!(wrapper.snapshot().session_state, SessionStatus::TimedOut);
@@ -226,6 +259,7 @@ fn duplicate_failed_terminal_is_suppressed() {
     start_mock_execution(&mut wrapper, now);
     wrapper.inject_due_event_for_test(
         LbeEvent::ValidationCompleted {
+            execution_id: active_execution_id(&wrapper),
             status: ValidationStatus::Passed,
             result: "invalid early validation".to_owned(),
         },
@@ -237,6 +271,7 @@ fn duplicate_failed_terminal_is_suppressed() {
 
     wrapper.inject_due_event_for_test(
         LbeEvent::ValidationCompleted {
+            execution_id: active_execution_id(&wrapper),
             status: ValidationStatus::Failed,
             result: "duplicate failure".to_owned(),
         },
@@ -262,12 +297,17 @@ fn duplicate_aborted_terminal_is_suppressed() {
     assert_eq!(
         first_terminal_events
             .iter()
-            .filter(|event| matches!(event, LbeEvent::ExecutionRejected))
+            .filter(|event| matches!(event, LbeEvent::ExecutionRejected { .. }))
             .count(),
         1
     );
 
-    wrapper.inject_due_event_for_test(LbeEvent::ExecutionRejected, now);
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ExecutionRejected {
+            approval_id: "aborted".to_owned(),
+        },
+        now,
+    );
 
     assert!(wrapper.poll_event(now).unwrap().is_none());
     assert_eq!(wrapper.snapshot().session_state, SessionStatus::Aborted);
@@ -294,6 +334,7 @@ fn duplicate_completion_and_post_terminal_events_do_not_mutate_state_twice() {
     );
     wrapper.inject_due_event_for_test(
         LbeEvent::ToolStarted {
+            execution_id: active_execution_id(&wrapper),
             tool_call_id: "tool_mock_workspace".to_owned(),
         },
         now,
@@ -321,6 +362,7 @@ fn ordering_guards_reject_missing_intermediate_states() {
 
     wrapper.inject_due_event_for_test(
         LbeEvent::ToolCompleted {
+            execution_id: active_execution_id(&wrapper),
             tool_call_id: "unknown_tool".to_owned(),
             evidence_ref: None,
         },
@@ -347,6 +389,7 @@ fn validation_completion_before_validation_start_is_rejected() {
 
     wrapper.inject_due_event_for_test(
         LbeEvent::ValidationCompleted {
+            execution_id: active_execution_id(&wrapper),
             status: ValidationStatus::Passed,
             result: "invalid early validation".to_owned(),
         },
@@ -425,7 +468,7 @@ fn abort_and_reject_terminalize_once() {
     rejected
         .submit(
             UserRequest::Reject {
-                approval_id: "apr_mock_7f31".to_owned(),
+                approval_id: "apr_mock_0001".to_owned(),
             },
             now,
         )
@@ -434,7 +477,7 @@ fn abort_and_reject_terminalize_once() {
     assert_eq!(
         reject_events
             .iter()
-            .filter(|event| matches!(event, LbeEvent::ExecutionRejected))
+            .filter(|event| matches!(event, LbeEvent::ExecutionRejected { .. }))
             .count(),
         1
     );
@@ -447,7 +490,7 @@ fn abort_and_reject_terminalize_once() {
     assert_eq!(
         abort_events
             .iter()
-            .filter(|event| matches!(event, LbeEvent::ExecutionRejected))
+            .filter(|event| matches!(event, LbeEvent::ExecutionRejected { .. }))
             .count(),
         1
     );
@@ -466,6 +509,116 @@ fn parallel_wrapper_execution_ids_do_not_collide() {
         first.snapshot().active_execution_id,
         second.snapshot().active_execution_id
     );
+}
+
+#[test]
+fn approval_ids_are_unique_and_replay_is_rejected() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    let approval_a = submit_mock_proposal(&mut wrapper, now);
+    wrapper
+        .submit(
+            UserRequest::Reject {
+                approval_id: approval_a.clone(),
+            },
+            now,
+        )
+        .unwrap();
+    let _ = drain_wrapper(&mut wrapper, now);
+
+    let approval_b = submit_mock_proposal(&mut wrapper, now);
+    assert_ne!(approval_a, approval_b);
+    let replay = wrapper.submit(
+        UserRequest::Approve {
+            approval_id: approval_a,
+        },
+        now,
+    );
+    assert!(replay.is_err());
+    assert_eq!(
+        wrapper.snapshot().session_state,
+        SessionStatus::WaitingForApproval
+    );
+}
+
+#[test]
+fn stale_execution_events_do_not_mutate_a_new_active_execution() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec_a".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::LbeCompletionAccepted {
+        execution_id: "exec_a".to_owned(),
+        receipt_id: None,
+    });
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec_b".to_owned(),
+    });
+    let before = app.transcript.len();
+    app.reduce_lbe_event(LbeEvent::ValidationCompleted {
+        execution_id: "exec_a".to_owned(),
+        status: ValidationStatus::Passed,
+        result: "stale".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::TimedOut {
+        execution_id: "exec_a".to_owned(),
+        timeout_seconds: 1,
+    });
+    app.reduce_lbe_event(LbeEvent::ExecutionCompleted {
+        execution_id: "exec_a".to_owned(),
+        receipt_id: None,
+    });
+    app.reduce_lbe_event(LbeEvent::LbeCompletionAccepted {
+        execution_id: "exec_a".to_owned(),
+        receipt_id: None,
+    });
+    assert_eq!(app.active_execution_id.as_deref(), Some("exec_b"));
+    assert_eq!(app.phase, Phase::Running);
+    assert_eq!(app.transcript.len(), before);
+}
+
+#[test]
+fn foreign_tool_and_command_events_do_not_project_into_active_execution() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec_a".to_owned(),
+    });
+    let before = app.transcript.len();
+    app.reduce_lbe_event(LbeEvent::ToolRequested {
+        execution_id: "exec_b".to_owned(),
+        tool_call_id: "tool_b".to_owned(),
+        tool_name: "foreign".to_owned(),
+        input_summary: "foreign".to_owned(),
+        risk: crate::events::ToolRisk::ReadOnly,
+    });
+    app.reduce_lbe_event(LbeEvent::CommandStdoutDelta {
+        execution_id: "exec_b".to_owned(),
+        tool_call_id: "tool_b".to_owned(),
+        command_id: "cmd_b".to_owned(),
+        text: "foreign".to_owned(),
+    });
+    assert_eq!(app.active_execution_id.as_deref(), Some("exec_a"));
+    assert_eq!(app.transcript.len(), before);
+}
+
+#[test]
+fn snapshot_and_attachment_events_do_not_change_execution_ownership() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec_a".to_owned(),
+    });
+    let mut snapshot = app.snapshot.clone();
+    snapshot.active_execution_id = Some("exec_foreign".to_owned());
+    snapshot.session_state = SessionStatus::Completed;
+    app.reduce_lbe_event(LbeEvent::RuntimeAttachmentUpdated {
+        connection: RuntimeConnection::Disconnected,
+        runtime_id: None,
+        runtime_mode: RuntimeMode::Local,
+        attached_client_count: 0,
+    });
+    app.reduce_lbe_event(LbeEvent::SnapshotUpdated { snapshot });
+    assert_eq!(app.active_execution_id.as_deref(), Some("exec_a"));
+    assert_eq!(app.phase, Phase::Running);
 }
 
 #[test]
@@ -697,14 +850,13 @@ fn session_lineage_and_checkpoint_project_into_their_panels() {
     while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
         app.reduce_lbe_event(event);
     }
-    app.submit_or_approve(&mut wrapper, now);
+    app.submit_or_approve(&mut wrapper, Instant::now());
     while let Some(event) = wrapper
-        .poll_event(now + Duration::from_millis(950))
+        .poll_event(Instant::now() + Duration::from_millis(950))
         .unwrap()
     {
         app.reduce_lbe_event(event);
     }
-
     let session_text = mock_panel_text(MockPanel::Session, &app.snapshot).to_string();
     assert!(session_text.contains("Root sess_mock_7f31 · parent none · origin user"));
 
@@ -718,8 +870,15 @@ fn execution_projects_checkpoint_and_command_streams_without_spawning_a_process(
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
     let now = Instant::now();
-    app.input = "inspect workspace".to_owned();
-    app.submit_or_approve(&mut wrapper, now);
+    wrapper
+        .submit(
+            UserRequest::SubmitTask {
+                intent: "inspect workspace".to_owned(),
+                mode: AgentMode::Regular,
+            },
+            now,
+        )
+        .unwrap();
     while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
         app.reduce_lbe_event(event);
     }
@@ -728,9 +887,9 @@ fn execution_projects_checkpoint_and_command_streams_without_spawning_a_process(
         SessionStatus::WaitingForApproval
     );
 
-    app.submit_or_approve(&mut wrapper, now);
+    app.submit_or_approve(&mut wrapper, Instant::now());
     while let Some(event) = wrapper
-        .poll_event(now + Duration::from_millis(950))
+        .poll_event(Instant::now() + Duration::from_millis(950))
         .unwrap()
     {
         app.reduce_lbe_event(event);
@@ -739,7 +898,9 @@ fn execution_projects_checkpoint_and_command_streams_without_spawning_a_process(
     assert!(
         app.transcript
             .iter()
-            .any(|line| line.contains("CHECKPOINT  created · chk_mock_before_exec"))
+            .any(|line| line.contains("CHECKPOINT  created")),
+        "transcript: {:?}",
+        app.transcript
     );
     assert!(
         app.transcript

@@ -1,11 +1,9 @@
 use crate::{
     browser_chat::BrowserChatProvider,
     memory::MemoryRecord,
-    requests::LbeError,
     types::{
-        AuthState, CheckpointDescriptor, DiagnosticCheck, ModelDescriptor, ModelRef,
-        ProviderHealth, ProviderId, ProviderProjection, RuntimeConnection, RuntimeMode,
-        SessionStatus,
+        AuthState, CheckpointDescriptor, DiagnosticCheck, ModelDescriptor, ProviderHealth,
+        ProviderId, ProviderProjection, RuntimeConnection, RuntimeMode, SessionStatus,
     },
 };
 
@@ -25,6 +23,7 @@ pub(crate) enum LbeEvent {
     },
     SessionStatusUpdated {
         status: SessionStatus,
+        execution_id: Option<String>,
     },
     SnapshotUpdated {
         snapshot: crate::types::LbeSnapshot,
@@ -71,44 +70,53 @@ pub(crate) enum LbeEvent {
         checkpoint_id: String,
     },
     CommandStarted {
+        execution_id: String,
         tool_call_id: String,
         command_id: String,
         command_summary: String,
     },
     CommandStdoutDelta {
+        execution_id: String,
         tool_call_id: String,
         command_id: String,
         text: String,
     },
     CommandStderrDelta {
+        execution_id: String,
         tool_call_id: String,
         command_id: String,
         text: String,
     },
     CommandCompleted {
+        execution_id: String,
         tool_call_id: String,
         command_id: String,
         exit_code: i32,
     },
     CommandFailed {
+        execution_id: String,
         tool_call_id: String,
         command_id: String,
         exit_code: Option<i32>,
         message: String,
     },
     CommandDetached {
+        execution_id: String,
         tool_call_id: String,
         command_id: String,
     },
     DetachedCommandProgress {
+        execution_id: String,
         command_id: String,
         text: String,
     },
     DetachedCommandCompleted {
+        execution_id: String,
         command_id: String,
         exit_code: i32,
     },
     DetachedLogAvailable {
+        execution_id: String,
         command_id: String,
     },
     ContextCompactionSuggested,
@@ -131,6 +139,7 @@ pub(crate) enum LbeEvent {
         timeout_seconds: u64,
     },
     TimedOut {
+        execution_id: String,
         timeout_seconds: u64,
     },
     DiagnosticsUpdated {
@@ -150,23 +159,28 @@ pub(crate) enum LbeEvent {
         verdict: String,
     },
     ToolRequested {
+        execution_id: String,
         tool_call_id: String,
         tool_name: String,
         input_summary: String,
         risk: ToolRisk,
     },
     ToolStarted {
+        execution_id: String,
         tool_call_id: String,
     },
     ToolOutputDelta {
+        execution_id: String,
         tool_call_id: String,
         text: String,
     },
     ToolCompleted {
+        execution_id: String,
         tool_call_id: String,
         evidence_ref: Option<String>,
     },
     ToolFailed {
+        execution_id: String,
         tool_call_id: String,
         message: String,
     },
@@ -184,6 +198,7 @@ pub(crate) enum LbeEvent {
         execution_id: String,
     },
     ValidationCompleted {
+        execution_id: String,
         status: ValidationStatus,
         result: String,
     },
@@ -191,7 +206,9 @@ pub(crate) enum LbeEvent {
         execution_id: String,
         receipt_id: Option<String>,
     },
-    ExecutionRejected,
+    ExecutionRejected {
+        approval_id: String,
+    },
     SessionMemoryIndexed {
         session_id: String,
         session_hash: String,

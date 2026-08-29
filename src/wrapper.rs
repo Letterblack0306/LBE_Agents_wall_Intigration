@@ -85,6 +85,16 @@ impl Default for ExecutionStateMachine {
 }
 
 impl ExecutionStateMachine {
+    fn reset_for_new_request(&mut self) {
+        self.execution_id = None;
+        self.status = ExecutionStatus::Pending;
+        self.deadline = None;
+        self.tools.clear();
+        self.commands.clear();
+        self.validation = ValidationLifecycle::NotStarted;
+        self.terminal_emitted = false;
+    }
+
     fn begin_approval(&mut self) -> Result<(), LbeError> {
         self.ensure_not_terminal()?;
         if !matches!(self.status, ExecutionStatus::Pending) {
@@ -195,7 +205,7 @@ impl ExecutionStateMachine {
                 }
                 Ok(None)
             }
-            LbeEvent::ToolStarted { tool_call_id } => {
+            LbeEvent::ToolStarted { tool_call_id, .. } => {
                 self.ensure_not_terminal_lifecycle()?;
                 self.ensure_running_execution()?;
                 match self.tools.get_mut(tool_call_id) {
@@ -440,6 +450,7 @@ pub(crate) struct MockLbeWrapper {
     snapshot: LbeSnapshot,
     scheduled: VecDeque<ScheduledLbeEvent>,
     pending_approval_id: Option<String>,
+    next_approval_ordinal: u64,
     execution: ExecutionStateMachine,
 }
 
@@ -447,7 +458,7 @@ impl MockLbeWrapper {
     fn is_blocked_post_terminal_lifecycle_event(event: &LbeEvent) -> bool {
         matches!(
             event,
-            LbeEvent::ExecutionRejected
+            LbeEvent::ExecutionRejected { .. }
                 | LbeEvent::TimedOut { .. }
                 | LbeEvent::LbeCompletionAccepted { .. }
                 | LbeEvent::ExecutionStarted { .. }
@@ -495,6 +506,7 @@ impl MockLbeWrapper {
     fn emit_execution_status(&mut self) {
         self.emit(LbeEvent::SessionStatusUpdated {
             status: self.snapshot.session_state,
+            execution_id: self.snapshot.active_execution_id.clone(),
         });
         self.emit_snapshot();
     }
@@ -553,6 +565,7 @@ impl MockLbeWrapper {
                     self.emit_execution_status();
                 }
                 Ok(Some(LbeEvent::ToolFailed {
+                    execution_id: self.execution.execution_id.clone().unwrap_or_default(),
                     tool_call_id: "runtime_state_machine".to_owned(),
                     message: error.message,
                 }))
@@ -578,6 +591,7 @@ impl Default for MockLbeWrapper {
             snapshot: LbeSnapshot::default(),
             scheduled: VecDeque::new(),
             pending_approval_id: None,
+            next_approval_ordinal: 0,
             execution: ExecutionStateMachine::default(),
         }
     }
@@ -591,8 +605,14 @@ impl LbeWrapper for MockLbeWrapper {
         match request {
             UserRequest::SubmitTask { intent, mode } => match mode {
                 AgentMode::Regular => {
+                    if self.execution.status.is_terminal() {
+                        self.execution.reset_for_new_request();
+                        self.snapshot.active_execution_id = None;
+                        self.snapshot.execution_status = None;
+                    }
                     self.execution.begin_approval()?;
-                    let approval_id = "apr_mock_7f31".to_owned();
+                    self.next_approval_ordinal += 1;
+                    let approval_id = format!("apr_mock_{:04}", self.next_approval_ordinal);
                     self.pending_approval_id = Some(approval_id.clone());
                     self.set_execution_status(ExecutionStatus::WaitingForApproval);
                     self.emit(LbeEvent::ProposalCreated {
@@ -710,6 +730,7 @@ impl LbeWrapper for MockLbeWrapper {
                 self.schedule(
                     now + Duration::from_millis(300),
                     LbeEvent::ToolRequested {
+                        execution_id: ids.execution_id.clone(),
                         tool_call_id: ids.tool_call_id.clone(),
                         tool_name: "workspace.inspect".to_owned(),
                         input_summary: "active workspace".to_owned(),
@@ -719,12 +740,14 @@ impl LbeWrapper for MockLbeWrapper {
                 self.schedule(
                     now + Duration::from_millis(350),
                     LbeEvent::ToolStarted {
+                        execution_id: ids.execution_id.clone(),
                         tool_call_id: ids.tool_call_id.clone(),
                     },
                 );
                 self.schedule(
                     now + Duration::from_millis(400),
                     LbeEvent::CommandStarted {
+                        execution_id: ids.execution_id.clone(),
                         tool_call_id: ids.tool_call_id.clone(),
                         command_id: ids.command_id.clone(),
                         command_summary: "cargo check (mock only)".to_owned(),
@@ -733,6 +756,7 @@ impl LbeWrapper for MockLbeWrapper {
                 self.schedule(
                     now + Duration::from_millis(450),
                     LbeEvent::CommandStdoutDelta {
+                        execution_id: ids.execution_id.clone(),
                         tool_call_id: ids.tool_call_id.clone(),
                         command_id: ids.command_id.clone(),
                         text: "Checking mock workspace...".to_owned(),
@@ -741,6 +765,7 @@ impl LbeWrapper for MockLbeWrapper {
                 self.schedule(
                     now + Duration::from_millis(500),
                     LbeEvent::CommandStderrDelta {
+                        execution_id: ids.execution_id.clone(),
                         tool_call_id: ids.tool_call_id.clone(),
                         command_id: ids.command_id.clone(),
                         text: "mock stderr is display-only".to_owned(),
@@ -749,6 +774,7 @@ impl LbeWrapper for MockLbeWrapper {
                 self.schedule(
                     now + Duration::from_millis(550),
                     LbeEvent::CommandCompleted {
+                        execution_id: ids.execution_id.clone(),
                         tool_call_id: ids.tool_call_id.clone(),
                         command_id: ids.command_id.clone(),
                         exit_code: 0,
@@ -757,6 +783,7 @@ impl LbeWrapper for MockLbeWrapper {
                 self.schedule(
                     now + Duration::from_millis(600),
                     LbeEvent::ToolOutputDelta {
+                        execution_id: ids.execution_id.clone(),
                         tool_call_id: ids.tool_call_id.clone(),
                         text: "Mock workspace inspection completed.".to_owned(),
                     },
@@ -764,6 +791,7 @@ impl LbeWrapper for MockLbeWrapper {
                 self.schedule(
                     now + Duration::from_millis(650),
                     LbeEvent::ToolCompleted {
+                        execution_id: ids.execution_id.clone(),
                         tool_call_id: ids.tool_call_id.clone(),
                         evidence_ref: Some("evidence_mock_7f31".to_owned()),
                     },
@@ -790,6 +818,7 @@ impl LbeWrapper for MockLbeWrapper {
                 self.schedule(
                     now + Duration::from_millis(900),
                     LbeEvent::ValidationCompleted {
+                        execution_id: ids.execution_id.clone(),
                         status: ValidationStatus::Passed,
                         result: "Focused validation complete.".to_owned(),
                     },
@@ -810,7 +839,10 @@ impl LbeWrapper for MockLbeWrapper {
                 }
                 self.pending_approval_id = None;
                 self.execution.reject()?;
-                self.terminalize(ExecutionStatus::Rejected, LbeEvent::ExecutionRejected);
+                self.terminalize(
+                    ExecutionStatus::Rejected,
+                    LbeEvent::ExecutionRejected { approval_id },
+                );
             }
             UserRequest::SelectModel { model } => {
                 let in_catalog =
@@ -948,7 +980,12 @@ impl LbeWrapper for MockLbeWrapper {
                 self.pending_approval_id = None;
                 self.execution
                     .transition_terminal(ExecutionStatus::Aborted)?;
-                self.terminalize(ExecutionStatus::Aborted, LbeEvent::ExecutionRejected);
+                self.terminalize(
+                    ExecutionStatus::Aborted,
+                    LbeEvent::ExecutionRejected {
+                        approval_id: "aborted".to_owned(),
+                    },
+                );
             }
         }
         Ok(())
@@ -961,6 +998,7 @@ impl LbeWrapper for MockLbeWrapper {
             self.terminalize(
                 ExecutionStatus::TimedOut,
                 LbeEvent::TimedOut {
+                    execution_id: self.execution.execution_id.clone().unwrap_or_default(),
                     timeout_seconds: self.snapshot.timeout_seconds,
                 },
             );
