@@ -282,6 +282,20 @@ impl App {
                 }
                 None
             }
+            "/search" => {
+                if argument.is_empty() {
+                    self.transcript
+                        .push("SYSTEM  usage: /search <query>".to_owned());
+                } else {
+                    self.apply_wrapper_result(wrapper.submit(
+                        UserRequest::SearchWorkspace {
+                            query: argument.to_owned(),
+                        },
+                        Instant::now(),
+                    ));
+                }
+                None
+            }
             "/undo" => Some(MockPanel::Undo),
             "/checkpoints" => Some(MockPanel::Undo),
             "/mode" => {

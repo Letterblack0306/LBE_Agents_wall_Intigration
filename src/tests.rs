@@ -1055,6 +1055,34 @@ fn glob_command_requires_a_pattern_argument() {
 }
 
 #[test]
+fn mock_search_command_fails_closed_without_fabricating_workspace_results() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/search workspace", &mut wrapper);
+
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("governed workspace search is unavailable in mock mode"))
+    );
+}
+
+#[test]
+fn search_command_requires_a_query_argument() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/search", &mut wrapper);
+
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("usage: /search <query>"))
+    );
+}
+
+#[test]
 fn mock_provider_catalog_events_and_panels_project_safe_typed_values() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
@@ -1788,6 +1816,60 @@ fn real_wrapper_workspace_glob_projects_agent_wall_receipt_and_evidence() {
             evidence_ref: Some(reference),
             ..
         } if reference.contains("workspace:")
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ExecutionCompleted {
+            receipt_id: Some(receipt),
+            ..
+        } if receipt.starts_with("receipt-")
+    )));
+}
+
+#[test]
+fn real_wrapper_workspace_search_projects_agent_wall_receipt_and_evidence() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none()) {
+        return;
+    }
+
+    let mut wrapper = RealLbeWrapper::new();
+    wrapper
+        .attach()
+        .expect("configured Agent Wall must attach before workspace.search");
+    wrapper
+        .submit(
+            UserRequest::SearchWorkspace {
+                query: "workspace glob".to_owned(),
+            },
+            Instant::now(),
+        )
+        .expect("workspace.search must cross the Agent Wall boundary");
+
+    let mut events = Vec::new();
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        events.push(event);
+    }
+
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolRequested {
+            tool_name,
+            risk: ToolRisk::ReadOnly,
+            ..
+        } if tool_name == "workspace.search"
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolCompleted {
+            evidence_ref: Some(reference),
+            ..
+        } if reference.contains("workspace:") || reference.contains("index:")
     )));
     assert!(events.iter().any(|event| matches!(
         event,

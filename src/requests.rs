@@ -23,6 +23,9 @@ pub(crate) enum UserRequest {
     GlobWorkspace {
         pattern: String,
     },
+    SearchWorkspace {
+        query: String,
+    },
     RefreshProviderCatalog,
     SelectModel {
         model: ModelRef,
