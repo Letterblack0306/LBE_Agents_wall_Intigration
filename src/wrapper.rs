@@ -1436,6 +1436,64 @@ impl RealLbeWrapper {
         Ok(())
     }
 
+    /// Detach this client from the real Agent Wall without changing any
+    /// persisted Wall state. Historical projections remain available for
+    /// display, but the snapshot is explicitly no longer live-connected.
+    pub(crate) fn disconnect(&mut self) {
+        self.connection = RuntimeConnection::Disconnected;
+        self.snapshot.connection = RuntimeConnection::Disconnected;
+        self.snapshot.runtime_id = None;
+        self.snapshot.turn_id = None;
+        self.pending_events
+            .push_back(LbeEvent::RuntimeAttachmentUpdated {
+                connection: RuntimeConnection::Disconnected,
+                runtime_id: None,
+                runtime_mode: RuntimeMode::Local,
+                attached_client_count: 0,
+            });
+        self.pending_events.push_back(LbeEvent::SnapshotUpdated {
+            snapshot: self.snapshot.clone(),
+        });
+    }
+
+    /// Re-read all four authoritative projections using an isolated
+    /// candidate wrapper. The current snapshot is not replaced unless the
+    /// candidate completes the full attach chain successfully.
+    pub(crate) fn reconnect(&mut self) -> Result<(), LbeError> {
+        self.connection = RuntimeConnection::Reconnecting;
+        self.snapshot.connection = RuntimeConnection::Reconnecting;
+        self.snapshot.runtime_id = None;
+        self.snapshot.turn_id = None;
+        self.pending_events
+            .push_back(LbeEvent::RuntimeAttachmentUpdated {
+                connection: RuntimeConnection::Reconnecting,
+                runtime_id: None,
+                runtime_mode: RuntimeMode::Local,
+                attached_client_count: 0,
+            });
+
+        let mut candidate = Self::new();
+        if let Err(error) = candidate.attach() {
+            self.connection = RuntimeConnection::Lost;
+            self.snapshot.connection = RuntimeConnection::Lost;
+            self.snapshot.runtime_id = None;
+            self.snapshot.turn_id = None;
+            self.pending_events
+                .push_back(LbeEvent::RuntimeAttachmentUpdated {
+                    connection: RuntimeConnection::Lost,
+                    runtime_id: None,
+                    runtime_mode: RuntimeMode::Local,
+                    attached_client_count: 0,
+                });
+            return Err(error);
+        }
+
+        self.snapshot = candidate.snapshot;
+        self.connection = candidate.connection;
+        self.pending_events.extend(candidate.pending_events);
+        Ok(())
+    }
+
     fn fail_closed(&mut self) {
         self.connection = RuntimeConnection::Disconnected;
         self.snapshot.connection = RuntimeConnection::Disconnected;

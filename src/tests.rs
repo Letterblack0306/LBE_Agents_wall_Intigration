@@ -1045,6 +1045,97 @@ fn real_wrapper_next_wake_is_none_when_disconnected() {
     assert!(wrapper.next_wake(Instant::now()).is_none());
 }
 
+#[test]
+fn real_wrapper_disconnect_is_non_connected_and_non_fabricating() {
+    let mut wrapper = RealLbeWrapper::new();
+    wrapper.disconnect();
+    let snapshot = wrapper.snapshot();
+    assert_eq!(wrapper.connection_state(), RuntimeConnection::Disconnected);
+    assert_eq!(snapshot.connection, RuntimeConnection::Disconnected);
+    assert_eq!(snapshot.runtime_id, None);
+    assert_eq!(snapshot.turn_id, None);
+    assert!(matches!(
+        wrapper.poll_event(Instant::now()).unwrap(),
+        Some(LbeEvent::RuntimeAttachmentUpdated {
+            connection: RuntimeConnection::Disconnected,
+            runtime_id: None,
+            attached_client_count: 0,
+            ..
+        })
+    ));
+    assert!(matches!(
+        wrapper.poll_event(Instant::now()).unwrap(),
+        Some(LbeEvent::SnapshotUpdated { snapshot: event_snapshot })
+            if event_snapshot.connection == RuntimeConnection::Disconnected
+                && event_snapshot.runtime_id.is_none()
+                && event_snapshot.turn_id.is_none()
+    ));
+}
+
+#[test]
+fn real_wrapper_reconnect_failure_never_falls_back_or_publishes_connected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let result = wrapper.reconnect();
+    assert!(result.is_err());
+    assert_ne!(wrapper.connection_state(), RuntimeConnection::Connected);
+    assert_eq!(wrapper.snapshot().runtime_id, None);
+    assert_eq!(wrapper.snapshot().turn_id, None);
+    assert!(wrapper.snapshot().providers.is_empty());
+    assert!(wrapper.snapshot().models.is_empty());
+    assert!(!matches!(
+        wrapper.poll_event(Instant::now()).unwrap(),
+        Some(LbeEvent::RuntimeAttachmentUpdated {
+            connection: RuntimeConnection::Connected,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn real_wrapper_disconnect_retains_only_historical_projection_contents() {
+    let mut wrapper = RealLbeWrapper::new();
+    let before = wrapper.snapshot();
+    wrapper.disconnect();
+    let after = wrapper.snapshot();
+    assert_eq!(after.project_truth, before.project_truth);
+    assert_eq!(after.session_context, before.session_context);
+    assert_eq!(after.provenance, before.provenance);
+    assert_eq!(after.validation, before.validation);
+    assert_ne!(after.connection, RuntimeConnection::Connected);
+}
+
+#[test]
+fn real_wrapper_reconnect_success_replaces_authority_when_real_state_exists() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+        "LBE_TASK_ID",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none()) {
+        return;
+    }
+    let mut wrapper = RealLbeWrapper::new();
+    if wrapper.attach().is_err() {
+        return;
+    }
+    wrapper.disconnect();
+    assert_ne!(wrapper.connection_state(), RuntimeConnection::Connected);
+    wrapper
+        .reconnect()
+        .expect("reconnect should re-export and validate all four projections");
+    let snapshot = wrapper.snapshot();
+    assert_eq!(wrapper.connection_state(), RuntimeConnection::Connected);
+    assert_eq!(snapshot.connection, RuntimeConnection::Connected);
+    assert!(snapshot.project_truth.is_some());
+    assert!(snapshot.session_context.is_some());
+    assert!(snapshot.provenance.is_some());
+    assert!(snapshot.validation.is_some());
+    assert_eq!(snapshot.runtime_id, None);
+    assert_eq!(snapshot.turn_id, None);
+}
+
 // ---------------------------------------------------------------------------
 // REAL_AGENT_WALL_SESSION_CONTEXT_ATTACHMENT_V1 tests
 // ---------------------------------------------------------------------------
