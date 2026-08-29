@@ -257,6 +257,7 @@ pub(crate) struct LbeSnapshot {
     pub(crate) workspace_label: String,
     pub(crate) project_truth: Option<ProjectTruthProjection>,
     pub(crate) session_context: Option<SessionContextProjection>,
+    pub(crate) provenance: Option<ProvenanceProjection>,
     pub(crate) model_id: String,
     pub(crate) model_family: String,
     pub(crate) effort_label: Option<String>,
@@ -299,6 +300,7 @@ impl Default for LbeSnapshot {
             workspace_label: r"C:\Users\".to_owned(),
             project_truth: None,
             session_context: None,
+            provenance: None,
             model_id: "Model ID".to_owned(),
             model_family: "Gemini".to_owned(),
             effort_label: Some("low".to_owned()),
@@ -625,6 +627,52 @@ pub(crate) struct SessionContextProjection {
     pub(crate) session_id: String,
     pub(crate) read_only: bool,
     pub(crate) data: SessionContextData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ProvenanceProjection {
+    pub(crate) schema_version: String,
+    pub(crate) projection_type: String,
+    pub(crate) generated_at: String,
+    pub(crate) workspace_id: String,
+    pub(crate) session_id: Option<String>,
+    pub(crate) read_only: bool,
+    pub(crate) data: ProvenanceData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ProvenanceData {
+    pub(crate) session_id: Option<String>,
+    pub(crate) task_id: Option<String>,
+    pub(crate) sources: Vec<OpaqueOwnerPayload>,
+    pub(crate) events: Vec<ProvenanceEvent>,
+    pub(crate) evidence_ids: Option<Vec<String>>,
+    pub(crate) staleness: ProvenanceStaleness,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ProvenanceEvent {
+    pub(crate) event_id: String,
+    pub(crate) sequence: u64,
+    pub(crate) event_type: String,
+    pub(crate) turn_id: String,
+    pub(crate) item_id: Option<String>,
+    pub(crate) provider_id: Option<String>,
+    pub(crate) model_id: Option<String>,
+    pub(crate) provider_request_id: Option<String>,
+    pub(crate) provider_item_id: Option<String>,
+    pub(crate) provider_tool_call_id: Option<String>,
+    pub(crate) lbe_call_id: Option<String>,
+    pub(crate) runtime_operation_id: Option<String>,
+    pub(crate) tool_receipt_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ProvenanceStaleness {
+    Current,
+    Stale,
+    Unknown,
 }
 
 // ---------------------------------------------------------------------------

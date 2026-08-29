@@ -1049,6 +1049,7 @@ impl RealLbeWrapper {
         snapshot.active_execution_id = None;
         snapshot.project_truth = None;
         snapshot.session_context = None;
+        snapshot.provenance = None;
 
         Self {
             snapshot,
@@ -1260,9 +1261,68 @@ impl RealLbeWrapper {
             return Err(error);
         }
 
-        // Step 11 — apply snapshot fields; both projections passed
+        // Step 11 — export provenance using authoritative identities
+        let provenance_output = match Command::new(&python)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "export",
+                "provenance",
+                "--database",
+            ])
+            .arg(&database)
+            .args(["--workspace-id", &authoritative_workspace_id])
+            .args(["--session-id", &session_id])
+            .args(["--format", "json"])
+            .output()
+        {
+            Ok(output) => output,
+            Err(error) => {
+                self.fail_closed();
+                return Err(LbeError::new(format!(
+                    "provenance process launch failed: {error}"
+                )));
+            }
+        };
+        if !provenance_output.status.success() {
+            self.fail_closed();
+            return Err(LbeError::new(format!(
+                "provenance process exited unsuccessfully: {}",
+                provenance_output.status
+            )));
+        }
+        let provenance_stdout = match String::from_utf8(provenance_output.stdout) {
+            Ok(text) => text,
+            Err(_) => {
+                self.fail_closed();
+                return Err(LbeError::new("provenance stdout was not UTF-8"));
+            }
+        };
+        if provenance_stdout.trim().is_empty() {
+            self.fail_closed();
+            return Err(LbeError::new("provenance stdout was empty"));
+        }
+        let provenance: ProvenanceProjection = match serde_json::from_str(&provenance_stdout) {
+            Ok(value) => value,
+            Err(error) => {
+                self.fail_closed();
+                return Err(LbeError::new(format!("invalid provenance JSON: {error}")));
+            }
+        };
+        if let Err(error) = validate_provenance(
+            &provenance,
+            &authoritative_workspace_id,
+            &session_context.session_id,
+        ) {
+            self.fail_closed();
+            return Err(error);
+        }
+
+        // Step 12 — apply snapshot fields; all projections passed
         self.snapshot.project_truth = Some(project_truth);
         self.snapshot.session_context = Some(session_context.clone());
+        self.snapshot.provenance = Some(provenance);
         self.snapshot.session_id = Some(session_context.session_id.clone());
         self.snapshot.workspace_id = Some(authoritative_workspace_id);
         self.snapshot.workspace_label = canonical_workspace_root;
@@ -1270,7 +1330,7 @@ impl RealLbeWrapper {
         self.snapshot.connection = RuntimeConnection::Connected;
         self.connection = RuntimeConnection::Connected;
 
-        // Step 12 — emit attachment and snapshot events
+        // Step 13 — emit attachment and snapshot events
         self.pending_events
             .push_back(LbeEvent::RuntimeAttachmentUpdated {
                 connection: RuntimeConnection::Connected,
@@ -1290,6 +1350,7 @@ impl RealLbeWrapper {
         self.snapshot.connection = RuntimeConnection::Disconnected;
         self.snapshot.project_truth = None;
         self.snapshot.session_context = None;
+        self.snapshot.provenance = None;
     }
 
     /// Returns the current connection state.
@@ -1577,6 +1638,66 @@ fn validate_opaque_payload(payload: &OpaqueOwnerPayload, name: &str) -> Result<(
         return Err(LbeError::new(format!(
             "session_context {name} must be opaque (opaque=true)",
         )));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_provenance(
+    projection: &ProvenanceProjection,
+    authoritative_workspace_id: &str,
+    authoritative_session_id: &str,
+) -> Result<(), LbeError> {
+    if projection.schema_version != "1.0" {
+        return Err(LbeError::new("provenance schema_version must be 1.0"));
+    }
+    if projection.projection_type != "provenance" {
+        return Err(LbeError::new("provenance projection_type is invalid"));
+    }
+    if !projection.read_only {
+        return Err(LbeError::new("provenance projection is not read-only"));
+    }
+    if projection.workspace_id.trim().is_empty() {
+        return Err(LbeError::new("provenance workspace_id is missing"));
+    }
+    if projection.workspace_id != authoritative_workspace_id {
+        return Err(LbeError::new(
+            "provenance workspace_id does not match project_truth",
+        ));
+    }
+    if projection.session_id.as_deref() != Some(authoritative_session_id) {
+        return Err(LbeError::new(
+            "provenance session_id does not match session_context",
+        ));
+    }
+    if projection.data.session_id.as_deref() != Some(authoritative_session_id) {
+        return Err(LbeError::new(
+            "provenance data.session_id does not match session_context",
+        ));
+    }
+    if projection.session_id != projection.data.session_id {
+        return Err(LbeError::new(
+            "provenance top-level and data session_id disagree",
+        ));
+    }
+    for (i, source) in projection.data.sources.iter().enumerate() {
+        validate_opaque_payload(source, &format!("provenance sources[{i}]"))?;
+    }
+    for (i, event) in projection.data.events.iter().enumerate() {
+        if event.event_id.trim().is_empty() {
+            return Err(LbeError::new(format!(
+                "provenance events[{i}].event_id is empty"
+            )));
+        }
+        if event.event_type.trim().is_empty() {
+            return Err(LbeError::new(format!(
+                "provenance events[{i}].event_type is empty"
+            )));
+        }
+        if event.turn_id.trim().is_empty() {
+            return Err(LbeError::new(format!(
+                "provenance events[{i}].turn_id is empty"
+            )));
+        }
     }
     Ok(())
 }

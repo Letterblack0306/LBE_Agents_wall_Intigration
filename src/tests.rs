@@ -4,7 +4,7 @@ use crate::{
     requests::UserRequest,
     types::*,
     ui::*,
-    wrapper::{LbeWrapper, MockLbeWrapper, RealLbeWrapper},
+    wrapper::{LbeWrapper, MockLbeWrapper, RealLbeWrapper, validate_provenance},
 };
 
 use ratatui::termina::event::KeyCode;
@@ -1684,4 +1684,126 @@ fn session_context_projection_round_trips_provider_fields() {
     let snap = wrapper.snapshot();
     assert!(snap.providers.is_empty());
     assert_eq!(snap.model_id, "");
+}
+
+fn valid_provenance() -> ProvenanceProjection {
+    ProvenanceProjection {
+        schema_version: "1.0".to_owned(),
+        projection_type: "provenance".to_owned(),
+        generated_at: "2026-01-01T00:00:00Z".to_owned(),
+        workspace_id: "ws_abc".to_owned(),
+        session_id: Some("sess_xyz".to_owned()),
+        read_only: true,
+        data: ProvenanceData {
+            session_id: Some("sess_xyz".to_owned()),
+            task_id: None,
+            sources: vec![OpaqueOwnerPayload {
+                owner_payload_version: "1.0".to_owned(),
+                opaque: true,
+                payload: serde_json::json!({"owned": true}),
+            }],
+            events: vec![ProvenanceEvent {
+                event_id: "evt_1".to_owned(),
+                sequence: 0,
+                event_type: "turn_started".to_owned(),
+                turn_id: "turn_1".to_owned(),
+                item_id: None,
+                provider_id: Some("provider".to_owned()),
+                model_id: Some("model".to_owned()),
+                provider_request_id: None,
+                provider_item_id: None,
+                provider_tool_call_id: None,
+                lbe_call_id: None,
+                runtime_operation_id: Some("runtime-op".to_owned()),
+                tool_receipt_id: Some("receipt".to_owned()),
+            }],
+            evidence_ids: None,
+            staleness: ProvenanceStaleness::Current,
+        },
+    }
+}
+
+#[test]
+fn provenance_validation_accepts_current_stale_and_unknown() {
+    for staleness in [
+        ProvenanceStaleness::Current,
+        ProvenanceStaleness::Stale,
+        ProvenanceStaleness::Unknown,
+    ] {
+        let mut projection = valid_provenance();
+        projection.data.staleness = staleness;
+        assert!(validate_provenance(&projection, "ws_abc", "sess_xyz").is_ok());
+    }
+}
+
+#[test]
+fn provenance_validation_rejects_identity_and_structure_mismatches() {
+    macro_rules! assert_rejected {
+        ($name:literal, $mutate:expr) => {{
+            let mut projection = valid_provenance();
+            $mutate(&mut projection);
+            assert!(
+                validate_provenance(&projection, "ws_abc", "sess_xyz").is_err(),
+                "case {} must fail closed",
+                $name
+            );
+        }};
+    }
+    assert_rejected!("workspace", |p: &mut ProvenanceProjection| p
+        .workspace_id
+        .clear());
+    assert_rejected!("workspace mismatch", |p: &mut ProvenanceProjection| {
+        p.workspace_id = "other".to_owned()
+    });
+    assert_rejected!("top session mismatch", |p: &mut ProvenanceProjection| {
+        p.session_id = Some("other".to_owned())
+    });
+    assert_rejected!("data session mismatch", |p: &mut ProvenanceProjection| {
+        p.data.session_id = Some("other".to_owned())
+    });
+    assert_rejected!("schema", |p: &mut ProvenanceProjection| {
+        p.schema_version = "2.0".to_owned()
+    });
+    assert_rejected!("projection type", |p: &mut ProvenanceProjection| {
+        p.projection_type = "other".to_owned()
+    });
+    assert_rejected!("read only", |p: &mut ProvenanceProjection| {
+        p.read_only = false
+    });
+    assert_rejected!("source version", |p: &mut ProvenanceProjection| {
+        p.data.sources[0].owner_payload_version = "2.0".to_owned()
+    });
+    assert_rejected!("source opaque", |p: &mut ProvenanceProjection| {
+        p.data.sources[0].opaque = false
+    });
+}
+
+#[test]
+fn provenance_validation_rejects_malformed_events_and_deserialization_rejects_unknown_staleness() {
+    for mutate in [
+        |p: &mut ProvenanceProjection| p.data.events[0].event_id.clear(),
+        |p: &mut ProvenanceProjection| p.data.events[0].event_type.clear(),
+        |p: &mut ProvenanceProjection| p.data.events[0].turn_id.clear(),
+    ] {
+        let mut projection = valid_provenance();
+        mutate(&mut projection);
+        assert!(validate_provenance(&projection, "ws_abc", "sess_xyz").is_err());
+    }
+    let json = r#"{
+      "schema_version":"1.0","projection_type":"provenance","generated_at":"now",
+      "workspace_id":"ws_abc","session_id":"sess_xyz","read_only":true,
+      "data":{"session_id":"sess_xyz","task_id":null,"sources":[],"events":[],
+      "evidence_ids":null,"staleness":"invalid"}
+    }"#;
+    assert!(serde_json::from_str::<ProvenanceProjection>(json).is_err());
+}
+
+#[test]
+fn provenance_is_not_present_in_initial_or_unconnected_real_snapshot() {
+    let wrapper = RealLbeWrapper::new();
+    let snapshot = wrapper.snapshot();
+    assert!(snapshot.provenance.is_none());
+    assert!(snapshot.latest_checkpoint.is_none());
+    assert_eq!(snapshot.runtime_id, None);
+    assert_eq!(snapshot.turn_id, None);
 }
