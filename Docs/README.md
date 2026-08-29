@@ -101,8 +101,9 @@ Module `33` defines the implementation sequence from mock TUI contract preview t
 | `29_workspace_changes_diff.md` | Workspace Changes / Diff | CORE | MISSING |
 | `30_file_editor_patch_review.md` | File / Patch Review | CORE | MISSING |
 | `31_cline_interop_reuse_strategy.md` | Cline Interop / Reuse Strategy | STRATEGIC | MISSING |
-| `32_deterministic_runtime_state_machine.md` | Deterministic Runtime State Machine | CORE / BLOCKING | MISSING |
+| `32_deterministic_runtime_state_machine.md` | Deterministic Runtime State Machine | CORE / BLOCKING | IMPLEMENTED_PRE_INTEGRATION |
 | `33_real_cli_ide_implementation_plan.md` | Real CLI IDE Implementation Plan | CORE / SEQUENCING | PLANNED |
+| `34_autonomous_developer_frontend.md` | Autonomous Developer Frontend Features (Handoff) | CORE | PARTIAL |
 
 ## Status Vocabulary
 

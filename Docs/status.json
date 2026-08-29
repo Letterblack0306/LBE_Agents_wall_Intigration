@@ -291,6 +291,17 @@
                                                                               ],
                                                                "notes":  "Missing current-source Cline adopt/adapt/wrap/native decisions for Modules 17-30. Prevents rebuilding generic coding-agent frontend features without evidence."
                                                            },
+                    "32_deterministic_runtime_state_machine.md":  {
+                                                                   "status":  "IMPLEMENTED_PRE_INTEGRATION",
+                                                                   "relevance":  "CORE / BLOCKING",
+                                                                   "depends_on":  [
+                                                                                      "04_sessions.md",
+                                                                                      "05_background_processes.md",
+                                                                                      "07_tools_registry.md",
+                                                                                      "13_lifecycle_acceptance.md"
+                                                                                  ],
+                                                                   "notes":  "Deterministic mock-runtime hardening substantially implemented, including terminal idempotency (duplicate terminal lifecycle event suppression), guarded transitions, timeout enforcement, and identity isolation. RealLbeWrapper read-only skeleton now exists behind LbeWrapper. Real Agent Wall attachment and feature-specific wall capabilities (memory, provenance, impact analysis, hypothesis/test/verify, task graph, validation strategies, documentation artifacts) remain pending."
+                                                               },
                     "33_real_cli_ide_implementation_plan.md":  {
                                                                    "status":  "PLANNED",
                                                                    "relevance":  "CORE / SEQUENCING",
@@ -298,7 +309,16 @@
                                                                                       "31_cline_interop_reuse_strategy.md",
                                                                                       "32_deterministic_runtime_state_machine.md"
                                                                                   ],
-                                                                   "notes":  "Defines the ordered path from mock TUI contract preview to real governed CLI IDE. RealLbeWrapper must begin as a minimal read-only Agent Wall attachment before governed command/file execution, provider loop, IDE review surfaces, persistence, headless mode, background processes, and multi-agent work."
+                                                                   "notes":  "Ordered implementation plan: RealLbeWrapper skeleton exists, real wall attachment and snapshot/event stream mapping remain pending, then governed execution, policy/sandbox, provider loop, IDE review surfaces, persistence, headless mode, background processes, and multi-agent work."
+                                                               },
+                    "34_autonomous_developer_frontend.md":  {
+                                                                   "status":  "PARTIAL",
+                                                                   "relevance":  "CORE",
+                                                                   "depends_on":  [
+                                                                                      "32_deterministic_runtime_state_machine.md",
+                                                                                      "33_real_cli_ide_implementation_plan.md"
+                                                                                  ],
+                                                                   "notes":  "Maps TUI-33 through TUI-40 (autonomous developer frontend features) to current implementation state. Frontend scaffolding exists across all eight features (varying degree). Full completion requires real Agent Wall attachment, authoritative event/snapshot stream, and feature-specific wall capabilities (memory, provenance, impact analysis, hypothesis/test/verify, task graph, validation strategies, documentation artifacts) -- not another state-machine pass. Documents per-feature runtime gap using Handoff Result Format."
                                                                }
                 }
 }
