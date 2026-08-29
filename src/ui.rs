@@ -337,6 +337,7 @@ fn shortcut_text() -> Text<'static> {
         Line::from("Tab     cycle LBE Audit, Agent regular, and Plan"),
         Line::from("↑/↓     recall submitted mock input history"),
         Line::from("Ctrl+L  clear rendered mock transcript"),
+        Line::from("/read   inspect a relative path through Agent Wall"),
         Line::from("Ctrl+D  exit when the composer is empty"),
         Line::from("?       close this shortcut reference"),
         Line::from("q       quit when the task input is empty"),

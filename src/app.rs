@@ -177,13 +177,11 @@ impl App {
         command: &str,
         wrapper: &mut (impl LbeWrapper + ?Sized),
     ) {
-        let command = command
-            .split_whitespace()
-            .next()
-            .unwrap_or(command)
-            .to_ascii_lowercase();
+        let mut parts = command.splitn(2, char::is_whitespace);
+        let command_name = parts.next().unwrap_or(command).to_ascii_lowercase();
+        let argument = parts.next().unwrap_or("").trim();
         self.show_shortcuts = false;
-        self.panel = match command.as_str() {
+        self.panel = match command_name.as_str() {
             "/help" => {
                 self.show_shortcuts = true;
                 None
@@ -242,6 +240,20 @@ impl App {
                 );
                 Some(MockPanel::Doctor)
             }
+            "/read" => {
+                if argument.is_empty() {
+                    self.transcript
+                        .push("SYSTEM  usage: /read <relative-path>".to_owned());
+                } else {
+                    self.apply_wrapper_result(wrapper.submit(
+                        UserRequest::InspectWorkspace {
+                            path: argument.to_owned(),
+                        },
+                        Instant::now(),
+                    ));
+                }
+                None
+            }
             "/undo" => Some(MockPanel::Undo),
             "/checkpoints" => Some(MockPanel::Undo),
             "/mode" => {
@@ -278,7 +290,7 @@ impl App {
             }
             _ => {
                 self.transcript.push(format!(
-                    "SYSTEM  unsupported command: {command}; use /help."
+                    "SYSTEM  unsupported command: {command_name}; use /help."
                 ));
                 None
             }

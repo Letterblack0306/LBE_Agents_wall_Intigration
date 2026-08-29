@@ -14,6 +14,9 @@ pub(crate) enum UserRequest {
         message: String,
     },
     RefreshRuntimeSnapshot,
+    InspectWorkspace {
+        path: String,
+    },
     RefreshProviderCatalog,
     SelectModel {
         model: ModelRef,

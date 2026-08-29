@@ -1,6 +1,6 @@
 use crate::{
     app::App,
-    events::{LbeEvent, ValidationStatus},
+    events::{LbeEvent, ToolRisk, ValidationStatus},
     requests::UserRequest,
     types::*,
     ui::*,
@@ -984,6 +984,35 @@ fn commands_open_mock_panels_without_claiming_runtime_integration() {
 }
 
 #[test]
+fn mock_read_command_fails_closed_without_fabricating_workspace_evidence() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/read README.md", &mut wrapper);
+
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("governed workspace inspection is unavailable in mock mode"))
+    );
+    assert!(app.snapshot.project_truth.is_none());
+}
+
+#[test]
+fn read_command_requires_a_relative_path_argument() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/read", &mut wrapper);
+
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("usage: /read <relative-path>"))
+    );
+}
+
+#[test]
 fn mock_provider_catalog_events_and_panels_project_safe_typed_values() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
@@ -1561,6 +1590,61 @@ fn real_wrapper_attaches_session_only_without_task_identity() {
 fn real_wrapper_poll_returns_none_when_disconnected() {
     let mut wrapper = RealLbeWrapper::new();
     assert!(wrapper.poll_event(Instant::now()).unwrap().is_none());
+}
+
+#[test]
+fn real_wrapper_workspace_read_projects_agent_wall_receipt_and_evidence() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+        "LBE_GUARD_INSPECTOR_CONFIG_PATH",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none()) {
+        return;
+    }
+
+    let mut wrapper = RealLbeWrapper::new();
+    wrapper
+        .attach()
+        .expect("configured Agent Wall must attach before workspace.read");
+    wrapper
+        .submit(
+            UserRequest::InspectWorkspace {
+                path: "README.md".to_owned(),
+            },
+            Instant::now(),
+        )
+        .expect("workspace.read must cross the Agent Wall boundary");
+
+    let mut events = Vec::new();
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        events.push(event);
+    }
+
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolRequested {
+            tool_name,
+            risk: ToolRisk::ReadOnly,
+            ..
+        } if tool_name == "workspace.read"
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolCompleted {
+            evidence_ref: Some(reference),
+            ..
+        } if reference.contains("workspace:")
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ExecutionCompleted {
+            receipt_id: Some(receipt),
+            ..
+        } if receipt.starts_with("receipt-")
+    )));
 }
 
 #[test]

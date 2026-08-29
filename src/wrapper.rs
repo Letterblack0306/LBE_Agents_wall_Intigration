@@ -766,6 +766,11 @@ impl LbeWrapper for MockLbeWrapper {
                     "runtime snapshot refresh is unavailable in mock mode",
                 ));
             }
+            UserRequest::InspectWorkspace { .. } => {
+                return Err(LbeError::new(
+                    "governed workspace inspection is unavailable in mock mode",
+                ));
+            }
             UserRequest::RefreshProviderCatalog => {
                 self.emit(LbeEvent::ProviderDiscoveryStarted);
                 let providers = self.snapshot.providers.clone();
@@ -1691,8 +1696,150 @@ impl RealLbeWrapper {
             )))
         }
     }
+
+    fn inspect_workspace(&mut self, path: &str) -> Result<(), LbeError> {
+        let wall_root = self
+            .wall_root
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_ROOT is not configured"))?;
+        let database = self
+            .wall_database
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_DATABASE is not configured"))?;
+        let session_id = self
+            .session_id
+            .clone()
+            .or_else(|| self.snapshot.session_id.clone())
+            .ok_or_else(|| LbeError::new("LBE_SESSION_ID is not configured"))?;
+        let workspace_id = self
+            .snapshot
+            .workspace_id
+            .clone()
+            .ok_or_else(|| LbeError::new("authoritative workspace identity is unavailable"))?;
+        let workspace = self
+            .target_workspace
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_TARGET_WORKSPACE is not configured"))?;
+
+        let operation_id = format!(
+            "tui.workspace.read:{}:{}",
+            session_id,
+            next_real_operation_ordinal()
+        );
+        let execution_id = format!("exec_{operation_id}");
+        let tool_call_id = format!("tool_{operation_id}");
+        let python = std::env::var_os("LBE_WALL_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("python"));
+
+        self.pending_events.push_back(LbeEvent::ExecutionStarted {
+            execution_id: execution_id.clone(),
+        });
+        self.pending_events.push_back(LbeEvent::ToolRequested {
+            execution_id: execution_id.clone(),
+            tool_call_id: tool_call_id.clone(),
+            tool_name: "workspace.read".to_owned(),
+            input_summary: path.to_owned(),
+            risk: ToolRisk::ReadOnly,
+        });
+        self.pending_events.push_back(LbeEvent::ToolStarted {
+            execution_id: execution_id.clone(),
+            tool_call_id: tool_call_id.clone(),
+        });
+
+        let output = Command::new(&python)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "tool",
+                "workspace.read",
+                "--database",
+            ])
+            .arg(database)
+            .args([
+                "--session-id",
+                &session_id,
+                "--workspace-id",
+                &workspace_id,
+                "--workspace",
+            ])
+            .arg(workspace)
+            .args([
+                "--path",
+                path,
+                "--operation-id",
+                &operation_id,
+                "--format",
+                "json",
+            ])
+            .output()
+            .map_err(|error| {
+                LbeError::new(format!("workspace.read process launch failed: {error}"))
+            })?;
+
+        let stdout = String::from_utf8(output.stdout)
+            .map_err(|_| LbeError::new("workspace.read stdout was not UTF-8"))?;
+        let payload: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|error| LbeError::new(format!("invalid workspace.read JSON: {error}")))?;
+        if payload
+            .get("operation_id")
+            .and_then(serde_json::Value::as_str)
+            != Some(operation_id.as_str())
+            || payload.get("tool_id").and_then(serde_json::Value::as_str) != Some("workspace.read")
+        {
+            return Err(LbeError::new("workspace.read response identity mismatch"));
+        }
+
+        let receipt_id = payload
+            .get("receipt_id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        let status = payload
+            .get("status")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("FAILED");
+        if output.status.success() && status == "EXECUTED" {
+            let evidence_ref = payload
+                .get("evidence")
+                .and_then(serde_json::Value::as_array)
+                .and_then(|items| items.first())
+                .and_then(|item| item.get("ref"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned);
+            self.pending_events.push_back(LbeEvent::ToolCompleted {
+                execution_id,
+                tool_call_id,
+                evidence_ref,
+            });
+            if let Some(receipt_id) = receipt_id {
+                self.pending_events.push_back(LbeEvent::ExecutionCompleted {
+                    execution_id: format!("exec_{operation_id}"),
+                    receipt_id: Some(receipt_id),
+                });
+            }
+            Ok(())
+        } else {
+            let message = payload
+                .get("error_message")
+                .and_then(serde_json::Value::as_str)
+                .or_else(|| payload.get("message").and_then(serde_json::Value::as_str))
+                .unwrap_or("workspace.read was not executed")
+                .to_owned();
+            self.pending_events.push_back(LbeEvent::ToolFailed {
+                execution_id,
+                tool_call_id,
+                message,
+            });
+            Ok(())
+        }
+    }
 }
 
+fn next_real_operation_ordinal() -> u64 {
+    static NEXT_REAL_OPERATION: AtomicU64 = AtomicU64::new(1);
+    NEXT_REAL_OPERATION.fetch_add(1, Ordering::Relaxed)
+}
 impl LbeWrapper for RealLbeWrapper {
     fn snapshot(&self) -> LbeSnapshot {
         self.snapshot.clone()
@@ -1704,6 +1851,7 @@ impl LbeWrapper for RealLbeWrapper {
                 self.require_connected()?;
                 self.attach()
             }
+            UserRequest::InspectWorkspace { path } => self.inspect_workspace(&path),
             _ => self.require_connected(),
         }
     }
