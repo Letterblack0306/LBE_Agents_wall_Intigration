@@ -31,6 +31,9 @@ pub(crate) enum UserRequest {
         content: String,
         expected_sha256: String,
     },
+    RunRegisteredProcess {
+        command_id: String,
+    },
     RefreshProviderCatalog,
     SelectModel {
         model: ModelRef,

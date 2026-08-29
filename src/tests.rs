@@ -1109,6 +1109,32 @@ fn patch_command_requires_path_hash_and_content() {
 }
 
 #[test]
+fn mock_run_command_fails_closed_without_executing_processes() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/run python.version", &mut wrapper);
+
+    assert!(app.transcript.iter().any(|line| {
+        line.contains("governed registered-process execution is unavailable in mock mode")
+    }));
+}
+
+#[test]
+fn run_command_requires_a_registered_command_id() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/run", &mut wrapper);
+
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("usage: /run <registered-command-id>"))
+    );
+}
+
+#[test]
 fn mock_provider_catalog_events_and_panels_project_safe_typed_values() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
@@ -1955,6 +1981,58 @@ fn real_wrapper_workspace_patch_projects_agent_wall_receipt_and_evidence() {
             evidence_ref: Some(reference),
             ..
         } if reference.contains("workspace:")
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ExecutionCompleted {
+            receipt_id: Some(receipt),
+            ..
+        } if receipt.starts_with("receipt-")
+    )));
+}
+
+#[test]
+fn real_wrapper_registered_process_projects_agent_wall_receipt_and_evidence() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+        "LBE_GUARD_INSPECTOR_CONFIG_PATH",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none()) {
+        return;
+    }
+    let mut wrapper = RealLbeWrapper::new();
+    wrapper
+        .attach()
+        .expect("configured Agent Wall must attach before process.run_registered");
+    wrapper
+        .submit(
+            UserRequest::RunRegisteredProcess {
+                command_id: "python.version".to_owned(),
+            },
+            Instant::now(),
+        )
+        .expect("process.run_registered must cross the Agent Wall boundary");
+    let mut events = Vec::new();
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        events.push(event);
+    }
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolRequested {
+            tool_name,
+            risk: ToolRisk::ReadOnly,
+            ..
+        } if tool_name == "process.run_registered"
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolCompleted {
+            evidence_ref: Some(reference),
+            ..
+        } if reference.starts_with("process:")
     )));
     assert!(events.iter().any(|event| matches!(
         event,

@@ -318,6 +318,20 @@ impl App {
                 }
                 None
             }
+            "/run" => {
+                if argument.is_empty() {
+                    self.transcript
+                        .push("SYSTEM  usage: /run <registered-command-id>".to_owned());
+                } else {
+                    self.apply_wrapper_result(wrapper.submit(
+                        UserRequest::RunRegisteredProcess {
+                            command_id: argument.to_owned(),
+                        },
+                        Instant::now(),
+                    ));
+                }
+                None
+            }
             "/undo" => Some(MockPanel::Undo),
             "/checkpoints" => Some(MockPanel::Undo),
             "/mode" => {
