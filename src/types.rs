@@ -256,6 +256,7 @@ pub(crate) struct LbeSnapshot {
     pub(crate) workspace_id: Option<String>,
     pub(crate) workspace_label: String,
     pub(crate) project_truth: Option<ProjectTruthProjection>,
+    pub(crate) session_context: Option<SessionContextProjection>,
     pub(crate) model_id: String,
     pub(crate) model_family: String,
     pub(crate) effort_label: Option<String>,
@@ -297,6 +298,7 @@ impl Default for LbeSnapshot {
             workspace_id: Some("workspace_mock_lbe_tui_lab".to_owned()),
             workspace_label: r"C:\Users\".to_owned(),
             project_truth: None,
+            session_context: None,
             model_id: "Model ID".to_owned(),
             model_family: "Gemini".to_owned(),
             effort_label: Some("low".to_owned()),
@@ -524,6 +526,105 @@ pub(crate) struct ProviderError {
     pub(crate) provider_id: ProviderId,
     pub(crate) code: Option<String>,
     pub(crate) message: String,
+}
+
+// ---------------------------------------------------------------------------
+// SessionContextProjection — authoritative Agent Wall product export
+// ---------------------------------------------------------------------------
+
+/// Opaque owner payload from Agent Wall.
+///
+/// The `payload` field is owned by the Agent Wall and is not reinterpreted
+/// by the TUI. This wrapper provides structural validation only.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct OpaqueOwnerPayload {
+    pub(crate) owner_payload_version: String,
+    pub(crate) opaque: bool,
+    pub(crate) payload: serde_json::Value,
+}
+
+/// A single item in the session transcript.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct SessionTranscriptItem {
+    pub(crate) sequence: u64,
+    pub(crate) kind: String,
+    pub(crate) status: String,
+    pub(crate) text: String,
+    pub(crate) event_id: String,
+    #[serde(default)]
+    pub(crate) item_id: Option<String>,
+}
+
+/// Session state from the session_context projection.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct SessionContextState {
+    pub(crate) session_id: String,
+    pub(crate) project_workspace_id: String,
+    pub(crate) canonical_workspace_root: String,
+    pub(crate) mode: String,
+    #[serde(default)]
+    pub(crate) permission: Option<String>,
+    #[serde(default)]
+    pub(crate) runtime_policy: Option<String>,
+    #[serde(default)]
+    pub(crate) provider_id: Option<String>,
+    #[serde(default)]
+    pub(crate) provider_model: Option<String>,
+    #[serde(default)]
+    pub(crate) active_profile_id: Option<String>,
+    #[serde(default)]
+    pub(crate) permission_policy_id: Option<String>,
+    #[serde(default)]
+    pub(crate) evidence_policy_id: Option<String>,
+    #[serde(default)]
+    pub(crate) checkpoint_id: Option<String>,
+    pub(crate) created_at: String,
+    pub(crate) updated_at: String,
+}
+
+/// Workspace state from the session_context projection.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct SessionContextWorkspace {
+    pub(crate) project_workspace_id: String,
+    pub(crate) canonical_root: String,
+    pub(crate) branch: String,
+    pub(crate) head: String,
+    pub(crate) status_short: Vec<String>,
+}
+
+/// Top-level data in the session_context projection.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct SessionContextData {
+    pub(crate) session: SessionContextState,
+    pub(crate) workspace: SessionContextWorkspace,
+    #[serde(default)]
+    pub(crate) task: Option<OpaqueOwnerPayload>,
+    #[serde(default)]
+    pub(crate) checkpoint: Option<OpaqueOwnerPayload>,
+    #[serde(default)]
+    pub(crate) checkpoint_revalidation: Option<OpaqueOwnerPayload>,
+    #[serde(default)]
+    pub(crate) verified_facts: Vec<OpaqueOwnerPayload>,
+    #[serde(default)]
+    pub(crate) active_constraints: Vec<OpaqueOwnerPayload>,
+    #[serde(default)]
+    pub(crate) recent_failures: Vec<OpaqueOwnerPayload>,
+    pub(crate) transcript: Vec<SessionTranscriptItem>,
+}
+
+/// Authoritative session_context projection from the Agent Wall product CLI.
+///
+/// This is a read-only product-level export; the TUI does not fabricate,
+/// mutate, or reinterpret the opaque owner payloads within.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct SessionContextProjection {
+    pub(crate) schema_version: String,
+    pub(crate) projection_type: String,
+    pub(crate) generated_at: String,
+    pub(crate) workspace_id: String,
+    pub(crate) session_id: String,
+    pub(crate) read_only: bool,
+    pub(crate) data: SessionContextData,
 }
 
 // ---------------------------------------------------------------------------

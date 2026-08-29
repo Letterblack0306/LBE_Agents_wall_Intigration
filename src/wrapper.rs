@@ -1004,6 +1004,8 @@ pub(crate) struct RealLbeWrapper {
     connection: RuntimeConnection,
     wall_root: Option<PathBuf>,
     target_workspace: Option<PathBuf>,
+    wall_database: Option<PathBuf>,
+    session_id: Option<String>,
     pending_events: VecDeque<LbeEvent>,
 }
 
@@ -1022,6 +1024,9 @@ impl RealLbeWrapper {
     pub(crate) fn new() -> Self {
         let wall_root = std::env::var_os("LBE_WALL_ROOT").map(PathBuf::from);
         let target_workspace = std::env::var_os("LBE_TARGET_WORKSPACE").map(PathBuf::from);
+        let wall_database = std::env::var_os("LBE_WALL_DATABASE").map(PathBuf::from);
+        let session_id =
+            std::env::var_os("LBE_SESSION_ID").map(|value| value.to_string_lossy().into_owned());
         let connection = RuntimeConnection::Disconnected;
 
         let mut snapshot = LbeSnapshot::default();
@@ -1043,32 +1048,59 @@ impl RealLbeWrapper {
         snapshot.diagnostics = Vec::new();
         snapshot.active_execution_id = None;
         snapshot.project_truth = None;
+        snapshot.session_context = None;
 
         Self {
             snapshot,
             connection,
             wall_root,
             target_workspace,
+            wall_database,
+            session_id,
             pending_events: VecDeque::new(),
         }
     }
 
-    /// Attach only the read-only project_truth projection from the committed
-    /// Agent Wall product CLI.
+    /// Attach read-only Agent Wall projections in strict order:
+    ///
+    /// 1. Validate LBE_WALL_ROOT.
+    /// 2. Validate LBE_TARGET_WORKSPACE.
+    /// 3. Export project_truth.
+    /// 4. Strictly validate project_truth.
+    /// 5. Obtain authoritative workspace_id and canonical workspace root.
+    /// 6. Require LBE_WALL_DATABASE.
+    /// 7. Require LBE_SESSION_ID.
+    /// 8. Export session_context.
+    /// 9. Strictly decode and validate session_context.
+    /// 10. Cross-check project_truth and session_context identities.
+    /// 11. Only on both successes, set connection = Connected.
+    /// 12. Emit the existing attachment/snapshot events.
+    ///
+    /// The wrapper never leaves RealLbeWrapper Connected if either projection
+    /// fails after the other succeeds.
     pub(crate) fn attach(&mut self) -> Result<(), LbeError> {
-        let wall_root = self.wall_root.clone().ok_or_else(|| {
-            self.fail_closed();
-            LbeError::new("LBE_WALL_ROOT is not configured")
-        })?;
-        let target = self.target_workspace.clone().ok_or_else(|| {
-            self.fail_closed();
-            LbeError::new("LBE_TARGET_WORKSPACE is not configured")
-        })?;
+        // Step 1 — validate LBE_WALL_ROOT
+        let wall_root = match self.wall_root.clone() {
+            Some(value) => value,
+            None => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_WALL_ROOT is not configured"));
+            }
+        };
         let wall_root = match require_directory(&wall_root, "LBE_WALL_ROOT") {
             Ok(path) => path,
             Err(error) => {
                 self.fail_closed();
                 return Err(error);
+            }
+        };
+
+        // Step 2 — validate LBE_TARGET_WORKSPACE
+        let target = match self.target_workspace.clone() {
+            Some(value) => value,
+            None => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_TARGET_WORKSPACE is not configured"));
             }
         };
         let target = match require_directory(&target, "LBE_TARGET_WORKSPACE") {
@@ -1078,10 +1110,14 @@ impl RealLbeWrapper {
                 return Err(error);
             }
         };
+
+        // Step 3 — resolve python interpreter (LBE_WALL_PYTHON else "python")
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
-        let output = Command::new(python)
+
+        // Step 4 — export project_truth
+        let output = match Command::new(&python)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -1093,9 +1129,15 @@ impl RealLbeWrapper {
             .arg(&target)
             .args(["--format", "json"])
             .output()
-            .map_err(|error| {
-                LbeError::new(format!("project_truth process launch failed: {error}"))
-            })?;
+        {
+            Ok(output) => output,
+            Err(error) => {
+                self.fail_closed();
+                return Err(LbeError::new(format!(
+                    "project_truth process launch failed: {error}"
+                )));
+            }
+        };
         if !output.status.success() {
             self.fail_closed();
             return Err(LbeError::new(format!(
@@ -1103,32 +1145,132 @@ impl RealLbeWrapper {
                 output.status
             )));
         }
-        let stdout = String::from_utf8(output.stdout).map_err(|_| {
-            self.fail_closed();
-            LbeError::new("project_truth stdout was not UTF-8")
-        })?;
-        self.attach_projection(&stdout, &target)
-    }
-
-    fn attach_projection(&mut self, stdout: &str, target: &Path) -> Result<(), LbeError> {
+        let stdout = match String::from_utf8(output.stdout) {
+            Ok(text) => text,
+            Err(_) => {
+                self.fail_closed();
+                return Err(LbeError::new("project_truth stdout was not UTF-8"));
+            }
+        };
         if stdout.trim().is_empty() {
             self.fail_closed();
             return Err(LbeError::new("project_truth stdout was empty"));
         }
-        let projection: ProjectTruthProjection = serde_json::from_str(stdout).map_err(|error| {
+
+        // Step 5 — decode and validate project_truth
+        let project_truth: ProjectTruthProjection = match serde_json::from_str(&stdout) {
+            Ok(value) => value,
+            Err(error) => {
+                self.fail_closed();
+                return Err(LbeError::new(format!(
+                    "invalid project_truth JSON: {error}"
+                )));
+            }
+        };
+        if let Err(error) = validate_project_truth(&project_truth, &target) {
             self.fail_closed();
-            LbeError::new(format!("invalid project_truth JSON: {error}"))
-        })?;
-        validate_project_truth(&projection, target).map_err(|error| {
+            return Err(error);
+        }
+
+        // Step 6 — authoritative identity from project_truth
+        let authoritative_workspace_id = project_truth.workspace_id.clone();
+        let canonical_workspace_root = project_truth.data.workspace_root.clone();
+
+        // Step 7 — require LBE_WALL_DATABASE
+        let database = match self.wall_database.clone() {
+            Some(value) => value,
+            None => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_WALL_DATABASE is not configured"));
+            }
+        };
+
+        // Step 8 — require LBE_SESSION_ID
+        let session_id = match self.session_id.clone() {
+            Some(value) => value,
+            None => {
+                self.fail_closed();
+                return Err(LbeError::new("LBE_SESSION_ID is not configured"));
+            }
+        };
+        // Step 9 — export session_context using the authoritative workspace_id
+        let sc_output = match Command::new(&python)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "export",
+                "session_context",
+                "--database",
+            ])
+            .arg(&database)
+            .args(["--session-id", &session_id])
+            .args(["--workspace"])
+            .arg(&target)
+            .args(["--workspace-id", &authoritative_workspace_id])
+            .args(["--format", "json"])
+            .output()
+        {
+            Ok(output) => output,
+            Err(error) => {
+                self.fail_closed();
+                return Err(LbeError::new(format!(
+                    "session_context process launch failed: {error}"
+                )));
+            }
+        };
+        if !sc_output.status.success() {
             self.fail_closed();
-            error
-        })?;
-        self.snapshot.workspace_id = Some(projection.workspace_id.clone());
-        self.snapshot.workspace_label = projection.data.workspace_root.clone();
-        self.snapshot.project_truth = Some(projection);
+            return Err(LbeError::new(format!(
+                "session_context process exited unsuccessfully: {}",
+                sc_output.status
+            )));
+        }
+        let sc_stdout = match String::from_utf8(sc_output.stdout) {
+            Ok(text) => text,
+            Err(_) => {
+                self.fail_closed();
+                return Err(LbeError::new("session_context stdout was not UTF-8"));
+            }
+        };
+        if sc_stdout.trim().is_empty() {
+            self.fail_closed();
+            return Err(LbeError::new("session_context stdout was empty"));
+        }
+
+        // Step 10 — decode session_context
+        let session_context: SessionContextProjection = match serde_json::from_str(&sc_stdout) {
+            Ok(value) => value,
+            Err(error) => {
+                self.fail_closed();
+                return Err(LbeError::new(format!(
+                    "invalid session_context JSON: {error}"
+                )));
+            }
+        };
+
+        // Cross-validate identities between project_truth and session_context
+        if let Err(error) = validate_session_context(
+            &session_context,
+            &authoritative_workspace_id,
+            &canonical_workspace_root,
+            &session_id,
+        ) {
+            self.fail_closed();
+            return Err(error);
+        }
+
+        // Step 11 — apply snapshot fields; both projections passed
+        self.snapshot.project_truth = Some(project_truth);
+        self.snapshot.session_context = Some(session_context.clone());
+        self.snapshot.session_id = Some(session_context.session_id.clone());
+        self.snapshot.workspace_id = Some(authoritative_workspace_id);
+        self.snapshot.workspace_label = canonical_workspace_root;
         self.snapshot.runtime_mode = RuntimeMode::Local;
-        self.connection = RuntimeConnection::Connected;
         self.snapshot.connection = RuntimeConnection::Connected;
+        self.connection = RuntimeConnection::Connected;
+
+        // Step 12 — emit attachment and snapshot events
         self.pending_events
             .push_back(LbeEvent::RuntimeAttachmentUpdated {
                 connection: RuntimeConnection::Connected,
@@ -1139,6 +1281,7 @@ impl RealLbeWrapper {
         self.pending_events.push_back(LbeEvent::SnapshotUpdated {
             snapshot: self.snapshot.clone(),
         });
+
         Ok(())
     }
 
@@ -1146,6 +1289,7 @@ impl RealLbeWrapper {
         self.connection = RuntimeConnection::Disconnected;
         self.snapshot.connection = RuntimeConnection::Disconnected;
         self.snapshot.project_truth = None;
+        self.snapshot.session_context = None;
     }
 
     /// Returns the current connection state.
@@ -1247,4 +1391,192 @@ fn validate_project_truth(
 
 fn is_hex_64(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+/// Strict validation for a session_context projection.
+///
+/// Performs all structural and cross-identity checks required by the
+/// REAL_AGENT_WALL_SESSION_CONTEXT_ATTACHMENT_V1 specification.
+///
+/// Fails closed on any mismatch.
+pub(crate) fn validate_session_context(
+    projection: &SessionContextProjection,
+    authoritative_workspace_id: &str,
+    canonical_workspace_root: &str,
+    configured_session_id: &str,
+) -> Result<(), LbeError> {
+    // Top-level structural checks
+    if projection.schema_version != "1.0" {
+        return Err(LbeError::new("session_context schema_version must be 1.0"));
+    }
+    if projection.projection_type != "session_context" {
+        return Err(LbeError::new(
+            "session_context projection_type must be session_context",
+        ));
+    }
+    if !projection.read_only {
+        return Err(LbeError::new("session_context projection is not read-only"));
+    }
+    if projection.workspace_id.trim().is_empty() {
+        return Err(LbeError::new("session_context workspace_id is empty"));
+    }
+    if projection.session_id.trim().is_empty() {
+        return Err(LbeError::new("session_context session_id is empty"));
+    }
+
+    // Session identity checks
+    let session = &projection.data.session;
+    if session.session_id.trim().is_empty() {
+        return Err(LbeError::new(
+            "session_context data.session.session_id is empty",
+        ));
+    }
+    if session.project_workspace_id.trim().is_empty() {
+        return Err(LbeError::new(
+            "session_context data.session.project_workspace_id is empty",
+        ));
+    }
+    if session.canonical_workspace_root.trim().is_empty() {
+        return Err(LbeError::new(
+            "session_context data.session.canonical_workspace_root is empty",
+        ));
+    }
+    if session.mode.trim().is_empty() {
+        return Err(LbeError::new("session_context data.session.mode is empty"));
+    }
+    if session.created_at.trim().is_empty() {
+        return Err(LbeError::new(
+            "session_context data.session.created_at is empty",
+        ));
+    }
+    if session.updated_at.trim().is_empty() {
+        return Err(LbeError::new(
+            "session_context data.session.updated_at is empty",
+        ));
+    }
+
+    // Workspace checks
+    let workspace = &projection.data.workspace;
+    if workspace.project_workspace_id.trim().is_empty() {
+        return Err(LbeError::new(
+            "session_context data.workspace.project_workspace_id is empty",
+        ));
+    }
+    if workspace.canonical_root.trim().is_empty() {
+        return Err(LbeError::new(
+            "session_context data.workspace.canonical_root is empty",
+        ));
+    }
+
+    // Opaque owner payload validation for task, checkpoint, checkpoint_revalidation
+    for (name, opt) in [
+        ("task", &projection.data.task),
+        ("checkpoint", &projection.data.checkpoint),
+        (
+            "checkpoint_revalidation",
+            &projection.data.checkpoint_revalidation,
+        ),
+    ] {
+        if let Some(payload) = opt {
+            validate_opaque_payload(payload, name)?;
+        }
+    }
+
+    // Opaque owner payload validation for verified_facts
+    for (i, payload) in projection.data.verified_facts.iter().enumerate() {
+        validate_opaque_payload(payload, &format!("verified_facts[{i}]"))?;
+    }
+
+    // Opaque owner payload validation for active_constraints
+    for (i, payload) in projection.data.active_constraints.iter().enumerate() {
+        validate_opaque_payload(payload, &format!("active_constraints[{i}]"))?;
+    }
+
+    // Opaque owner payload validation for recent_failures
+    for (i, payload) in projection.data.recent_failures.iter().enumerate() {
+        validate_opaque_payload(payload, &format!("recent_failures[{i}]"))?;
+    }
+
+    // Transcript item validation
+    for (i, item) in projection.data.transcript.iter().enumerate() {
+        if item.kind.trim().is_empty() {
+            return Err(LbeError::new(format!(
+                "session_context transcript[{i}].kind is empty",
+            )));
+        }
+        if item.status.trim().is_empty() {
+            return Err(LbeError::new(format!(
+                "session_context transcript[{i}].status is empty",
+            )));
+        }
+        if item.event_id.trim().is_empty() {
+            return Err(LbeError::new(format!(
+                "session_context transcript[{i}].event_id is empty",
+            )));
+        }
+    }
+
+    // Cross-identity validation
+    if &projection.workspace_id != authoritative_workspace_id {
+        return Err(LbeError::new(format!(
+            "session_context workspace_id '{}' does not match authoritative project_truth workspace_id '{}'",
+            projection.workspace_id, authoritative_workspace_id
+        )));
+    }
+    if &session.project_workspace_id != &projection.workspace_id {
+        return Err(LbeError::new(format!(
+            "session_context data.session.project_workspace_id '{}' does not match session_context workspace_id '{}'",
+            session.project_workspace_id, projection.workspace_id
+        )));
+    }
+    if &workspace.project_workspace_id != &projection.workspace_id {
+        return Err(LbeError::new(format!(
+            "session_context data.workspace.project_workspace_id '{}' does not match session_context workspace_id '{}'",
+            workspace.project_workspace_id, projection.workspace_id
+        )));
+    }
+    if &projection.session_id != configured_session_id {
+        return Err(LbeError::new(format!(
+            "session_context session_id '{}' does not match configured LBE_SESSION_ID '{}'",
+            projection.session_id, configured_session_id
+        )));
+    }
+    if &session.session_id != &projection.session_id {
+        return Err(LbeError::new(format!(
+            "session_context data.session.session_id '{}' does not match session_context session_id '{}'",
+            session.session_id, projection.session_id
+        )));
+    }
+    if &session.canonical_workspace_root != &workspace.canonical_root {
+        return Err(LbeError::new(format!(
+            "session_context data.session.canonical_workspace_root '{}' does not match data.workspace.canonical_root '{}'",
+            session.canonical_workspace_root, workspace.canonical_root
+        )));
+    }
+    if &workspace.canonical_root != canonical_workspace_root {
+        return Err(LbeError::new(format!(
+            "session_context data.workspace.canonical_root '{}' does not match project_truth data.workspace_root '{}'",
+            workspace.canonical_root, canonical_workspace_root
+        )));
+    }
+
+    Ok(())
+}
+
+/// Validate that an opaque owner payload has the required wrapper structure.
+///
+/// The `payload` field is kept as opaque `serde_json::Value`; this function
+/// enforces only the wrapper invariants, not the contents of the payload.
+fn validate_opaque_payload(payload: &OpaqueOwnerPayload, name: &str) -> Result<(), LbeError> {
+    if payload.owner_payload_version != "1.0" {
+        return Err(LbeError::new(format!(
+            "session_context {name} owner_payload_version must be 1.0",
+        )));
+    }
+    if !payload.opaque {
+        return Err(LbeError::new(format!(
+            "session_context {name} must be opaque (opaque=true)",
+        )));
+    }
+    Ok(())
 }

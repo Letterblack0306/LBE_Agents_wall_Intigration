@@ -1042,3 +1042,646 @@ fn real_wrapper_next_wake_is_none_when_disconnected() {
     let wrapper = RealLbeWrapper::new();
     assert!(wrapper.next_wake(Instant::now()).is_none());
 }
+
+// ---------------------------------------------------------------------------
+// REAL_AGENT_WALL_SESSION_CONTEXT_ATTACHMENT_V1 tests
+// ---------------------------------------------------------------------------
+
+use crate::wrapper::validate_session_context;
+
+fn build_minimal_session_context(
+    workspace_id: &str,
+    session_id: &str,
+    canonical_root: &str,
+) -> String {
+    format!(
+        r#"{{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "{ws}",
+  "session_id": "{sid}",
+  "read_only": true,
+  "data": {{
+    "session": {{
+      "session_id": "{sid}",
+      "project_workspace_id": "{ws}",
+      "canonical_workspace_root": "{cr}",
+      "mode": "interactive",
+      "permission": null,
+      "runtime_policy": null,
+      "provider_id": null,
+      "provider_model": null,
+      "active_profile_id": null,
+      "permission_policy_id": null,
+      "evidence_policy_id": null,
+      "checkpoint_id": null,
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }},
+    "workspace": {{
+      "project_workspace_id": "{ws}",
+      "canonical_root": "{cr}",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    }},
+    "task": null,
+    "checkpoint": null,
+    "checkpoint_revalidation": null,
+    "verified_facts": [],
+    "active_constraints": [],
+    "recent_failures": [],
+    "transcript": []
+  }}
+}}"#,
+        ws = workspace_id,
+        sid = session_id,
+        cr = canonical_root,
+    )
+}
+
+#[test]
+fn validate_session_context_accepts_minimal_valid_projection() {
+    let sc_json = build_minimal_session_context("ws_abc", "sess_xyz", "C:/fake/root");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:/fake/root", "sess_xyz");
+    assert!(
+        result.is_ok(),
+        "expected minimal projection to validate: {:?}",
+        result
+    );
+}
+
+#[test]
+fn validate_session_context_rejects_wrong_projection_type() {
+    let mut sc_json = build_minimal_session_context("ws_abc", "sess_xyz", "C:\\fake\\root");
+    sc_json = sc_json.replace("\"session_context\"", "\"other_type\"");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("projection_type"));
+}
+
+#[test]
+fn validate_session_context_rejects_wrong_schema_version() {
+    let mut sc_json = build_minimal_session_context("ws_abc", "sess_xyz", "C:\\fake\\root");
+    sc_json = sc_json.replace("\"1.0\"", "\"2.0\"");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("schema_version"));
+}
+
+#[test]
+fn validate_session_context_rejects_read_only_false() {
+    let mut sc_json = build_minimal_session_context("ws_abc", "sess_xyz", "C:\\fake\\root");
+    sc_json = sc_json.replace("\"read_only\": true", "\"read_only\": false");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("read-only"));
+}
+
+#[test]
+fn validate_session_context_rejects_empty_workspace_id() {
+    let sc_json = build_minimal_session_context("", "sess_xyz", "C:\\fake\\root");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    let result = validate_session_context(&projection, "", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+}
+
+#[test]
+fn validate_session_context_rejects_empty_session_id() {
+    let sc_json = build_minimal_session_context("ws_abc", "", "C:\\fake\\root");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "");
+    assert!(result.is_err());
+}
+
+#[test]
+fn validate_session_context_rejects_session_project_workspace_id_mismatch() {
+    let sc_json = build_minimal_session_context("ws_abc", "sess_xyz", "C:\\fake\\root");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_OTHER", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    let msg = result.unwrap_err().message;
+    assert!(
+        msg.contains("workspace_id") && msg.contains("authoritative"),
+        "expected workspace_id mismatch, got: {msg}"
+    );
+}
+
+#[test]
+fn validate_session_context_rejects_workspace_project_workspace_id_mismatch() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_xyz",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\fake\\root",
+      "mode": "interactive",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_OTHER",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "transcript": []
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .message
+            .contains("data.workspace.project_workspace_id")
+    );
+}
+
+#[test]
+fn validate_session_context_rejects_canonical_root_mismatch() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_xyz",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\other\\path",
+      "mode": "interactive",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_abc",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "transcript": []
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .message
+            .contains("canonical_workspace_root")
+    );
+}
+
+#[test]
+fn validate_session_context_rejects_top_level_session_id_mismatch() {
+    let sc_json = build_minimal_session_context("ws_abc", "sess_xyz", "C:\\fake\\root");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_OTHER");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("LBE_SESSION_ID"));
+}
+
+#[test]
+fn validate_session_context_rejects_session_session_id_mismatch() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_OTHER",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\fake\\root",
+      "mode": "interactive",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_abc",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "transcript": []
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    let msg = result.unwrap_err().message;
+    assert!(msg.contains("data.session.session_id"), "got: {msg}");
+}
+
+#[test]
+fn validate_session_context_rejects_malformed_opaque_wrapper() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_xyz",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\fake\\root",
+      "mode": "interactive",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_abc",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "task": {
+      "owner_payload_version": "1.0",
+      "opaque": false,
+      "payload": null
+    },
+    "transcript": []
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("opaque"));
+}
+
+#[test]
+fn validate_session_context_rejects_malformed_opaque_version() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_xyz",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\fake\\root",
+      "mode": "interactive",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_abc",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "checkpoint": {
+      "owner_payload_version": "2.0",
+      "opaque": true,
+      "payload": null
+    },
+    "transcript": []
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .message
+            .contains("owner_payload_version")
+    );
+}
+
+#[test]
+fn validate_session_context_rejects_malformed_transcript_kind() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_xyz",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\fake\\root",
+      "mode": "interactive",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_abc",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "transcript": [
+      { "sequence": 0, "kind": "", "status": "ok", "text": "hello", "event_id": "evt_1" }
+    ]
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("transcript[0].kind"));
+}
+
+#[test]
+fn validate_session_context_rejects_malformed_transcript_status() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_xyz",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\fake\\root",
+      "mode": "interactive",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_abc",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "transcript": [
+      { "sequence": 0, "kind": "user", "status": "", "text": "hello", "event_id": "evt_1" }
+    ]
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("transcript[0].status"));
+}
+
+#[test]
+fn validate_session_context_rejects_malformed_transcript_event_id() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_xyz",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\fake\\root",
+      "mode": "interactive",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_abc",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "transcript": [
+      { "sequence": 0, "kind": "user", "status": "ok", "text": "hello", "event_id": "" }
+    ]
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .message
+            .contains("transcript[0].event_id")
+    );
+}
+
+#[test]
+fn real_wrapper_initial_state_has_no_session_context() {
+    let wrapper = RealLbeWrapper::new();
+    let snapshot = wrapper.snapshot();
+    assert!(
+        snapshot.session_context.is_none(),
+        "RealLbeWrapper::new() must not fabricate session_context"
+    );
+}
+
+#[test]
+fn real_wrapper_default_snapshot_has_no_session_context() {
+    let snapshot = LbeSnapshot::default();
+    assert!(
+        snapshot.session_context.is_none(),
+        "Default snapshot must not have session_context populated"
+    );
+}
+
+#[test]
+fn real_wrapper_does_not_populate_provider_runtime_state() {
+    let wrapper = RealLbeWrapper::new();
+    let snap = wrapper.snapshot();
+    assert!(
+        snap.providers.is_empty(),
+        "real wrapper must not populate providers"
+    );
+    assert!(
+        snap.models.is_empty(),
+        "real wrapper must not populate models"
+    );
+    assert!(
+        snap.selected_model.is_none(),
+        "real wrapper must not populate selected_model"
+    );
+    assert_eq!(snap.model_id, "");
+    assert_eq!(snap.model_family, "");
+}
+
+#[test]
+fn real_wrapper_does_not_fabricate_lineage_or_checkpoint_or_memory() {
+    let wrapper = RealLbeWrapper::new();
+    let snap = wrapper.snapshot();
+    assert!(
+        snap.latest_checkpoint.is_none(),
+        "real wrapper must not fabricate CheckpointDescriptor"
+    );
+    // session_context must never populate SessionLineage or MemoryProjection
+    // (these are TUI-owned mocks; the real wrapper does not call them).
+    let _ = snap;
+}
+
+#[test]
+fn real_wrapper_attach_fails_closed_without_lbe_wall_database() {
+    let wall_root = std::env::var_os("LBE_WALL_ROOT");
+    let target = std::env::var_os("LBE_TARGET_WORKSPACE");
+    let database = std::env::var_os("LBE_WALL_DATABASE");
+    let session_id = std::env::var_os("LBE_SESSION_ID");
+    if wall_root.is_none() || target.is_none() || database.is_some() || session_id.is_none() {
+        return;
+    }
+    let mut wrapper = RealLbeWrapper::new();
+    let result = wrapper.attach();
+    assert!(result.is_err());
+    let msg = result.unwrap_err().message;
+    assert!(
+        msg.contains("LBE_WALL_DATABASE"),
+        "expected LBE_WALL_DATABASE error, got: {msg}"
+    );
+    assert_eq!(wrapper.connection_state(), RuntimeConnection::Disconnected);
+    assert!(wrapper.snapshot().session_context.is_none());
+    assert!(wrapper.snapshot().project_truth.is_none());
+}
+
+#[test]
+fn real_wrapper_attach_fails_closed_without_lbe_session_id() {
+    let wall_root = std::env::var_os("LBE_WALL_ROOT");
+    let target = std::env::var_os("LBE_TARGET_WORKSPACE");
+    let database = std::env::var_os("LBE_WALL_DATABASE");
+    let session_id = std::env::var_os("LBE_SESSION_ID");
+    if wall_root.is_none() || target.is_none() || database.is_none() || session_id.is_some() {
+        return;
+    }
+    let mut wrapper = RealLbeWrapper::new();
+    let result = wrapper.attach();
+    assert!(result.is_err());
+    let msg = result.unwrap_err().message;
+    assert!(
+        msg.contains("LBE_SESSION_ID"),
+        "expected LBE_SESSION_ID error, got: {msg}"
+    );
+    assert_eq!(wrapper.connection_state(), RuntimeConnection::Disconnected);
+    assert!(wrapper.snapshot().session_context.is_none());
+    assert!(wrapper.snapshot().project_truth.is_none());
+}
+
+#[test]
+fn real_wrapper_attach_retains_session_context_when_both_projections_succeed() {
+    let wall_root = std::env::var_os("LBE_WALL_ROOT");
+    let target = std::env::var_os("LBE_TARGET_WORKSPACE");
+    let database = std::env::var_os("LBE_WALL_DATABASE");
+    let session_id = std::env::var_os("LBE_SESSION_ID");
+    if wall_root.is_none() || target.is_none() || database.is_none() || session_id.is_none() {
+        return;
+    }
+    let mut wrapper = RealLbeWrapper::new();
+    if wrapper.attach().is_err() {
+        return;
+    }
+    let snapshot = wrapper.snapshot();
+    assert_eq!(snapshot.connection, RuntimeConnection::Connected);
+    assert!(snapshot.project_truth.is_some());
+    assert!(
+        snapshot.session_context.is_some(),
+        "real attachment must retain session_context"
+    );
+    assert_eq!(
+        snapshot.session_id,
+        snapshot
+            .session_context
+            .as_ref()
+            .map(|sc| sc.session_id.clone())
+    );
+    assert_eq!(
+        snapshot.workspace_id,
+        snapshot
+            .project_truth
+            .as_ref()
+            .map(|pt| pt.workspace_id.clone())
+    );
+    assert_eq!(snapshot.runtime_id, None);
+    assert_eq!(snapshot.turn_id, None);
+    assert!(snapshot.latest_checkpoint.is_none());
+}
+
+#[test]
+fn session_context_schema_deserializes_with_required_fields() {
+    let sc_json = build_minimal_session_context("ws_abc", "sess_xyz", "C:\\fake\\root");
+    let projection: SessionContextProjection = serde_json::from_str(&sc_json).unwrap();
+    assert_eq!(projection.schema_version, "1.0");
+    assert_eq!(projection.projection_type, "session_context");
+    assert!(projection.read_only);
+    assert_eq!(projection.workspace_id, "ws_abc");
+    assert_eq!(projection.session_id, "sess_xyz");
+    assert_eq!(projection.data.session.session_id, "sess_xyz");
+    assert_eq!(projection.data.workspace.project_workspace_id, "ws_abc");
+    assert_eq!(projection.data.session.provider_id, None);
+    assert_eq!(projection.data.session.provider_model, None);
+}
+
+#[test]
+fn session_context_projection_round_trips_provider_fields() {
+    let sc_json = r#"{
+  "schema_version": "1.0",
+  "projection_type": "session_context",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "workspace_id": "ws_abc",
+  "session_id": "sess_xyz",
+  "read_only": true,
+  "data": {
+    "session": {
+      "session_id": "sess_xyz",
+      "project_workspace_id": "ws_abc",
+      "canonical_workspace_root": "C:\\fake\\root",
+      "mode": "interactive",
+      "provider_id": "openai",
+      "provider_model": "gpt-5",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    },
+    "workspace": {
+      "project_workspace_id": "ws_abc",
+      "canonical_root": "C:\\fake\\root",
+      "branch": "main",
+      "head": "deadbeef",
+      "status_short": []
+    },
+    "transcript": []
+  }
+}"#;
+    let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
+    assert_eq!(
+        projection.data.session.provider_id.as_deref(),
+        Some("openai")
+    );
+    assert_eq!(
+        projection.data.session.provider_model.as_deref(),
+        Some("gpt-5")
+    );
+    // Provider fields are inside session_context only; they do NOT populate snapshot providers/models.
+    let wrapper = RealLbeWrapper::new();
+    let snap = wrapper.snapshot();
+    assert!(snap.providers.is_empty());
+    assert_eq!(snap.model_id, "");
+}
