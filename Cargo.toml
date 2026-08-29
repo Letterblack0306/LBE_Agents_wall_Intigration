@@ -6,7 +6,7 @@ description = "LetterBlack Engine terminal CLI/TUI prototype"
 
 [[bin]]
 name = "lbe"
-path = "rust/main.rs"
+path = "src/main.rs"
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["termina"] }

@@ -1,0 +1,77 @@
+{
+  "schema_version": 2,
+  "project": "LBE TUI pre-integration closure",
+  "integration_phase": "PRE_INTEGRATION",
+  "modules": {
+    "01_transcript_viewport.md": {
+      "status": "MISSING",
+      "depends_on": [],
+      "notes": "LbeEvent vocabulary for commands/stdout/stderr/detached exists. No scroll offset, PageUp/Down/Home/End, follow-tail preservation, or command detail view implemented."
+    },
+    "02_model_picker.md": {
+      "status": "PARTIAL",
+      "depends_on": [],
+      "notes": "UserRequest::SelectModel exists with catalog validation in MockLbeWrapper. Model catalog rendering shown in status bar. Missing: interactive picker with row selection, Up/Down navigation, Enter submits, Esc closes, error surfacing for invalid selections."
+    },
+    "03_checkpoints_restore.md": {
+      "status": "PARTIAL",
+      "depends_on": [],
+      "notes": "Full LbeEvent vocabulary for checkpoints (created, comparison, restore requested/blocked/restored) exists with transcript rendering. Missing: CheckpointCompare/Restore UserRequest contracts, checkpoint list/detail/comparison/results rendering."
+    },
+    "04_sessions.md": {
+      "status": "PARTIAL",
+      "depends_on": [],
+      "notes": "Session lineage, status projection, and SessionStatus/Origin types exist in LbeSnapshot. /session panel exists as placeholder. Missing: session list/detail projection, replacement of local-only /new reset with runtime request contract."
+    },
+    "05_background_processes.md": {
+      "status": "PARTIAL",
+      "depends_on": [],
+      "notes": "Command/detached-event vocabulary exists with transcript rendering. /processes panel not implemented. Missing: command ID/state/source/latest activity/exit-code/log-availability projection and detail view."
+    },
+    "06_provider_configuration.md": {
+      "status": "PARTIAL",
+      "depends_on": [],
+      "notes": "Provider types (ProviderId, ProviderHealth, AuthState, ProviderProjection, ProviderConfig, ProviderCapabilities) and mock catalog exist. ProviderCatalogDiscovered/Health/Auth events exist. Missing: configure/validate/remove request contracts, provider selection and base URL editing, credential state rendering without exposing raw secrets."
+    },
+    "07_tools_registry.md": {
+      "status": "PLACEHOLDER",
+      "depends_on": [],
+      "notes": "/tools panel exists but shows only a not-connected placeholder. ToolRisk and ValidationStatus types exist. LbeEvent::ToolRequested/Started/Completed/Failed exist. Missing: typed tool registry projection, name/description/owner/risk/enabled/approval-requirement rendering, read-only detail view."
+    },
+    "08_evidence_browser.md": {
+      "status": "PLACEHOLDER",
+      "depends_on": ["07_tools_registry.md"],
+      "notes": "/evidence panel exists but shows only a not-connected placeholder. No evidence record types defined. Missing: typed evidence record projection, ID/type/source/origin/timestamp/status/summary rendering, evidence-to-execution/tool/session reference links."
+    },
+    "09_receipts_browser.md": {
+      "status": "PLACEHOLDER",
+      "depends_on": ["08_evidence_browser.md"],
+      "notes": "/receipts panel exists but shows only a not-connected placeholder. Receipt IDs appear in transcripts (LbeCompletionAccepted). Missing: structured receipt projection, receipt ID/execution ID/authorization/execution/validation/completion state rendering, evidence reference exposure."
+    },
+    "10_mcp_surface.md": {
+      "status": "PLACEHOLDER",
+      "depends_on": [],
+      "notes": "/mcp panel exists but shows only a not-connected placeholder. Missing: typed MCP server projection, server identity/transport/connection-state/health/tool-count rendering. Configuration/connect actions reserved as wrapper requests."
+    },
+    "11_terminal_compatibility.md": {
+      "status": "MISSING",
+      "depends_on": [],
+      "notes": "Palette uses RGB colors; no NO_COLOR fallback. Logo uses unicode block characters; no ASCII fallback tokens. Missing: NO_COLOR handling, ASCII fallback tokens, CJK/emoji/combining-character cell-width verification, long path/model name testing."
+    },
+    "12_plain_cli_mode.md": {
+      "status": "MISSING",
+      "depends_on": [],
+      "notes": "No --no-tui command path exists. All output goes through Termina/ratatui. Missing: --no-tui flag definition, stdout-for-results/stderr-for-diagnostics contract, meaningful exit-code contract for automation."
+    },
+    "13_lifecycle_acceptance.md": {
+      "status": "NOT_PROVEN",
+      "depends_on": ["14_responsive_acceptance.md"],
+      "notes": "Unit tests exist for logo geometry, animation reveal order, context meter, and minimum-size fallback. Missing: PTY smoke tests for normal quit/Ctrl+C/Ctrl+D/panic exits, alternate-screen/cursor/raw-mode restoration verification, resize and suspend/resume behavior testing."
+    },
+    "14_responsive_acceptance.md": {
+      "status": "PARTIAL",
+      "depends_on": [],
+      "notes": "Minimum-size check (60x18) exists in unit tests. Below-minimum fallback renders honest message. Missing: pinned render tests at 60x18 and 80x24 for populated states, narrow-width panel tests for provider/model/doctor/session, long workspace path/model name overflow testing, deterministic truncation verification."
+    }
+  }
+}

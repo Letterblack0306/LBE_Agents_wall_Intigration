@@ -158,6 +158,7 @@ struct LbeSnapshot {
     runtime_id: Option<String>,
     runtime_mode: RuntimeMode,
     attached_client_count: usize,
+    lineage: SessionLineage,
     session_id: Option<String>,
     session_state: SessionStatus,
     turn_id: Option<String>,
@@ -170,6 +171,7 @@ struct LbeSnapshot {
     context_capacity: usize,
     compaction_available: bool,
     compaction_state: CompactionState,
+    latest_checkpoint: Option<CheckpointDescriptor>,
     retry_count: u32,
     retry_limit: u32,
     timeout_seconds: u64,
@@ -188,6 +190,11 @@ impl Default for LbeSnapshot {
             runtime_id: Some("runtime_mock_tui".to_owned()),
             runtime_mode: RuntimeMode::Mock,
             attached_client_count: 0,
+            lineage: SessionLineage {
+                root_session_id: "sess_mock_7f31".to_owned(),
+                parent_session_id: None,
+                origin: SessionOrigin::User,
+            },
             session_id: Some("sess_mock_7f31".to_owned()),
             session_state: SessionStatus::Idle,
             turn_id: Some("turn_mock_0".to_owned()),
@@ -200,6 +207,7 @@ impl Default for LbeSnapshot {
             context_capacity: 10,
             compaction_available: true,
             compaction_state: CompactionState::Idle,
+            latest_checkpoint: None,
             retry_count: 0,
             retry_limit: 3,
             timeout_seconds: 900,
@@ -486,6 +494,32 @@ impl SessionStatus {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionOrigin {
+    User,
+    Automation,
+    Subagent,
+    Team,
+}
+
+impl SessionOrigin {
+    fn label(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Automation => "automation",
+            Self::Subagent => "subagent",
+            Self::Team => "team",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SessionLineage {
+    root_session_id: String,
+    parent_session_id: Option<String>,
+    origin: SessionOrigin,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CompactionState {
     Idle,
     Suggested,
@@ -564,6 +598,7 @@ enum UserRequest {
     SubmitTask { intent: String, mode: AgentMode },
     Continue { session_id: String, message: String },
     RefreshProviderCatalog,
+    SelectModel { model: ModelRef },
     CompactContext,
     RunDiagnostics,
     Approve { approval_id: String },
@@ -599,6 +634,16 @@ enum LbeEvent {
     },
     ProviderCatalogDiscovered {
         providers: Vec<ProviderProjection>,
+    },
+    ProviderDiscoveryStarted,
+    ProviderDiscoveryCompleted {
+        providers: Vec<ProviderId>,
+    },
+    ProviderValidationStarted {
+        provider_id: ProviderId,
+    },
+    ProviderValidationCompleted {
+        provider_id: ProviderId,
     },
     ProviderHealthUpdated {
         provider_id: ProviderId,
@@ -865,11 +910,15 @@ impl LbeWrapper for MockLbeWrapper {
                 });
             }
             UserRequest::RefreshProviderCatalog => {
+                self.emit(LbeEvent::ProviderDiscoveryStarted);
                 let providers = self.snapshot.providers.clone();
                 self.emit(LbeEvent::ProviderCatalogDiscovered {
                     providers: providers.clone(),
                 });
-                for provider in providers {
+                for provider in &providers {
+                    self.emit(LbeEvent::ProviderValidationStarted {
+                        provider_id: provider.provider_id,
+                    });
                     self.emit(LbeEvent::ProviderAuthStateUpdated {
                         provider_id: provider.provider_id,
                         auth_state: provider.auth_state,
@@ -878,9 +927,19 @@ impl LbeWrapper for MockLbeWrapper {
                         provider_id: provider.provider_id,
                         health: provider.health,
                     });
+                    self.emit(LbeEvent::ProviderValidationCompleted {
+                        provider_id: provider.provider_id,
+                    });
                 }
                 self.emit(LbeEvent::ModelCatalogDiscovered {
                     models: self.snapshot.models.clone(),
+                });
+                let discovered = providers
+                    .iter()
+                    .map(|provider| provider.provider_id)
+                    .collect::<Vec<_>>();
+                self.emit(LbeEvent::ProviderDiscoveryCompleted {
+                    providers: discovered,
                 });
             }
             UserRequest::CompactContext => {
@@ -1042,6 +1101,22 @@ impl LbeWrapper for MockLbeWrapper {
                 self.emit(LbeEvent::SessionStatusUpdated {
                     status: self.snapshot.session_state,
                 });
+            }
+            UserRequest::SelectModel { model } => {
+                let in_catalog = self.snapshot.models.iter().any(|candidate| {
+                    candidate.provider_id == model.provider_id
+                        && candidate.model_id == model.model_id
+                });
+                if !in_catalog {
+                    return Err(LbeError {
+                        message: format!(
+                            "model {} is not in the discovered model catalog",
+                            model.model_id
+                        ),
+                    });
+                }
+                self.snapshot.selected_model = Some(model);
+                self.emit_snapshot();
             }
             UserRequest::SetMode { mode } => {
                 self.snapshot.active_mode = mode;
@@ -1272,6 +1347,7 @@ impl App {
                 Some(MockPanel::Doctor)
             }
             "/undo" => Some(MockPanel::Undo),
+            "/checkpoints" => Some(MockPanel::Undo),
             "/mode" => {
                 self.transcript
                     .push(format!("SYSTEM  active mode: {}", self.agent_mode.label()));
@@ -1390,10 +1466,32 @@ impl App {
                     provider.auth_state = auth_state;
                 }
             }
+            LbeEvent::ProviderDiscoveryStarted => {
+                self.transcript.push("PROVIDER  discovery started".to_owned());
+            }
+            LbeEvent::ProviderDiscoveryCompleted { providers } => {
+                self.transcript.push(format!(
+                    "PROVIDER  discovery completed · {} provider(s)",
+                    providers.len()
+                ));
+            }
+            LbeEvent::ProviderValidationStarted { provider_id } => {
+                self.transcript.push(format!(
+                    "PROVIDER  validation started · {}",
+                    provider_id.label()
+                ));
+            }
+            LbeEvent::ProviderValidationCompleted { provider_id } => {
+                self.transcript.push(format!(
+                    "PROVIDER  validation completed · {}",
+                    provider_id.label()
+                ));
+            }
             LbeEvent::ModelCatalogDiscovered { models } => {
                 self.snapshot.models = models;
             }
             LbeEvent::CheckpointCreated { checkpoint } => {
+                self.snapshot.latest_checkpoint = Some(checkpoint.clone());
                 self.transcript.push(format!(
                     "CHECKPOINT  created · {} · {} file(s)",
                     checkpoint.checkpoint_id,
@@ -2128,13 +2226,26 @@ fn mock_panel_text(panel: MockPanel, snapshot: &LbeSnapshot) -> Text<'static> {
                 "Only in-memory composer recall is available.".to_owned(),
             ],
         ),
-        MockPanel::Session => (
-            "Session",
-            vec![
-                "MOCK / NOT CONNECTED".to_owned(),
-                "No durable session owner is connected.".to_owned(),
-            ],
-        ),
+        MockPanel::Session => {
+            let lineage = &snapshot.lineage;
+            let parent = lineage
+                .parent_session_id
+                .as_deref()
+                .unwrap_or("none");
+            (
+                "Session",
+                vec![
+                    "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
+                    format!(
+                        "Root {} · parent {} · origin {}",
+                        lineage.root_session_id,
+                        parent,
+                        lineage.origin.label()
+                    ),
+                    "No durable session owner is connected.".to_owned(),
+                ],
+            )
+        }
         MockPanel::Evidence => (
             "Evidence",
             vec![
@@ -2171,13 +2282,29 @@ fn mock_panel_text(panel: MockPanel, snapshot: &LbeSnapshot) -> Text<'static> {
                 "All values are mock projections; no runtime is attached.".to_owned(),
             ],
         ),
-        MockPanel::Undo => (
-            "Undo",
-            vec![
-                "MOCK / NOT CONNECTED".to_owned(),
-                "Checkpoint restore must be requested from canonical LBE runtime.".to_owned(),
-            ],
-        ),
+        MockPanel::Undo => {
+            let mut rows = vec![
+                "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
+                "Checkpoint projection; restore originates from the canonical LBE runtime."
+                    .to_owned(),
+                String::new(),
+            ];
+            if let Some(checkpoint) = &snapshot.latest_checkpoint {
+                rows.push(format!(
+                    "{} · {} · {} file(s) changed",
+                    checkpoint.checkpoint_id,
+                    checkpoint.created_at,
+                    checkpoint.changed_files.len()
+                ));
+                rows.push(format!(
+                    "workspace revision {}",
+                    checkpoint.workspace_revision
+                ));
+            } else {
+                rows.push("No checkpoint has been created in this mock session.".to_owned());
+            }
+            ("Undo", rows)
+        }
         MockPanel::Doctor => {
             let mut rows = vec![
                 "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
@@ -2534,6 +2661,102 @@ mod tests {
         assert!(doctor_text.contains("Mock diagnostics; no live checks are executed."));
         assert!(doctor_text.contains("runtime.mock"));
         assert!(doctor_text.contains("terminal.termina"));
+    }
+
+    #[test]
+    fn select_model_rejects_a_model_not_in_the_discovered_catalog() {
+        let mut wrapper = MockLbeWrapper::default();
+        let now = Instant::now();
+        let result = wrapper.submit(
+            UserRequest::SelectModel {
+                model: ModelRef {
+                    provider_id: ProviderId::Anthropic,
+                    model_id: "claude-invented-99".to_owned(),
+                },
+            },
+            now,
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            wrapper
+                .snapshot
+                .selected_model
+                .as_ref()
+                .map(|model| model.model_id.as_str()),
+            Some("gemini-2.5-flash-preview")
+        );
+    }
+
+    #[test]
+    fn select_model_accepts_a_model_present_in_the_discovered_catalog() {
+        let mut wrapper = MockLbeWrapper::default();
+        let now = Instant::now();
+        let result = wrapper.submit(
+            UserRequest::SelectModel {
+                model: ModelRef {
+                    provider_id: ProviderId::Gemini,
+                    model_id: "gemini-2.5-flash-preview".to_owned(),
+                },
+            },
+            now,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn provider_refresh_emits_discovery_and_validation_lifecycle() {
+        let mut app = App::default();
+        let mut wrapper = MockLbeWrapper::default();
+        app.handle_command("/provider", &mut wrapper);
+        while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+            app.reduce_lbe_event(event);
+        }
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("PROVIDER  discovery started"))
+        );
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("PROVIDER  discovery completed"))
+        );
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("PROVIDER  validation started · Google Gemini"))
+        );
+        assert!(
+            app.transcript
+                .iter()
+                .any(|line| line.contains("PROVIDER  validation completed · LM Studio"))
+        );
+    }
+
+    #[test]
+    fn session_lineage_and_checkpoint_project_into_their_panels() {
+        let mut app = App::default();
+        let mut wrapper = MockLbeWrapper::default();
+        let now = Instant::now();
+        app.input = "inspect workspace".to_owned();
+        app.submit_or_approve(&mut wrapper, now);
+        while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+            app.reduce_lbe_event(event);
+        }
+        app.submit_or_approve(&mut wrapper, now);
+        while let Some(event) = wrapper
+            .poll_event(now + Duration::from_millis(950))
+            .unwrap()
+        {
+            app.reduce_lbe_event(event);
+        }
+
+        let session_text = mock_panel_text(MockPanel::Session, &app.snapshot).to_string();
+        assert!(session_text.contains("Root sess_mock_7f31 · parent none · origin user"));
+
+        let undo_text = mock_panel_text(MockPanel::Undo, &app.snapshot).to_string();
+        assert!(undo_text.contains("chk_mock_before_exec"));
+        assert!(!undo_text.contains("No checkpoint has been created"));
     }
 
     #[test]
