@@ -20,6 +20,9 @@ pub(crate) enum UserRequest {
     ListWorkspace {
         path: String,
     },
+    GlobWorkspace {
+        pattern: String,
+    },
     RefreshProviderCatalog,
     SelectModel {
         model: ModelRef,

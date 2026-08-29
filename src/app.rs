@@ -268,6 +268,20 @@ impl App {
                 }
                 None
             }
+            "/glob" => {
+                if argument.is_empty() {
+                    self.transcript
+                        .push("SYSTEM  usage: /glob <relative-glob-pattern>".to_owned());
+                } else {
+                    self.apply_wrapper_result(wrapper.submit(
+                        UserRequest::GlobWorkspace {
+                            pattern: argument.to_owned(),
+                        },
+                        Instant::now(),
+                    ));
+                }
+                None
+            }
             "/undo" => Some(MockPanel::Undo),
             "/checkpoints" => Some(MockPanel::Undo),
             "/mode" => {
