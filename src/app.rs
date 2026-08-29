@@ -528,18 +528,45 @@ impl App {
                     .push(format!("CONTEXT  compaction failed · {message}"));
             }
             LbeEvent::RetryScheduled {
+                execution_id,
+                retry_target,
                 retry_count,
                 retry_limit,
-            } => {
+                ..
+            } if self.owns_execution(&execution_id) => {
                 self.snapshot.retry_count = retry_count;
                 self.snapshot.retry_limit = retry_limit;
-                self.transcript
-                    .push(format!("RETRY  scheduled · {retry_count}/{retry_limit}"));
+                self.transcript.push(format!(
+                    "RETRY  scheduled · {retry_target} · {retry_count}/{retry_limit}"
+                ));
             }
-            LbeEvent::RetryLimitReached { retry_limit } => {
+            LbeEvent::RetryLimitReached {
+                execution_id,
+                retry_target,
+                retry_limit,
+                ..
+            } if self.owns_execution(&execution_id) => {
                 self.snapshot.retry_count = retry_limit;
+                self.transcript.push(format!(
+                    "RETRY  limit reached · {retry_target} · {retry_limit}"
+                ));
+            }
+            LbeEvent::ExecutionInterrupted {
+                execution_id,
+                reason,
+            } if self.owns_execution(&execution_id) => {
+                self.snapshot.session_state = SessionStatus::Interrupted;
+                self.snapshot.execution_status = Some(ExecutionStatus::Interrupted);
                 self.transcript
-                    .push(format!("RETRY  limit reached · {retry_limit}"));
+                    .push(format!("RUNTIME  execution interrupted · {reason}"));
+                self.phase = Phase::Interrupted;
+            }
+            LbeEvent::ExecutionResumed { execution_id } if self.owns_execution(&execution_id) => {
+                self.snapshot.session_state = SessionStatus::Running;
+                self.snapshot.execution_status = Some(ExecutionStatus::Running);
+                self.transcript
+                    .push(format!("RUNTIME  execution resumed · {execution_id}"));
+                self.phase = Phase::Running;
             }
             LbeEvent::TimeoutWarning {
                 elapsed_seconds,
@@ -820,7 +847,11 @@ impl App {
             | LbeEvent::ValidationStarted { .. }
             | LbeEvent::ValidationCompleted { .. }
             | LbeEvent::LbeCompletionAccepted { .. }
-            | LbeEvent::TimedOut { .. } => {}
+            | LbeEvent::TimedOut { .. }
+            | LbeEvent::RetryScheduled { .. }
+            | LbeEvent::RetryLimitReached { .. }
+            | LbeEvent::ExecutionInterrupted { .. }
+            | LbeEvent::ExecutionResumed { .. } => {}
         }
     }
 

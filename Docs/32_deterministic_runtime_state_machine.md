@@ -46,7 +46,7 @@
 
 ## Status
 
-REQUIRED_BEFORE_REAL_WALL_ATTACHMENT
+CLOSED — CLOSURE VALIDATED 2026-08-29
 
 ## Product Relevance
 
@@ -60,9 +60,41 @@ This module is not a new frontend feature.
 
 It is a correctness prerequisite for the existing TUI contracts before attaching the real Agent Wall.
 
+## Current Evidence Audit
+
+The closure audit was performed against the current Rust implementation at
+repository revision `8034a09fa9353b5876a1eb249426772bfe692101`, not against
+the historical design text in this document.
+
+| Criterion | Current source evidence | Test evidence | Classification |
+| --- | --- | --- | --- |
+| Single runtime authority | `ExecutionStateMachine` owns lifecycle state behind `MockLbeWrapper`; `App` filters and projects events | `snapshot_and_attachment_events_do_not_change_execution_ownership`, stale/foreign projection tests | PROVEN for the pre-integration mock path |
+| Success terminalization | Validation must pass before `LbeCompletionAccepted`; wrapper synchronizes execution/session status | `proposal_approval_lifecycle_reaches_receipt`, `success_terminal_exactly_once_and_snapshot_matches_execution_terminal`, `completion_before_validation_is_rejected` | PROVEN |
+| Failure terminalization | Tool/command/validation failures transition to `Failed` and clear scheduled work | `duplicate_failed_terminal_is_suppressed`, `ordering_guards_reject_missing_intermediate_states`, validation failure coverage | PROVEN |
+| Timeout | Deadline is runtime-owned; `next_wake()` exposes the deadline; timeout clears pending work and terminalizes | `timeout_terminalizes_once_and_clears_pending_work`, `duplicate_timeout_terminal_is_suppressed` | PROVEN |
+| Abort | `UserRequest::Abort` terminalizes the active mock execution, clears pending work, and synchronizes session status | `abort_and_reject_terminalize_once`, `ctrl_c_while_running_requests_abort_without_quitting` | PROVEN |
+| Rejection | Pending approval identity is checked before deterministic rejection terminalization | `approval_ids_are_unique_and_replay_is_rejected`, `mock_wrapper_rejects_an_unknown_approval_id`, `abort_and_reject_terminalize_once` | PROVEN |
+| Duplicate terminals | Terminal state and terminal-event suppression prevent replay mutation | duplicate completion/failure/timeout/abort/rejection tests | PROVEN |
+| Post-terminal events | Lifecycle events after terminal state are discarded without changing canonical state | `duplicate_completion_and_post_terminal_events_do_not_mutate_state_twice`, duplicate terminal tests | PROVEN |
+| Ordering | Tool, command, validation, execution, and completion prerequisites are checked by `ExecutionStateMachine::apply_event` | `ordering_guards_reject_missing_intermediate_states`, `validation_completion_before_validation_start_is_rejected`, `completion_before_validation_is_rejected` | PROVEN |
+| Unknown/foreign IDs | Execution, tool, command, approval, and parent relationships are checked; App ignores stale/foreign execution events | `stale_execution_events_do_not_mutate_a_new_active_execution`, `foreign_tool_and_command_events_do_not_project_into_active_execution`, approval replay tests | PROVEN |
+| Identity isolation | Runtime ordinals create distinct execution/tool/command identities; approval ordinals are monotonic | `parallel_wrapper_execution_ids_do_not_collide`, approval uniqueness test | PROVEN |
+| Retry | `ExecutionStateMachine` owns retry count/limit/source/target; parent execution identity is preserved and each retry registers a fresh subordinate tool identity; exhaustion transitions to `Failed` | `retry_preserves_execution_and_records_targeted_attempt`, `retry_limit_terminalizes_as_failed_and_replay_is_suppressed`, `invalid_and_foreign_retry_events_do_not_mutate_execution` | PROVEN for the deterministic mock runtime |
+| Reconnect/interruption | Execution interruption is explicit as `ExecutionStatus::Interrupted`; wrapper clears deadline/queued lifecycle work, rejects stale continuation, and permits only explicit same-ID resume; attachment reconnect remains separate | `interrupted_execution_is_explicit_and_cannot_continue_until_resumed`, `terminal_execution_reconnect_events_do_not_duplicate_terminal_outcome`, real-wrapper reconnect fail-closed tests | PROVEN for the deterministic mock interruption contract; real execution recovery remains external |
+| Snapshot/UI consistency | Wrapper derives session status from execution status; App treats snapshots/attachment events as projections and preserves active execution ownership | success/timeout/abort synchronization tests and snapshot ownership test | PROVEN for covered mock lifecycle |
+| Existing mock path | Mock proposal, approval, execution, validation, receipt, plan, and audit flows remain operational | Full baseline suite | PROVEN |
+| Mock truth labeling | Mock connection and unavailable live-runtime wording remain explicit | `commands_open_mock_panels_without_claiming_runtime_integration`, provider/doctor labeling tests | PROVEN |
+
+The retry and interruption contracts are intentionally minimal and mock-runtime
+scoped. They do not claim real Agent Wall execution recovery or provider retry
+behavior.
+
 ## Current Problem
 
-The current mock implementation has two overlapping state authorities:
+The historical split-state description below is retained as design context. The
+current implementation now has an `ExecutionStateMachine` behind
+`MockLbeWrapper`; `App` still owns local UI phase and active-execution
+projection state, but does not author the wrapper's canonical lifecycle status.
 
 ```text
 MockLbeWrapper
@@ -72,7 +104,11 @@ App
     mutates local phase + overlapping snapshot/session projection
 ```
 
-This permits contradictions such as:
+The closure audit found no supported contradiction in the covered terminal
+paths. The unresolved correctness gaps are retry semantics and execution
+interruption semantics, not the already-tested terminal paths.
+
+The previously possible contradiction was:
 
 ```text
 UI phase = Completed
@@ -545,8 +581,8 @@ Module 32 is complete only when all of the following are true:
 - [ ] Out-of-order lifecycle events are rejected.
 - [ ] Unknown lifecycle IDs are rejected.
 - [ ] Tool/command/execution/validation identities are tracked.
-- [ ] Retry behavior has explicit state semantics.
-- [ ] Reconnect/interruption behavior has explicit state semantics.
+- [x] Retry behavior has explicit state semantics: count/limit/source/target are runtime-owned, parent execution identity is preserved, subordinate retry identities are fresh, and retry exhaustion terminalizes as `Failed`.
+- [x] Reconnect/interruption behavior has explicit state semantics: `Interrupted` is fail-closed, queued lifecycle work is cleared, stale events cannot mutate it, and only explicit same-ID resume can restore `Running`.
 - [ ] UI projection agrees with authoritative runtime/session snapshot.
 - [ ] Existing successful mock path continues to work.
 - [ ] Existing pre-integration mock truth labeling remains intact.
@@ -567,6 +603,16 @@ This module must not:
 - move evidence or receipt authority into the UI;
 - remove `MockLbeWrapper`;
 - bypass `LbeWrapper`.
+
+## Closure Decision — 2026-08-29
+
+Module 32 is **CLOSED** for the deterministic pre-integration runtime scope.
+The terminal, ordering, timeout, abort, rejection, retry, interruption,
+identity, projection, mock-path, and truth-labeling criteria are supported by
+current source and focused/full tests. Retry preserves the parent execution ID
+and allocates fresh subordinate tool IDs. Interruption is explicit and
+fail-closed; attachment reconnect does not claim to recover real execution
+truth. Real Agent Wall execution recovery remains outside this module.
 
 ## Integration Gate
 
@@ -612,6 +658,12 @@ TIMEOUT ENFORCEMENT
 PASS
 
 FAILURE TERMINALIZATION
+PASS
+
+RETRY SEMANTICS
+PASS
+
+INTERRUPTION / RECONNECT SEMANTICS
 PASS
 
 UI/RUNTIME STATE CONSISTENCY

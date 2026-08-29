@@ -128,11 +128,24 @@ pub(crate) enum LbeEvent {
         message: String,
     },
     RetryScheduled {
+        execution_id: String,
+        retry_source: String,
+        retry_target: String,
         retry_count: u32,
         retry_limit: u32,
     },
     RetryLimitReached {
+        execution_id: String,
+        retry_source: String,
+        retry_target: String,
         retry_limit: u32,
+    },
+    ExecutionInterrupted {
+        execution_id: String,
+        reason: String,
+    },
+    ExecutionResumed {
+        execution_id: String,
     },
     TimeoutWarning {
         elapsed_seconds: u64,

@@ -63,6 +63,12 @@ struct ExecutionStateMachine {
     next_execution_ordinal: u64,
     next_tool_ordinal: u64,
     next_command_ordinal: u64,
+    retry_count: u32,
+    retry_limit: u32,
+    retry_target: Option<String>,
+    retry_source: Option<String>,
+    retry_attempt: u32,
+    interrupted_deadline: Option<Instant>,
 }
 
 impl Default for ExecutionStateMachine {
@@ -80,6 +86,12 @@ impl Default for ExecutionStateMachine {
             next_execution_ordinal: 0,
             next_tool_ordinal: 0,
             next_command_ordinal: 0,
+            retry_count: 0,
+            retry_limit: 3,
+            retry_target: None,
+            retry_source: None,
+            retry_attempt: 0,
+            interrupted_deadline: None,
         }
     }
 }
@@ -93,6 +105,11 @@ impl ExecutionStateMachine {
         self.commands.clear();
         self.validation = ValidationLifecycle::NotStarted;
         self.terminal_emitted = false;
+        self.retry_count = 0;
+        self.retry_target = None;
+        self.retry_source = None;
+        self.retry_attempt = 0;
+        self.interrupted_deadline = None;
     }
 
     fn begin_approval(&mut self) -> Result<(), LbeError> {
@@ -157,6 +174,10 @@ impl ExecutionStateMachine {
         self.commands.clear();
         self.validation = ValidationLifecycle::NotStarted;
         self.terminal_emitted = false;
+        self.retry_target = None;
+        self.retry_source = None;
+        self.retry_attempt = 0;
+        self.interrupted_deadline = None;
         Ok(ExecutionIds {
             execution_id,
             tool_call_id,
@@ -245,6 +266,80 @@ impl ExecutionStateMachine {
                     )),
                     None => Err(LbeError::new("unknown tool-call ID rejected")),
                 }
+            }
+            LbeEvent::RetryScheduled {
+                execution_id,
+                retry_source,
+                retry_target,
+                retry_count,
+                retry_limit,
+            } => {
+                self.ensure_not_terminal_lifecycle()?;
+                self.ensure_execution_id(execution_id)?;
+                self.ensure_running_execution()?;
+                if *retry_limit == 0 || *retry_count != self.retry_count + 1 {
+                    return Err(LbeError::new("retry count or limit is invalid"));
+                }
+                if *retry_count > *retry_limit {
+                    return Err(LbeError::new("retry exceeds configured limit"));
+                }
+                if retry_source.trim().is_empty() || retry_target.trim().is_empty() {
+                    return Err(LbeError::new("retry identities must not be empty"));
+                }
+                if self.tools.get(retry_source) != Some(&ToolLifecycle::Completed)
+                    && self.tools.get(retry_source) != Some(&ToolLifecycle::Failed)
+                {
+                    return Err(LbeError::new("retry source must be a finished tool"));
+                }
+                if self.tools.contains_key(retry_target) || self.commands.contains_key(retry_target)
+                {
+                    return Err(LbeError::new("retry target identity must be fresh"));
+                }
+                self.retry_count = *retry_count;
+                self.retry_limit = *retry_limit;
+                self.retry_target = Some(retry_target.clone());
+                self.retry_source = Some(retry_source.clone());
+                self.retry_attempt += 1;
+                self.tools
+                    .insert(retry_target.clone(), ToolLifecycle::Requested);
+                Ok(None)
+            }
+            LbeEvent::RetryLimitReached {
+                execution_id,
+                retry_source,
+                retry_target,
+                retry_limit,
+            } => {
+                self.ensure_not_terminal_lifecycle()?;
+                self.ensure_execution_id(execution_id)?;
+                self.ensure_running_execution()?;
+                if *retry_limit != self.retry_limit
+                    || self.retry_count < self.retry_limit
+                    || self.retry_target.as_deref() != Some(retry_target.as_str())
+                    || self.retry_source.as_deref() != Some(retry_source.as_str())
+                {
+                    return Err(LbeError::new("retry limit transition is invalid"));
+                }
+                self.transition_terminal(ExecutionStatus::Failed)?;
+                Ok(Some(ExecutionStatus::Failed))
+            }
+            LbeEvent::ExecutionInterrupted { execution_id, .. } => {
+                self.ensure_not_terminal_lifecycle()?;
+                self.ensure_execution_id(execution_id)?;
+                self.ensure_running_execution()?;
+                self.status = ExecutionStatus::Interrupted;
+                self.interrupted_deadline = self.deadline.take();
+                Ok(Some(ExecutionStatus::Interrupted))
+            }
+            LbeEvent::ExecutionResumed { execution_id } => {
+                self.ensure_not_terminal_lifecycle()?;
+                self.ensure_execution_id(execution_id)?;
+                if !matches!(self.status, ExecutionStatus::Interrupted) {
+                    return Err(LbeError::new("execution resume requires interrupted state"));
+                }
+                self.status = ExecutionStatus::Running;
+                self.deadline = self.interrupted_deadline.take();
+                Ok(Some(ExecutionStatus::Running))
             }
             LbeEvent::CommandStarted {
                 tool_call_id,
@@ -544,7 +639,7 @@ impl MockLbeWrapper {
         match self.execution.apply_event(&scheduled.event) {
             Ok(Some(status)) => {
                 self.set_execution_status(status);
-                if status.is_terminal() {
+                if status.is_terminal() || status == ExecutionStatus::Interrupted {
                     self.scheduled.clear();
                 }
                 let event = scheduled.event;
@@ -556,6 +651,18 @@ impl MockLbeWrapper {
             }
             Ok(None) => Ok(Some(scheduled.event)),
             Err(error) => {
+                if self.execution.status == ExecutionStatus::Interrupted {
+                    return Ok(None);
+                }
+                if matches!(
+                    scheduled.event,
+                    LbeEvent::RetryScheduled { .. }
+                        | LbeEvent::RetryLimitReached { .. }
+                        | LbeEvent::ExecutionInterrupted { .. }
+                        | LbeEvent::ExecutionResumed { .. }
+                ) {
+                    return Ok(None);
+                }
                 self.scheduled.clear();
                 if !self.execution.status.is_terminal() {
                     self.execution
@@ -582,6 +689,16 @@ impl MockLbeWrapper {
     pub(crate) fn inject_due_event_for_test(&mut self, event: LbeEvent, now: Instant) {
         self.scheduled
             .push_front(ScheduledLbeEvent { due_at: now, event });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn retry_state_for_test(&self) -> (u32, u32, Option<String>, u32) {
+        (
+            self.execution.retry_count,
+            self.execution.retry_limit,
+            self.execution.retry_target.clone(),
+            self.execution.retry_attempt,
+        )
     }
 }
 

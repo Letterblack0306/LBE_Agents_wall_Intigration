@@ -270,12 +270,12 @@ P10 Connectors / schedules / advanced UX
 
 ### P0 Gate — Deterministic Wrapper Invariants
 
-- [ ] Module 32 is closed.
-- [ ] Terminal state is emitted exactly once.
-- [ ] Duplicate terminal events are suppressed or rejected.
-- [ ] Post-terminal lifecycle events cannot mutate terminal state.
-- [ ] Timeout/abort/reject/failure/success all terminalize deterministically.
-- [ ] Retry and reconnect semantics are either implemented or explicitly moved to a separate runtime-resilience module.
+- [x] Module 32 is closed for the deterministic pre-integration runtime scope.
+- [x] Terminal state is emitted exactly once.
+- [x] Duplicate terminal events are suppressed or rejected.
+- [x] Post-terminal lifecycle events cannot mutate terminal state.
+- [x] Timeout/abort/reject/failure/success all terminalize deterministically.
+- [x] Retry and reconnect/interruption semantics are implemented and tested behind the wrapper; real Agent Wall attachment remains separate.
 
 ### P1 Gate — Read-Only RealLbeWrapper Attachment
 

@@ -201,11 +201,12 @@ pub(crate) fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
             format!("> {proposal}   [Enter] approve   [Esc] reject")
         }
         Phase::Running => "> Execution in progress…".to_owned(),
+        Phase::Interrupted => "> Execution interrupted; runtime truth unresolved…".to_owned(),
         _ if app.input.is_empty() => format!("> {}", mode_placeholder(app.agent_mode)),
         _ => format!("> {}", app.input),
     };
 
-    let composer_style = if matches!(app.phase, Phase::Running) {
+    let composer_style = if matches!(app.phase, Phase::Running | Phase::Interrupted) {
         Style::default().fg(PALETTE.muted)
     } else {
         Style::default().fg(PALETTE.ink)

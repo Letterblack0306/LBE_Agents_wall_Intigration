@@ -429,6 +429,279 @@ fn completion_before_validation_is_rejected() {
 }
 
 #[test]
+fn retry_preserves_execution_and_records_targeted_attempt() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    start_mock_execution(&mut wrapper, now);
+    let execution_id = active_execution_id(&wrapper);
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ToolRequested {
+            execution_id: execution_id.clone(),
+            tool_call_id: "tool_retry_target".to_owned(),
+            tool_name: "workspace.inspect".to_owned(),
+            input_summary: "retry target".to_owned(),
+            risk: crate::events::ToolRisk::ReadOnly,
+        },
+        now,
+    );
+    wrapper.poll_event(now).unwrap().unwrap();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ToolStarted {
+            execution_id: execution_id.clone(),
+            tool_call_id: "tool_retry_target".to_owned(),
+        },
+        now,
+    );
+    wrapper.poll_event(now).unwrap().unwrap();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ToolCompleted {
+            execution_id: execution_id.clone(),
+            tool_call_id: "tool_retry_target".to_owned(),
+            evidence_ref: None,
+        },
+        now,
+    );
+    wrapper.poll_event(now).unwrap().unwrap();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::RetryScheduled {
+            execution_id: execution_id.clone(),
+            retry_source: "tool_retry_target".to_owned(),
+            retry_target: "tool_retry_attempt_1".to_owned(),
+            retry_count: 1,
+            retry_limit: 2,
+        },
+        now,
+    );
+    assert!(matches!(
+        wrapper.poll_event(now).unwrap(),
+        Some(LbeEvent::RetryScheduled { .. })
+    ));
+    let (count, limit, target, attempt) = wrapper.retry_state_for_test();
+    assert_eq!(
+        (count, limit, target.as_deref(), attempt),
+        (1, 2, Some("tool_retry_attempt_1"), 1)
+    );
+    assert_eq!(
+        wrapper.snapshot().active_execution_id.as_deref(),
+        Some(execution_id.as_str())
+    );
+}
+
+#[test]
+fn retry_limit_terminalizes_as_failed_and_replay_is_suppressed() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    start_mock_execution(&mut wrapper, now);
+    let execution_id = active_execution_id(&wrapper);
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ToolRequested {
+            execution_id: execution_id.clone(),
+            tool_call_id: "tool_retry_limit".to_owned(),
+            tool_name: "workspace.inspect".to_owned(),
+            input_summary: "retry target".to_owned(),
+            risk: crate::events::ToolRisk::ReadOnly,
+        },
+        now,
+    );
+    wrapper.poll_event(now).unwrap().unwrap();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ToolStarted {
+            execution_id: execution_id.clone(),
+            tool_call_id: "tool_retry_limit".to_owned(),
+        },
+        now,
+    );
+    wrapper.poll_event(now).unwrap().unwrap();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ToolCompleted {
+            execution_id: execution_id.clone(),
+            tool_call_id: "tool_retry_limit".to_owned(),
+            evidence_ref: None,
+        },
+        now,
+    );
+    wrapper.poll_event(now).unwrap().unwrap();
+    for count in 1..=2 {
+        let (source, target) = if count == 1 {
+            ("tool_retry_limit", "tool_retry_limit_attempt_1")
+        } else {
+            ("tool_retry_limit_attempt_1", "tool_retry_limit_attempt_2")
+        };
+        wrapper.inject_due_event_for_test(
+            LbeEvent::RetryScheduled {
+                execution_id: execution_id.clone(),
+                retry_source: source.to_owned(),
+                retry_target: target.to_owned(),
+                retry_count: count,
+                retry_limit: 2,
+            },
+            now,
+        );
+        wrapper.poll_event(now).unwrap().unwrap();
+        wrapper.inject_due_event_for_test(
+            LbeEvent::ToolStarted {
+                execution_id: execution_id.clone(),
+                tool_call_id: target.to_owned(),
+            },
+            now,
+        );
+        wrapper.poll_event(now).unwrap().unwrap();
+        wrapper.inject_due_event_for_test(
+            LbeEvent::ToolCompleted {
+                execution_id: execution_id.clone(),
+                tool_call_id: target.to_owned(),
+                evidence_ref: None,
+            },
+            now,
+        );
+        wrapper.poll_event(now).unwrap().unwrap();
+    }
+    wrapper.inject_due_event_for_test(
+        LbeEvent::RetryLimitReached {
+            execution_id: execution_id.clone(),
+            retry_source: "tool_retry_limit_attempt_1".to_owned(),
+            retry_target: "tool_retry_limit_attempt_2".to_owned(),
+            retry_limit: 2,
+        },
+        now,
+    );
+    assert!(matches!(
+        wrapper.poll_event(now).unwrap(),
+        Some(LbeEvent::RetryLimitReached { .. })
+    ));
+    assert_eq!(
+        wrapper.snapshot().execution_status,
+        Some(ExecutionStatus::Failed)
+    );
+    wrapper.inject_due_event_for_test(
+        LbeEvent::RetryLimitReached {
+            execution_id,
+            retry_source: "tool_retry_limit_attempt_1".to_owned(),
+            retry_target: "tool_retry_limit_attempt_2".to_owned(),
+            retry_limit: 2,
+        },
+        now,
+    );
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+}
+
+#[test]
+fn invalid_and_foreign_retry_events_do_not_mutate_execution() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    start_mock_execution(&mut wrapper, now);
+    let execution_id = active_execution_id(&wrapper);
+    let before = wrapper.snapshot();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::RetryScheduled {
+            execution_id: "foreign".to_owned(),
+            retry_source: "missing".to_owned(),
+            retry_target: "missing_target".to_owned(),
+            retry_count: 1,
+            retry_limit: 2,
+        },
+        now,
+    );
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    assert_eq!(wrapper.snapshot(), before);
+    wrapper.inject_due_event_for_test(
+        LbeEvent::RetryScheduled {
+            execution_id,
+            retry_source: "missing".to_owned(),
+            retry_target: "missing_target".to_owned(),
+            retry_count: 1,
+            retry_limit: 2,
+        },
+        now,
+    );
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    assert_eq!(wrapper.snapshot(), before);
+}
+
+#[test]
+fn interrupted_execution_is_explicit_and_cannot_continue_until_resumed() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    start_mock_execution(&mut wrapper, now);
+    let execution_id = active_execution_id(&wrapper);
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ExecutionInterrupted {
+            execution_id: execution_id.clone(),
+            reason: "runtime truth unavailable".to_owned(),
+        },
+        now,
+    );
+    assert!(matches!(
+        wrapper.poll_event(now).unwrap(),
+        Some(LbeEvent::ExecutionInterrupted { .. })
+    ));
+    assert_eq!(
+        wrapper.snapshot().execution_status,
+        Some(ExecutionStatus::Interrupted)
+    );
+    assert_eq!(wrapper.snapshot().session_state, SessionStatus::Interrupted);
+    assert!(wrapper.next_wake(now).is_none());
+    while wrapper.poll_event(now).unwrap().is_some() {}
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ToolStarted {
+            execution_id: execution_id.clone(),
+            tool_call_id: "tool_mock_workspace".to_owned(),
+        },
+        now,
+    );
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ExecutionResumed {
+            execution_id: execution_id.clone(),
+        },
+        now,
+    );
+    assert!(matches!(
+        wrapper.poll_event(now).unwrap(),
+        Some(LbeEvent::ExecutionResumed { .. })
+    ));
+    assert_eq!(
+        wrapper.snapshot().execution_status,
+        Some(ExecutionStatus::Running)
+    );
+}
+
+#[test]
+fn interrupted_runtime_event_projects_to_interrupted_ui_phase() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec_interrupt_ui".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::ExecutionInterrupted {
+        execution_id: "exec_interrupt_ui".to_owned(),
+        reason: "runtime truth unavailable".to_owned(),
+    });
+    assert_eq!(app.phase, Phase::Interrupted);
+    assert_eq!(app.snapshot.session_state, SessionStatus::Interrupted);
+    assert_eq!(
+        app.snapshot.execution_status,
+        Some(ExecutionStatus::Interrupted)
+    );
+}
+
+#[test]
+fn terminal_execution_reconnect_events_do_not_duplicate_terminal_outcome() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    start_mock_execution(&mut wrapper, now);
+    let _ = drain_wrapper(&mut wrapper, now + Duration::from_millis(950));
+    let before = wrapper.snapshot();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ExecutionResumed {
+            execution_id: active_execution_id(&wrapper),
+        },
+        now,
+    );
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    assert_eq!(wrapper.snapshot(), before);
+}
+
+#[test]
 fn timeout_terminalizes_once_and_clears_pending_work() {
     let now = Instant::now();
     let mut wrapper = MockLbeWrapper::default();
