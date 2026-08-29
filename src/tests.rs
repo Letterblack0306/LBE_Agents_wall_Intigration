@@ -111,6 +111,171 @@ fn success_terminal_exactly_once_and_snapshot_matches_execution_terminal() {
 }
 
 #[test]
+fn duplicate_terminal_event_after_completion_is_suppressed() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    let mut app = App::with_snapshot(wrapper.snapshot());
+    start_mock_execution(&mut wrapper, now);
+
+    for event in drain_wrapper(&mut wrapper, now + Duration::from_millis(950)) {
+        app.reduce_lbe_event(event);
+    }
+    let terminal_lines = app
+        .transcript
+        .iter()
+        .filter(|line| line.contains("COMPLETION ACCEPTED"))
+        .count();
+    assert_eq!(terminal_lines, 1);
+
+    wrapper.inject_due_event_for_test(
+        LbeEvent::LbeCompletionAccepted {
+            execution_id: active_execution_id(&wrapper),
+            receipt_id: Some("duplicate".to_owned()),
+        },
+        now,
+    );
+
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    assert_eq!(wrapper.snapshot().session_state, SessionStatus::Completed);
+    assert_eq!(
+        wrapper.snapshot().execution_status,
+        Some(ExecutionStatus::Completed)
+    );
+    assert_eq!(
+        app.transcript
+            .iter()
+            .filter(|line| line.contains("COMPLETION ACCEPTED"))
+            .count(),
+        terminal_lines
+    );
+}
+
+#[test]
+fn duplicate_rejected_terminal_is_suppressed() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    wrapper
+        .submit(
+            UserRequest::SubmitTask {
+                intent: "inspect workspace".to_owned(),
+                mode: AgentMode::Regular,
+            },
+            now,
+        )
+        .unwrap();
+    while wrapper.poll_event(now).unwrap().is_some() {}
+    wrapper
+        .submit(
+            UserRequest::Reject {
+                approval_id: "apr_mock_7f31".to_owned(),
+            },
+            now,
+        )
+        .unwrap();
+    let first_terminal_events =
+        drain_wrapper(&mut wrapper, Instant::now() + Duration::from_millis(1));
+    assert_eq!(
+        first_terminal_events
+            .iter()
+            .filter(|event| matches!(event, LbeEvent::ExecutionRejected))
+            .count(),
+        1
+    );
+
+    wrapper.inject_due_event_for_test(LbeEvent::ExecutionRejected, now);
+
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    assert_eq!(wrapper.snapshot().session_state, SessionStatus::Rejected);
+    assert_eq!(
+        wrapper.snapshot().execution_status,
+        Some(ExecutionStatus::Rejected)
+    );
+}
+
+#[test]
+fn duplicate_timeout_terminal_is_suppressed() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    wrapper.set_timeout_seconds_for_test(0);
+    start_mock_execution(&mut wrapper, now);
+    let first_terminal_events = drain_wrapper(&mut wrapper, now + Duration::from_secs(1));
+    assert_eq!(
+        first_terminal_events
+            .iter()
+            .filter(|event| matches!(event, LbeEvent::TimedOut { .. }))
+            .count(),
+        1
+    );
+
+    wrapper.inject_due_event_for_test(LbeEvent::TimedOut { timeout_seconds: 0 }, now);
+
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    assert_eq!(wrapper.snapshot().session_state, SessionStatus::TimedOut);
+    assert_eq!(
+        wrapper.snapshot().execution_status,
+        Some(ExecutionStatus::TimedOut)
+    );
+}
+
+#[test]
+fn duplicate_failed_terminal_is_suppressed() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    start_mock_execution(&mut wrapper, now);
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ValidationCompleted {
+            status: ValidationStatus::Passed,
+            result: "invalid early validation".to_owned(),
+        },
+        now,
+    );
+    let first_failure = wrapper.poll_event(now).unwrap().unwrap();
+    assert!(matches!(first_failure, LbeEvent::ToolFailed { .. }));
+    assert_eq!(wrapper.snapshot().session_state, SessionStatus::Failed);
+
+    wrapper.inject_due_event_for_test(
+        LbeEvent::ValidationCompleted {
+            status: ValidationStatus::Failed,
+            result: "duplicate failure".to_owned(),
+        },
+        now,
+    );
+
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    assert_eq!(wrapper.snapshot().session_state, SessionStatus::Failed);
+    assert_eq!(
+        wrapper.snapshot().execution_status,
+        Some(ExecutionStatus::Failed)
+    );
+}
+
+#[test]
+fn duplicate_aborted_terminal_is_suppressed() {
+    let now = Instant::now();
+    let mut wrapper = MockLbeWrapper::default();
+    start_mock_execution(&mut wrapper, now);
+    wrapper.submit(UserRequest::Abort, now).unwrap();
+    let first_terminal_events =
+        drain_wrapper(&mut wrapper, Instant::now() + Duration::from_millis(1));
+    assert_eq!(
+        first_terminal_events
+            .iter()
+            .filter(|event| matches!(event, LbeEvent::ExecutionRejected))
+            .count(),
+        1
+    );
+
+    wrapper.inject_due_event_for_test(LbeEvent::ExecutionRejected, now);
+
+    assert!(wrapper.poll_event(now).unwrap().is_none());
+    assert_eq!(wrapper.snapshot().session_state, SessionStatus::Aborted);
+    assert_eq!(
+        wrapper.snapshot().execution_status,
+        Some(ExecutionStatus::Aborted)
+    );
+}
+
+#[test]
 fn duplicate_completion_and_post_terminal_events_do_not_mutate_state_twice() {
     let now = Instant::now();
     let mut wrapper = MockLbeWrapper::default();
@@ -133,11 +298,10 @@ fn duplicate_completion_and_post_terminal_events_do_not_mutate_state_twice() {
     );
 
     let events = drain_wrapper(&mut wrapper, now);
-    assert!(events.iter().any(|event| {
-        matches!(
+    assert!(events.iter().all(|event| {
+        !matches!(
             event,
-            LbeEvent::ToolFailed { message, .. }
-                if message.contains("after terminal state")
+            LbeEvent::LbeCompletionAccepted { .. } | LbeEvent::ToolStarted { .. }
         )
     }));
     assert_eq!(wrapper.snapshot().session_state, SessionStatus::Completed);

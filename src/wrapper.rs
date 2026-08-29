@@ -442,6 +442,36 @@ pub(crate) struct MockLbeWrapper {
 }
 
 impl MockLbeWrapper {
+    fn is_blocked_post_terminal_lifecycle_event(event: &LbeEvent) -> bool {
+        matches!(
+            event,
+            LbeEvent::ExecutionRejected
+                | LbeEvent::TimedOut { .. }
+                | LbeEvent::LbeCompletionAccepted { .. }
+                | LbeEvent::ExecutionStarted { .. }
+                | LbeEvent::AgentRequestedCompletion { .. }
+                | LbeEvent::ExecutionCompleted { .. }
+                | LbeEvent::ValidationStarted { .. }
+                | LbeEvent::ValidationCompleted { .. }
+                | LbeEvent::ToolRequested { .. }
+                | LbeEvent::ToolStarted { .. }
+                | LbeEvent::ToolOutputDelta { .. }
+                | LbeEvent::ToolCompleted { .. }
+                | LbeEvent::ToolFailed { .. }
+                | LbeEvent::CommandStarted { .. }
+                | LbeEvent::CommandStdoutDelta { .. }
+                | LbeEvent::CommandStderrDelta { .. }
+                | LbeEvent::CommandCompleted { .. }
+                | LbeEvent::CommandFailed { .. }
+                | LbeEvent::CommandDetached { .. }
+                | LbeEvent::DetachedCommandProgress { .. }
+                | LbeEvent::DetachedCommandCompleted { .. }
+                | LbeEvent::DetachedLogAvailable { .. }
+                | LbeEvent::RetryScheduled { .. }
+                | LbeEvent::RetryLimitReached { .. }
+        )
+    }
+
     fn emit(&mut self, event: LbeEvent) {
         self.scheduled.push_back(ScheduledLbeEvent {
             due_at: Instant::now(),
@@ -476,7 +506,6 @@ impl MockLbeWrapper {
         self.scheduled.clear();
         self.set_execution_status(status);
         if !self.execution.terminal_already_emitted() {
-            self.execution.mark_terminal_emitted();
             self.emit(terminal_event);
             self.emit_execution_status();
         }
@@ -490,15 +519,13 @@ impl MockLbeWrapper {
             self.snapshot.latest_checkpoint = Some(checkpoint.clone());
         }
         if self.execution.status.is_terminal()
-            && self.execution.terminal_already_emitted()
-            && matches!(
-                scheduled.event,
-                LbeEvent::ExecutionRejected
-                    | LbeEvent::TimedOut { .. }
-                    | LbeEvent::LbeCompletionAccepted { .. }
-            )
+            && Self::is_blocked_post_terminal_lifecycle_event(&scheduled.event)
         {
-            return Ok(Some(scheduled.event));
+            if !self.execution.terminal_already_emitted() {
+                self.execution.mark_terminal_emitted();
+                return Ok(Some(scheduled.event));
+            }
+            return Ok(None);
         }
         match self.execution.apply_event(&scheduled.event) {
             Ok(Some(status)) => {
