@@ -74,10 +74,66 @@ pub(crate) const PALETTE: Palette = Palette {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Phase {
     Welcome,
-    AwaitingApproval { approval_id: String, proposal: String },
+    AwaitingApproval {
+        approval_id: String,
+        proposal: String,
+    },
     Running,
     Completed,
+    Failed,
+    TimedOut,
+    Aborted,
     Rejected,
+}
+
+impl Phase {
+    pub(crate) fn from_session_status(status: SessionStatus) -> Self {
+        match status {
+            SessionStatus::Idle | SessionStatus::WaitingForInput => Self::Welcome,
+            SessionStatus::Running => Self::Running,
+            SessionStatus::WaitingForApproval => Self::Welcome,
+            SessionStatus::Completed => Self::Completed,
+            SessionStatus::Failed => Self::Failed,
+            SessionStatus::TimedOut => Self::TimedOut,
+            SessionStatus::Aborted => Self::Aborted,
+            SessionStatus::Rejected => Self::Rejected,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExecutionStatus {
+    Pending,
+    WaitingForApproval,
+    Running,
+    Validating,
+    Completed,
+    Failed,
+    TimedOut,
+    Aborted,
+    Rejected,
+}
+
+impl ExecutionStatus {
+    pub(crate) fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::TimedOut | Self::Aborted | Self::Rejected
+        )
+    }
+
+    pub(crate) fn session_status(self) -> SessionStatus {
+        match self {
+            Self::Pending => SessionStatus::Idle,
+            Self::WaitingForApproval => SessionStatus::WaitingForApproval,
+            Self::Running | Self::Validating => SessionStatus::Running,
+            Self::Completed => SessionStatus::Completed,
+            Self::Failed => SessionStatus::Failed,
+            Self::TimedOut => SessionStatus::TimedOut,
+            Self::Aborted => SessionStatus::Aborted,
+            Self::Rejected => SessionStatus::Rejected,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +236,8 @@ pub(crate) struct LbeSnapshot {
     pub(crate) retry_limit: u32,
     pub(crate) timeout_seconds: u64,
     pub(crate) elapsed_seconds: u64,
+    pub(crate) active_execution_id: Option<String>,
+    pub(crate) execution_status: Option<ExecutionStatus>,
     pub(crate) diagnostics: Vec<DiagnosticCheck>,
     pub(crate) active_mode: AgentMode,
     pub(crate) connection: RuntimeConnection,
@@ -218,6 +276,8 @@ impl Default for LbeSnapshot {
             retry_limit: 3,
             timeout_seconds: 900,
             elapsed_seconds: 0,
+            active_execution_id: None,
+            execution_status: None,
             diagnostics: mock_diagnostics(),
             active_mode: AgentMode::Regular,
             connection: RuntimeConnection::Mock,
@@ -502,7 +562,9 @@ pub(crate) enum SessionStatus {
     WaitingForInput,
     Completed,
     Failed,
+    TimedOut,
     Aborted,
+    Rejected,
 }
 
 impl SessionStatus {
@@ -514,7 +576,9 @@ impl SessionStatus {
             Self::WaitingForInput => "WAITING FOR INPUT",
             Self::Completed => "COMPLETED",
             Self::Failed => "FAILED",
+            Self::TimedOut => "TIMED OUT",
             Self::Aborted => "ABORTED",
+            Self::Rejected => "REJECTED",
         }
     }
 }

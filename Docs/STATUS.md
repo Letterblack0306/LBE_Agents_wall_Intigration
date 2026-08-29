@@ -35,4 +35,5 @@ Update this file only when a module changes.
 | `29_workspace_changes_diff.md` | MISSING | CORE | `03`, `08` | No changed-files list, git/workspace status, diff summary, hunk navigation, accept/reject status, or validation/checkpoint linkage. |
 | `30_file_editor_patch_review.md` | MISSING | CORE | `17`, `22`, `29` | No proposed-edit queue, patch preview, file navigation, accept/reject edit controls, conflict state, or edit provenance view. |
 | `31_cline_interop_reuse_strategy.md` | MISSING | STRATEGIC | `17`-`30` | No module-by-module Cline adopt/adapt/wrap/native decisions have been proven yet. Prevents rebuilding generic coding-agent frontend features without evidence. |
+| `32_deterministic_runtime_state_machine.md` | MISSING | CORE / BLOCKING | `04`, `05`, `07`, `13` | Runtime/session truth is not yet governed by one deterministic state machine. Blocks real Agent Wall attachment until terminal states, transition guards, timeout enforcement, and UI projection boundaries are implemented. |
 

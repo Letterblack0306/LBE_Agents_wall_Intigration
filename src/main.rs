@@ -12,7 +12,7 @@ mod tests;
 
 use std::{io, time::Instant};
 
-use ratatui::termina::{event::Event, EventReader};
+use ratatui::termina::{EventReader, event::Event};
 
 use app::App;
 use wrapper::{LbeWrapper, MockLbeWrapper};
@@ -54,9 +54,9 @@ fn run(terminal: &mut ui::AppTerminal, events: &EventReader) -> io::Result<()> {
         if events.poll(timeout, |event| {
             matches!(event, Event::Key(_) | Event::WindowResized(_))
         })? {
-            if let Event::Key(key) = events.read(|event| {
-                matches!(event, Event::Key(_) | Event::WindowResized(_))
-            })? {
+            if let Event::Key(key) =
+                events.read(|event| matches!(event, Event::Key(_) | Event::WindowResized(_)))?
+            {
                 app.handle_key(key, &mut wrapper, Instant::now());
             }
         }

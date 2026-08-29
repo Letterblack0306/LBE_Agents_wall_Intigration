@@ -140,7 +140,7 @@ impl App {
             }
         }
     }
-pub(crate) fn dismiss_or_reject(&mut self, wrapper: &mut impl LbeWrapper) {
+    pub(crate) fn dismiss_or_reject(&mut self, wrapper: &mut impl LbeWrapper) {
         if self.panel.is_some() || self.show_shortcuts {
             self.panel = None;
             self.show_shortcuts = false;
@@ -166,7 +166,7 @@ pub(crate) fn dismiss_or_reject(&mut self, wrapper: &mut impl LbeWrapper) {
                 .push(format!("LBE WRAPPER ERROR  {}", error.message));
         }
     }
-pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWrapper) {
+    pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWrapper) {
         let command = command
             .split_whitespace()
             .next()
@@ -275,7 +275,6 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
         };
     }
 
-
     pub(crate) fn recall_history(&mut self, older: bool) {
         if self.input_history.is_empty() {
             return;
@@ -295,7 +294,6 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
         self.history_index = Some(index);
         self.input = self.input_history[index].clone();
     }
-
 
     pub(crate) fn reduce_lbe_event(&mut self, event: LbeEvent) {
         match event {
@@ -320,9 +318,19 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
             }
             LbeEvent::SessionStatusUpdated { status } => {
                 self.snapshot.session_state = status;
+                if !matches!(self.phase, Phase::AwaitingApproval { .. })
+                    || status != SessionStatus::WaitingForApproval
+                {
+                    self.phase = Phase::from_session_status(status);
+                }
             }
             LbeEvent::SnapshotUpdated { snapshot } => {
                 self.agent_mode = snapshot.active_mode;
+                if !matches!(self.phase, Phase::AwaitingApproval { .. })
+                    || snapshot.session_state != SessionStatus::WaitingForApproval
+                {
+                    self.phase = Phase::from_session_status(snapshot.session_state);
+                }
                 self.snapshot = snapshot;
             }
             LbeEvent::ProviderCatalogDiscovered { providers } => {
@@ -355,7 +363,8 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
                 }
             }
             LbeEvent::ProviderDiscoveryStarted => {
-                self.transcript.push("PROVIDER  discovery started".to_owned());
+                self.transcript
+                    .push("PROVIDER  discovery started".to_owned());
             }
             LbeEvent::ProviderDiscoveryCompleted { providers } => {
                 self.transcript.push(format!(
@@ -514,7 +523,6 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
             LbeEvent::TimedOut { timeout_seconds } => {
                 self.snapshot.elapsed_seconds = timeout_seconds;
                 self.snapshot.timeout_seconds = timeout_seconds;
-                self.snapshot.session_state = SessionStatus::Failed;
                 self.transcript
                     .push(format!("TIMEOUT  reached · {timeout_seconds}s"));
             }
@@ -612,7 +620,6 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
                 self.transcript.push(format!(
                     "LBE RUNTIME  COMPLETION ACCEPTED · {execution_id} · receipt {receipt}"
                 ));
-                self.phase = Phase::Completed;
             }
             LbeEvent::ExecutionRejected => {
                 self.transcript
@@ -624,7 +631,8 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
                 session_hash,
             } => {
                 self.snapshot.memory.current_session_hash = Some(session_hash.clone());
-                self.snapshot.memory.indexed_sessions = self.snapshot.memory.indexed_sessions.max(1);
+                self.snapshot.memory.indexed_sessions =
+                    self.snapshot.memory.indexed_sessions.max(1);
                 self.transcript.push(format!(
                     "MEMORY  indexed session · {session_id} · {session_hash}"
                 ));
@@ -636,7 +644,8 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
             }
             LbeEvent::MemoryRecallResult { query, records } => {
                 self.snapshot.memory.last_recall_query = Some(query.clone());
-                self.snapshot.memory.indexed_memories = self.snapshot.memory.indexed_memories.max(records.len());
+                self.snapshot.memory.indexed_memories =
+                    self.snapshot.memory.indexed_memories.max(records.len());
                 self.snapshot.memory.recent_records = records.clone();
                 self.transcript.push(format!(
                     "MEMORY  recall result · {query} · {} record(s)",
@@ -681,18 +690,21 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
                 browser_message_id,
                 content,
             } => {
-                self.snapshot.browser_chat.last_browser_message_id = Some(browser_message_id.clone());
+                self.snapshot.browser_chat.last_browser_message_id =
+                    Some(browser_message_id.clone());
                 self.snapshot.browser_chat.last_lbe_turn_id = self.snapshot.turn_id.clone();
                 self.snapshot.browser_chat.status = "Browser message received".to_owned();
-                self.transcript
-                    .push(format!("BROWSER  message · {browser_message_id} · {content}"));
+                self.transcript.push(format!(
+                    "BROWSER  message · {browser_message_id} · {content}"
+                ));
             }
             LbeEvent::BrowserToolRequested {
                 browser_message_id,
                 tool_name,
                 input_summary,
             } => {
-                self.snapshot.browser_chat.last_browser_message_id = Some(browser_message_id.clone());
+                self.snapshot.browser_chat.last_browser_message_id =
+                    Some(browser_message_id.clone());
                 self.snapshot.browser_chat.status = "Tool request routed through LBE".to_owned();
                 self.transcript.push(format!(
                     "BROWSER  tool requested · {browser_message_id} · {tool_name} · {input_summary}"
@@ -704,7 +716,8 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
                 receipt_id,
                 evidence_ref,
             } => {
-                self.snapshot.browser_chat.last_browser_message_id = Some(browser_message_id.clone());
+                self.snapshot.browser_chat.last_browser_message_id =
+                    Some(browser_message_id.clone());
                 self.snapshot.browser_chat.last_receipt_id = receipt_id.clone();
                 self.snapshot.browser_chat.last_evidence_ref = evidence_ref.clone();
                 self.snapshot.browser_chat.status = "LBE result delivered to browser".to_owned();
@@ -733,14 +746,27 @@ pub(crate) fn handle_command(&mut self, command: &str, wrapper: &mut impl LbeWra
     }
 
     pub(crate) fn next_intro_wake(&self, now: Instant) -> Option<Duration> {
-        if !self.transcript.is_empty() { return None; }
+        if !self.transcript.is_empty() {
+            return None;
+        }
         let elapsed = self.intro_elapsed(now);
-        for milestone in [OUTER_REVEAL, FRAME_REVEAL, BRACKETS_REVEAL, BAR_REVEAL, SLOGAN_REVEAL, BAR_BLINK_START] {
-            if elapsed < milestone { return Some(milestone - elapsed); }
+        for milestone in [
+            OUTER_REVEAL,
+            FRAME_REVEAL,
+            BRACKETS_REVEAL,
+            BAR_REVEAL,
+            SLOGAN_REVEAL,
+            BAR_BLINK_START,
+        ] {
+            if elapsed < milestone {
+                return Some(milestone - elapsed);
+            }
         }
         let blink_elapsed = elapsed - BAR_BLINK_START;
         let remainder = blink_elapsed.as_millis() % BAR_BLINK_HALF_PERIOD.as_millis();
-        Some(Duration::from_millis((BAR_BLINK_HALF_PERIOD.as_millis() - remainder) as u64))
+        Some(Duration::from_millis(
+            (BAR_BLINK_HALF_PERIOD.as_millis() - remainder) as u64,
+        ))
     }
 
     pub(crate) fn next_wake(&self, now: Instant) -> Option<Duration> {

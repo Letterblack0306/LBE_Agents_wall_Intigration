@@ -60,7 +60,7 @@ Modules `17`-`30` cover remaining coding-client surfaces. Build each independent
 
 ### C. Reuse / Interop Strategy
 
-Module `31` prevents rebuilding generic coding-agent frontend capabilities that can be adopted, adapted, or wrapped from Cline-compatible surfaces.
+Module `31` prevents rebuilding generic coding-agent frontend capabilities that can be adopted, adapted, or wrapped from Cline-compatible surfaces. Module `32` records the deterministic runtime state-machine prerequisite that must be closed before real Agent Wall attachment.
 
 ## Modules
 
@@ -97,6 +97,7 @@ Module `31` prevents rebuilding generic coding-agent frontend capabilities that 
 | `29_workspace_changes_diff.md` | Workspace Changes / Diff | CORE | MISSING |
 | `30_file_editor_patch_review.md` | File / Patch Review | CORE | MISSING |
 | `31_cline_interop_reuse_strategy.md` | Cline Interop / Reuse Strategy | STRATEGIC | MISSING |
+| `32_deterministic_runtime_state_machine.md` | Deterministic Runtime State Machine | CORE / BLOCKING | MISSING |
 
 ## Status Vocabulary
 

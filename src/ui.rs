@@ -73,7 +73,6 @@ fn cursor_visible(visible: bool) -> Csi {
     }
 }
 
-
 pub(crate) fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
     frame.render_widget(
@@ -434,10 +433,7 @@ pub(crate) fn mock_panel_text(panel: MockPanel, snapshot: &LbeSnapshot) -> Text<
         ),
         MockPanel::Session => {
             let lineage = &snapshot.lineage;
-            let parent = lineage
-                .parent_session_id
-                .as_deref()
-                .unwrap_or("none");
+            let parent = lineage.parent_session_id.as_deref().unwrap_or("none");
             (
                 "Session",
                 vec![
@@ -491,7 +487,8 @@ pub(crate) fn mock_panel_text(panel: MockPanel, snapshot: &LbeSnapshot) -> Text<
         MockPanel::Memory => {
             let mut rows = vec![
                 "LOCAL UI MEMORY · NON-CANONICAL · PRE-INTEGRATION".to_owned(),
-                "Canonical durable memory and verified promotion remain LBE-runtime-owned.".to_owned(),
+                "Canonical durable memory and verified promotion remain LBE-runtime-owned."
+                    .to_owned(),
                 String::new(),
                 format!(
                     "Current session hash: {}",
@@ -540,7 +537,8 @@ pub(crate) fn mock_panel_text(panel: MockPanel, snapshot: &LbeSnapshot) -> Text<
                 "Browser Chat",
                 vec![
                     "MOCK / NOT CONNECTED · UI CONTRACT PREVIEW".to_owned(),
-                    "Browser chat is a conversation surface; LBE remains execution authority.".to_owned(),
+                    "Browser chat is a conversation surface; LBE remains execution authority."
+                        .to_owned(),
                     String::new(),
                     format!(
                         "Provider        {}",
@@ -774,4 +772,3 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
         height,
     )
 }
-

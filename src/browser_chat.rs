@@ -50,7 +50,9 @@ pub(crate) enum BrowserChatEvent {
         input_summary: String,
     },
     ConnectionLost,
-    Reconnected { browser_session_id: String },
+    Reconnected {
+        browser_session_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
