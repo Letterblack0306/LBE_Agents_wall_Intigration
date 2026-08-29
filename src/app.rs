@@ -254,6 +254,20 @@ impl App {
                 }
                 None
             }
+            "/list" => {
+                if argument.is_empty() {
+                    self.transcript
+                        .push("SYSTEM  usage: /list <relative-directory>".to_owned());
+                } else {
+                    self.apply_wrapper_result(wrapper.submit(
+                        UserRequest::ListWorkspace {
+                            path: argument.to_owned(),
+                        },
+                        Instant::now(),
+                    ));
+                }
+                None
+            }
             "/undo" => Some(MockPanel::Undo),
             "/checkpoints" => Some(MockPanel::Undo),
             "/mode" => {

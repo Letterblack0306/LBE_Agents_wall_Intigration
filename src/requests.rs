@@ -17,6 +17,9 @@ pub(crate) enum UserRequest {
     InspectWorkspace {
         path: String,
     },
+    ListWorkspace {
+        path: String,
+    },
     RefreshProviderCatalog,
     SelectModel {
         model: ModelRef,

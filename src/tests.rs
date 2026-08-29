@@ -1013,6 +1013,20 @@ fn read_command_requires_a_relative_path_argument() {
 }
 
 #[test]
+fn mock_list_command_fails_closed_without_fabricating_workspace_entries() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/list .", &mut wrapper);
+
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("governed workspace listing is unavailable in mock mode"))
+    );
+}
+
+#[test]
 fn mock_provider_catalog_events_and_panels_project_safe_typed_values() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
@@ -1630,6 +1644,61 @@ fn real_wrapper_workspace_read_projects_agent_wall_receipt_and_evidence() {
             risk: ToolRisk::ReadOnly,
             ..
         } if tool_name == "workspace.read"
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolCompleted {
+            evidence_ref: Some(reference),
+            ..
+        } if reference.contains("workspace:")
+    )));
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ExecutionCompleted {
+            receipt_id: Some(receipt),
+            ..
+        } if receipt.starts_with("receipt-")
+    )));
+}
+
+#[test]
+fn real_wrapper_workspace_list_projects_agent_wall_receipt_and_evidence() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+        "LBE_GUARD_INSPECTOR_CONFIG_PATH",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none()) {
+        return;
+    }
+
+    let mut wrapper = RealLbeWrapper::new();
+    wrapper
+        .attach()
+        .expect("configured Agent Wall must attach before workspace.list");
+    wrapper
+        .submit(
+            UserRequest::ListWorkspace {
+                path: ".".to_owned(),
+            },
+            Instant::now(),
+        )
+        .expect("workspace.list must cross the Agent Wall boundary");
+
+    let mut events = Vec::new();
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        events.push(event);
+    }
+
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolRequested {
+            tool_name,
+            risk: ToolRisk::ReadOnly,
+            ..
+        } if tool_name == "workspace.list"
     )));
     assert!(events.iter().any(|event| matches!(
         event,
