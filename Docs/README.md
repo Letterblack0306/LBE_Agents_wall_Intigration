@@ -2,9 +2,19 @@
 
 ## Purpose
 
-This package tracks the LBE terminal frontend as a governed coding-agent CLI/TUI, not only an audit surface. Audit is one mode of the product; the full product scope includes coding, runtime/session, tool/process, evidence/receipt, and external interaction frontends.
+This package tracks the LBE terminal frontend as a governed coding-agent CLI/TUI, not only an audit surface. Audit is one mode of the product; the full product scope includes coding, runtime/session, tool/process, evidence/receipt, and external interaction frontends. Start with [`00_integration_alignment.md`](00_integration_alignment.md) for the two-repository ownership boundary, runtime modes, and integration sequence.
 
-The real LBE runtime integration remains a later phase. Rich frontend modules must still route authority-bearing actions through `LbeWrapper`.
+Rust/Ratatui is the active interface implementation. The Python TUI direction is
+retired/reference-only and has no further implementation path. The Python LBE
+runtime remains authoritative for governance, providers, authorization,
+execution, evidence, receipts, validation, and completion truth. The Rust TUI
+must remain a client/projection layer over `LbeWrapper` and LBE.
+
+The separate LBE workspace now records PASS for the complete runtime, session/application contract, governed tool orchestration, external capability registration, provider continuation, and interface control/evidence surfaces. The Rust TUI remains a client/projection adapter; real read-only workspace adapter paths and the MCP metadata refresh path are verified, but installed interactive `/mcp` PTY/E2E acceptance is not yet proven. The real runtime is now the default binary path; set `LBE_RUNTIME=mock` only for deterministic local contract previews.
+Remaining work is Rust/Ratatui interactive acceptance and live integration
+proof.
+
+Cline source audit and reuse classification are complete in the LBE workspace: ADAPT Cline AgentRuntime continuation/event/tool mechanics behind an LBE-owned adapter; reject direct native mutation/execution tools. OpenCode is also an official reuse/reference source, and its pinned revision `dc4449df0d52199704ea4989a5a993ebbc605612` is classified in Module 31. Both must be reused or adapted before equivalent features are recreated. No external runtime may replace LBE authority.
 
 ## Product Scope
 
@@ -46,13 +56,15 @@ The frontend may become IDE-like, but LBE remains authoritative for authorizatio
 
 ## Reuse Rule
 
-Before implementing Modules `17`-`30` natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping Cline-style frontend behavior unless LBE governance, provenance, policy, evidence, receipts, validation, memory, or completion truth requires native implementation. Module `31` tracks this reuse strategy.
+Before implementing Modules `17`-`30` natively, inspect the official Cline and OpenCode sources for an equivalent CLI/frontend/runtime primitive. Prefer adopting, adapting, or wrapping existing behavior. Implement only the LBE-specific adapter, projection, authority, provenance, policy, evidence, receipt, validation, memory, persistence, or completion semantics that cannot be safely delegated. Module `31` records this reuse strategy.
 
 ## Roadmap Tracks
 
 ### A. Existing Slices Integration
 
-Modules `01`-`16` cover the current pre-integration TUI shell and contracts that should be connected to the real LBE wall.
+Modules `01`-`16` cover the Rust/Ratatui TUI shell and contracts. The bounded
+read-only provider/tool path is accepted; remaining work is interactive Rust
+client acceptance and additional Rust-side projections over the real LBE wall.
 
 ### B. Coding Frontend Implementation Roadmap
 
@@ -60,7 +72,12 @@ Modules `17`-`30` cover remaining coding-client surfaces. Build each independent
 
 ### C. Reuse / Interop Strategy
 
-Module `31` prevents rebuilding generic coding-agent frontend capabilities that can be adopted, adapted, or wrapped from Cline-compatible surfaces. Module `32` records the deterministic runtime state-machine prerequisite that must be closed before real Agent Wall attachment.
+Module `31` prevents rebuilding generic coding-agent frontend and runtime capabilities that
+can be adopted, adapted, or wrapped from Cline/OpenCode surfaces. Module `32`
+records the deterministic runtime state-machine foundation. Python terminal UI
+is retired/reference-only; Rust/Ratatui is the active interface. The bounded
+governed read-only path is accepted, and the next work is Rust interactive
+acceptance plus remaining Rust client integration.
 
 ### D. Real CLI IDE Implementation Plan
 
@@ -70,16 +87,17 @@ Module `33` defines the implementation sequence from mock TUI contract preview t
 
 | Module | Area | Product Relevance | Status |
 |---|---|---|---|
-| `01_transcript_viewport.md` | Transcript Viewport and Long Output | CORE | MISSING |
-| `02_model_picker.md` | Interactive Model Picker | CORE | PARTIAL |
-| `03_checkpoints_restore.md` | Checkpoint Compare and Restore Requests | CORE | PARTIAL |
+| `00_integration_alignment.md` | Two-Repository Ownership, Modes, and Sequence | GOVERNANCE | ACTIVE |
+| `01_transcript_viewport.md` | Transcript Viewport and Long Output | CORE | IMPLEMENTED / LOCAL |
+| `02_model_picker.md` | Interactive Model Picker | CORE | IMPLEMENTED / LOCAL |
+| `03_checkpoints_restore.md` | Checkpoint Compare and Restore Requests | CORE | IMPLEMENTED / LOCAL |
 | `04_sessions.md` | Session Management | CORE | PARTIAL |
 | `05_background_processes.md` | Background and Detached Processes | CORE | PARTIAL |
 | `06_provider_configuration.md` | Provider Configuration UI Contract | CORE | PARTIAL |
 | `07_tools_registry.md` | Tool Registry Surface | CORE | PLACEHOLDER |
 | `08_evidence_browser.md` | Evidence Browser | CORE | PLACEHOLDER |
 | `09_receipts_browser.md` | Receipt Browser | CORE | PLACEHOLDER |
-| `10_mcp_surface.md` | MCP Registry Surface | CORE | PLACEHOLDER |
+| `10_mcp_surface.md` | MCP Registry Surface | CORE | PROVEN — METADATA PROJECTION; INSTALLED ACCEPTANCE OPEN |
 | `11_terminal_compatibility.md` | Terminal Compatibility | CORE | MISSING |
 | `12_plain_cli_mode.md` | Plain / Non-TUI Mode Contract | CORE | MISSING |
 | `13_lifecycle_acceptance.md` | Terminal Lifecycle Acceptance | CORE | NOT_PROVEN |
@@ -102,7 +120,10 @@ Module `33` defines the implementation sequence from mock TUI contract preview t
 | `30_file_editor_patch_review.md` | File / Patch Review | CORE | MISSING |
 | `31_cline_interop_reuse_strategy.md` | Cline Interop / Reuse Strategy | STRATEGIC | MISSING |
 | `32_deterministic_runtime_state_machine.md` | Deterministic Runtime State Machine | CORE / BLOCKING | IMPLEMENTED_PRE_INTEGRATION |
-| `33_real_cli_ide_implementation_plan.md` | Real CLI IDE Implementation Plan | CORE / SEQUENCING | PLANNED |
+| `33_real_cli_ide_implementation_plan.md` | Real CLI IDE Implementation Plan | CORE / SEQUENCING | ACTIVE SEQUENCE |
+| `34_p1_live_readonly_acceptance.md` | P1 Read-Only Real Runtime Acceptance | ACCEPTANCE | PASS |
+| `35_p1_live_acceptance_evidence_record.md` | P1 Live Acceptance Evidence Record | ACCEPTANCE | PASS |
+| `36_p2_p3_client_contract.md` | Governed Workspace Operation Client Contract | CONTRACT | DEFINED / NOT IMPLEMENTED |
 | `34_autonomous_developer_frontend.md` | Autonomous Developer Frontend Features (Handoff) | CORE | PARTIAL |
 
 ## Status Vocabulary
@@ -120,3 +141,8 @@ Module `33` defines the implementation sequence from mock TUI contract preview t
 The pre-integration UI can be classified as `UI_IMPLEMENTATION_COMPLETE_READY_FOR_LBE_INTEGRATION` only when required product modules are closed for their defined scope and all authority-bearing actions continue to route through `LbeWrapper` without moving canonical LBE authority into the TUI.
 
 
+
+
+## Current cross-workspace reconciliation (2026-08-31)
+
+The canonical LBE workspace at C:\Agents-Memory-Tool-v6-integration has PASS evidence for complete runtime/session/application ownership, governed tools and receipts, provider continuation, external capability registration, and interface control/evidence surfaces. The Rust repository must consume those owners through LbeWrapper and must not recreate session, provider, authorization, execution, evidence, receipt, persistence, memory, or completion authority. The remaining Rust scope is live adapter/event mapping, feature projections, and installed interactive acceptance.

@@ -15,16 +15,26 @@ cargo fmt --check
 cargo check
 ```
 
-The runtime remains deliberately mocked. The TUI routes actions through the `LbeWrapper` trait and renders typed `LbeSnapshot` / `LbeEvent` values from `MockLbeWrapper`; it visibly identifies this state as `MOCK / NOT CONNECTED · UI CONTRACT PREVIEW`. This workspace contains no `RealLbeWrapper`, canonical LBE wall, persistent-agent service, guard runtime, live authorization, evidence, receipts, providers, or model integration. `MockLbeWrapper` is not proof of live LBE authorization, execution, validation, evidence, or receipt ownership. Type a task and press Enter to create a proposal; press Enter again to approve it, or Escape to reject it. The app runs in the alternate screen and restores the terminal on normal exit, `q`, or Ctrl+C.
+The real LBE runtime is the default. The active interface is the Rust/Ratatui TUI, which routes actions through the `LbeWrapper` trait and renders typed `LbeSnapshot` / `LbeEvent` values. The fail-closed `RealLbeWrapper` path requires explicit Agent Wall configuration and does not fabricate state. Set `LBE_RUNTIME=mock` only for deterministic local contract previews. LBE's Python runtime remains the authoritative backend for provider access, governance, authorization, execution, evidence, receipts, validation, and completion truth. The Rust TUI is only the client/projection layer and does not replace LBE authority. The Python TUI direction is retired and reference-only; no further Python terminal UI implementation is planned. The app runs in the alternate screen and restores the terminal on normal exit, `q`, or Ctrl+C.
 
-## Mock-only surfaces
+## Conversational interaction and diagnostic surfaces
 
-The following commands provide navigation scaffolding and explicitly render `MOCK / NOT CONNECTED` until canonical LBE contracts are available: `/account`, `/provider`, `/model`, `/mcp`, `/tools`, `/history`, `/session`, `/evidence`, `/receipts`, `/status`, and `/undo`.
+Chat is the primary user-facing interface. The agent interprets the conversation, selects capabilities, and submits requests through `LbeWrapper`; LBE performs access control, policy evaluation, execution, validation, evidence, receipts, and completion.
+
+The TUI has three conversational modes:
+
+- **Runtime** — broad workspace-aware agent assistance using governed capabilities when needed.
+- **Plan** — broad workspace investigation and proposal; no execution.
+- **Audit** — focused, read-only investigation of workspace rules, guards, and evidence.
+
+The following slash commands are optional navigation or diagnostic scaffolding, not required user operations. `/mcp` renders the connected LBE capability metadata projection when the real runtime is configured and otherwise remains explicitly unavailable; the other listed surfaces remain truthful projection scaffolding until their canonical LBE contracts are available: `/account`, `/provider`, `/model`, `/tools`, `/history`, `/session`, `/processes`, `/evidence`, `/receipts`, `/status`, and `/undo`.
+
+The lower-level `/open`, `/read`, `/tree`, `/list`, `/glob`, `/find`, `/search`, `/patch`, `/run`, and `/authorize` entries are developer/agent integration paths for contract testing and governed request inspection. They do not grant permission, bypass LBE policy, or represent the normal user workflow. In Audit mode, the agent should find relevant workspace evidence and reason over it conversationally; users are not expected to drive audits with these commands.
 
 - `/help` opens the shortcut reference.
-- `/mode` shows the active mode; `/audit` selects Lbe Audit.
+- `/mode` shows the active mode; `/audit` selects Audit mode.
 - `/clear` clears only the rendered local transcript; `/new` resets the local mock session; `/quit` exits.
-- Plan submissions produce a local mock plan without entering execution. Audit submissions produce `INSUFFICIENT_EVIDENCE` because no LBE guard runtime is connected.
+- Plan submissions produce a local mock plan without entering execution. Audit submissions represent an agent-led, read-only workspace investigation and produce `INSUFFICIENT_EVIDENCE` because no LBE guard runtime is connected.
 
 ## LBE provider integration policy
 
@@ -34,4 +44,9 @@ The following commands provide navigation scaffolding and explicitly render `MOC
 - Providers will connect directly through an LBE-owned provider gateway when integration is explicitly opened.
 - Provider credentials remain provider-native and are referenced through secure storage; raw credentials are never rendered in TUI snapshots or events.
 - Provider and runtime authority remain outside this UI repository.
-- This repository renders mock provider-contract state only until real integration is explicitly opened.
+- OpenCode and Cline are external behavior references only; any reuse must pass
+  through `LbeWrapper` and the authoritative LBE runtime.
+- Rust/Ratatui is the active interface implementation; Python terminal UI is
+  retired/reference-only.
+- The Rust TUI renders provider/runtime projections supplied by the authoritative
+  LBE Python runtime and never owns provider credentials or runtime authority.

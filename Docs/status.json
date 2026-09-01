@@ -1,7 +1,7 @@
 {
     "schema_version":  3,
     "project":  "LBE TUI governed coding frontend roadmap",
-    "integration_phase":  "PRE_INTEGRATION_AND_PRODUCT_ROADMAP",
+     "integration_phase":  "LBE_RUNTIME_IMPLEMENTED_RUST_MCP_PROJECTION_INTEGRATION_PENDING",
     "product_scope":  [
                           "Governance / audit frontend",
                           "Coding-agent frontend",
@@ -18,152 +18,152 @@
                },
     "modules":  {
                     "01_transcript_viewport.md":  {
-                                                      "notes":  "LbeEvent vocabulary for commands/stdout/stderr/detached exists. Missing scroll offset, PageUp/Down/Home/End, follow-tail preservation, and command detail view.",
-                                                      "status":  "MISSING",
+                                                      "notes":  "Rust projection is implemented; LBE persisted conversation/event owner is PASS; live Rust event binding and PTY acceptance remain open.",
+                                                      "status":  "IMPLEMENTED / LOCAL",
                                                       "relevance":  "CORE",
                                                       "depends_on":  [
 
                                                                      ]
                                                   },
                     "02_model_picker.md":  {
-                                               "notes":  "UserRequest::SelectModel exists with catalog validation. Missing interactive picker navigation and selection UX.",
-                                               "status":  "PARTIAL",
+                                               "notes":  "Rust picker is implemented; LBE provider/model owner and first-run pairing are PASS; live Rust catalog binding remains open.",
+                                               "status":  "IMPLEMENTED / LOCAL",
                                                "relevance":  "CORE",
                                                "depends_on":  [
 
                                                               ]
                                            },
                     "03_checkpoints_restore.md":  {
-                                                      "notes":  "Checkpoint event vocabulary exists. Missing compare/restore request contracts and detail/comparison rendering.",
-                                                      "status":  "PARTIAL",
+                                                      "notes":  "Rust request/projection is implemented; LBE checkpoint/recovery owners exist; live Rust projection remains unproven.",
+                                                      "status":  "IMPLEMENTED / LOCAL",
                                                       "relevance":  "CORE",
                                                       "depends_on":  [
 
                                                                      ]
                                                   },
                     "04_sessions.md":  {
-                                           "notes":  "Session lineage/status types exist. Missing session list/detail projection and runtime-owned new/resume flow.",
-                                           "status":  "PARTIAL",
+                                           "notes":  "LBE session/application lifecycle is PASS; Rust contracts/projection exist but live service/event integration remains pending.",
+                                           "status":  "IMPLEMENTED / LBE OWNER PASS; RUST ADAPTER PARTIAL",
                                            "relevance":  "CORE",
                                            "depends_on":  [
 
                                                           ]
                                        },
                     "05_background_processes.md":  {
-                                                       "notes":  "Command/detached events exist. Missing /processes panel and process/log/detail projection.",
-                                                       "status":  "PARTIAL",
+                                                       "notes":  "LBE process/runtime owners exist; Rust detached-process projection is local and live event binding remains pending.",
+                                                       "status":  "PARTIAL — LBE OWNER EXISTS; RUST LIVE PROJECTION PENDING",
                                                        "relevance":  "CORE",
                                                        "depends_on":  [
 
                                                                       ]
                                                    },
                     "06_provider_configuration.md":  {
-                                                         "notes":  "Provider types and mock catalog exist. Missing configure/validate/remove contracts and safe credential UX.",
-                                                         "status":  "PARTIAL",
+                                                         "notes":  "LBE provider registry/configuration/health/continuation are accepted; Rust richer editing and live binding remain pending.",
+                                                         "status":  "PARTIAL — LBE PROVIDER LIFECYCLE PASS; RUST UI PARTIAL",
                                                          "relevance":  "CORE",
                                                          "depends_on":  [
 
                                                                         ]
                                                      },
                     "07_tools_registry.md":  {
-                                                 "notes":  "/tools placeholder only. Missing typed registry projection and detail view.",
-                                                 "status":  "PLACEHOLDER",
+                                                 "notes":  "LBE ToolRegistry/orchestration/authorization/receipt/continuation are PASS; Rust live registry projection remains open.",
+                                                 "status":  "PARTIAL — LBE R6E PASS; RUST PROJECTION PARTIAL",
                                                  "relevance":  "CORE",
                                                  "depends_on":  [
 
                                                                 ]
                                              },
                     "08_evidence_browser.md":  {
-                                                   "notes":  "/evidence placeholder only. Missing evidence record projection and cross-links.",
-                                                   "status":  "PLACEHOLDER",
+                                                   "notes":  "LBE EvidenceService is PASS; Rust typed live evidence browser remains open.",
+                                                   "status":  "PARTIAL — LBE EVIDENCE OWNER PASS; RUST BROWSER PARTIAL",
                                                    "relevance":  "CORE",
                                                    "depends_on":  [
                                                                       "07_tools_registry.md"
                                                                   ]
                                                },
                     "09_receipts_browser.md":  {
-                                                   "notes":  "/receipts placeholder only. Missing structured receipt projection.",
-                                                   "status":  "PLACEHOLDER",
+                                                   "notes":  "LBE receipt lifecycle is PASS; Rust structured live receipt browser remains open.",
+                                                   "status":  "PARTIAL — LBE RECEIPT OWNER PASS; RUST BROWSER PARTIAL",
                                                    "relevance":  "CORE",
                                                    "depends_on":  [
                                                                       "08_evidence_browser.md"
                                                                   ]
                                                },
-                    "10_mcp_surface.md":  {
-                                              "notes":  "/mcp placeholder only. Missing MCP server projection.",
-                                              "status":  "PLACEHOLDER",
+                     "10_mcp_surface.md":  {
+                                               "notes":  "LBE capability discovery is authoritative; configured RealLbeWrapper attachment and live capabilities.list refresh passed, returning schema_version=1, count=0, integrations=[], and execution_attempted=false. Rust retains typed metadata and /mcp renders it. Rust transport/execution/authorization remain absent; installed interactive /mcp PTY/E2E acceptance is not proven.",
+                                               "status":  "PROVEN — RUST METADATA PROJECTION; INSTALLED ACCEPTANCE OPEN",
                                               "relevance":  "CORE",
                                               "depends_on":  [
 
                                                              ]
                                           },
                     "11_terminal_compatibility.md":  {
-                                                         "notes":  "Missing NO_COLOR, ASCII fallback, cell-width verification, and long-label tests.",
-                                                         "status":  "MISSING",
+                                                         "notes":  "LBE interface surface is PASS; Rust NO_COLOR, ASCII fallback, and wide-character acceptance remain missing.",
+                                                         "status":  "PARTIAL — LBE TEXTUAL SURFACE PASS; RUST COMPATIBILITY MISSING",
                                                          "relevance":  "CORE",
                                                          "depends_on":  [
 
                                                                         ]
                                                      },
                     "12_plain_cli_mode.md":  {
-                                                 "notes":  "Missing --no-tui, --json, stdout/stderr contract, and automation exit codes.",
-                                                 "status":  "MISSING",
+                                                 "notes":  "LBE CLI/product entry is PASS; Rust --no-tui/headless path remains missing.",
+                                                 "status":  "PARTIAL — LBE CLI PASS; RUST NON-TUI PATH MISSING",
                                                  "relevance":  "CORE",
                                                  "depends_on":  [
 
                                                                 ]
                                              },
                     "13_lifecycle_acceptance.md":  {
-                                                       "notes":  "Missing PTY smoke tests for quit/signal/panic/resize terminal restoration.",
-                                                       "status":  "NOT_PROVEN",
+                                                       "notes":  "LBE live lifecycle/interface is accepted; Rust external PTY/ConPTY cleanup smoke remains unproven.",
+                                                       "status":  "PARTIAL — LBE RUNTIME PASS; RUST PTY NOT PROVEN",
                                                        "relevance":  "CORE",
                                                        "depends_on":  [
                                                                           "14_responsive_acceptance.md"
                                                                       ]
                                                    },
                     "14_responsive_acceptance.md":  {
-                                                        "notes":  "Minimum size fallback tested. Missing populated-state and narrow panel render tests.",
-                                                        "status":  "PARTIAL",
+                                                        "notes":  "LBE interface is accepted; Rust populated narrow-width and long-name tests remain open.",
+                                                        "status":  "PARTIAL — LBE TEXTUAL RESPONSIVE SURFACE PASS; RUST NARROW ACCEPTANCE OPEN",
                                                         "relevance":  "CORE",
                                                         "depends_on":  [
 
                                                                        ]
                                                     },
                     "15_session_memory_recall.md":  {
-                                                        "notes":  "Memory projection and /memory panel exist. Missing context refs, automatic bounded recall, and real runtime memory owner integration.",
-                                                        "status":  "PARTIAL",
+                                                        "notes":  "LBE memory/promotion/recovery owners are accepted; Rust durable recall/context integration remains pending.",
+                                                        "status":  "PARTIAL — LBE MEMORY OWNER IMPLEMENTED; RUST INTEGRATION PENDING",
                                                         "relevance":  "CORE",
                                                         "depends_on":  [
                                                                            "04_sessions.md"
                                                                        ]
                                                     },
                     "16_browser_chat_bridge.md":  {
-                                                      "notes":  "Browser chat contract/UI layer closed for pre-integration; live automation/attachment remain later integration.",
-                                                      "status":  "CLOSED_PRE_INTEGRATION",
+                                                      "notes":  "Pre-integration browser contract is closed; LBE external capability boundary is PASS; live browser automation remains unproven.",
+                                                      "status":  "CLOSED_PRE_INTEGRATION — LBE EXTERNAL CAPABILITY BOUNDARY PASS",
                                                       "relevance":  "EXTERNAL INTERACTION",
                                                       "depends_on":  [
                                                                          "15_session_memory_recall.md"
                                                                      ]
                                                   },
                     "17_policy_hooks_permissions.md":  {
-                                                           "notes":  "Missing permissions, policy, sandbox, hook, and escalation frontend.",
-                                                           "status":  "MISSING",
+                                                           "notes":  "LBE authorization/policy is PASS; Rust projection exists and installed interactive approval UX remains open.",
+                                                           "status":  "PARTIAL — LBE AUTHORIZATION/POLICY PASS; RUST UI PARTIAL",
                                                            "relevance":  "CORE",
                                                            "depends_on":  [
                                                                               "07_tools_registry.md"
                                                                           ]
                                                        },
                     "18_schedules.md":  {
-                                            "notes":  "Missing schedule list/detail/run history and controls.",
-                                            "status":  "MISSING",
+                                            "notes":  "No current LBE schedule product contract is proven; Rust schedules remain unimplemented.",
+                                            "status":  "MISSING — NO CURRENT LBE SCHEDULE OWNER EVIDENCE",
                                             "relevance":  "SUPPORTING",
                                             "depends_on":  [
                                                                "04_sessions.md"
                                                            ]
                                         },
                     "19_connectors.md":  {
-                                             "notes":  "Missing generic connector/session-thread frontend.",
-                                             "status":  "MISSING",
+                                             "notes":  "LBE external registration exists; connector lifecycle/product is not proven; Rust UI remains unimplemented.",
+                                             "status":  "PARTIAL — LBE EXTERNAL REGISTRATION ONLY; CONNECTOR PRODUCT NOT PROVEN",
                                              "relevance":  "SUPPORTING",
                                              "depends_on":  [
                                                                 "04_sessions.md",
@@ -171,8 +171,8 @@
                                                             ]
                                          },
                     "20_agent_teams.md":  {
-                                              "notes":  "Missing team, mailbox, mission log, and task-board projections.",
-                                              "status":  "MISSING",
+                                              "notes":  "LBE registration is governed; coordinated team/task-board product is not proven; Rust UI remains unimplemented.",
+                                              "status":  "PARTIAL — LBE EXTERNAL/SUBAGENT REGISTRATION ONLY; TEAM PRODUCT NOT PROVEN",
                                               "relevance":  "ADVANCED CORE",
                                               "depends_on":  [
                                                                  "04_sessions.md",
@@ -180,8 +180,8 @@
                                                              ]
                                           },
                     "21_conversation_handoff.md":  {
-                                                       "notes":  "Missing export/import/handoff and multi-client resume UI.",
-                                                       "status":  "MISSING",
+                                                       "notes":  "LBE persistence/resume is PASS; cross-client handoff package/product is not proven; Rust UI remains unimplemented.",
+                                                       "status":  "PARTIAL — LBE SESSION PERSISTENCE PASS; HANDOFF PRODUCT NOT PROVEN",
                                                        "relevance":  "CORE FOR MULTI-CLIENT USE",
                                                        "depends_on":  [
                                                                           "04_sessions.md",
@@ -189,8 +189,8 @@
                                                                       ]
                                                    },
                     "22_artifacts_review.md":  {
-                                                   "notes":  "Missing artifact review surfaces for plans/diffs/tests.",
-                                                   "status":  "MISSING",
+                                                   "notes":  "LBE evidence/receipt/diff surfaces are PASS; complete artifact review UI remains unproven.",
+                                                   "status":  "PARTIAL — LBE EVIDENCE/DIFF SURFACES PASS; ARTIFACT REVIEW UI NOT PROVEN",
                                                    "relevance":  "CORE",
                                                    "depends_on":  [
                                                                       "03_checkpoints_restore.md",
@@ -200,8 +200,8 @@
                                                                   ]
                                                },
                     "23_subagents.md":  {
-                                            "notes":  "Missing subagent registry/status/output/control UI.",
-                                            "status":  "MISSING",
+                                            "notes":  "LBE subagent registration is governed; complete subagent lifecycle/UI remains unproven.",
+                                            "status":  "PARTIAL — LBE EXTERNAL CAPABILITY REGISTRATION PASS; SUBAGENT UI/RUNTIME NOT PROVEN",
                                             "relevance":  "CORE FOR AGENTIC CODING",
                                             "depends_on":  [
                                                                "05_background_processes.md",
@@ -210,8 +210,8 @@
                                                            ]
                                         },
                     "24_projects_settings.md":  {
-                                                    "notes":  "Missing project selector/trust/settings/config-source UI.",
-                                                    "status":  "MISSING",
+                                                    "notes":  "LBE project/provider/session owners and interface contracts are PASS; Rust project/settings UI remains missing.",
+                                                    "status":  "PARTIAL — LBE HOME/PROVIDER/SESSION OWNERS PASS; RUST UI MISSING",
                                                     "relevance":  "CORE",
                                                     "depends_on":  [
                                                                        "06_provider_configuration.md",
@@ -219,24 +219,24 @@
                                                                    ]
                                                 },
                     "25_composer_prompt_editor.md":  {
-                                                         "notes":  "Missing multiline editor, cursor movement, paste safety, Vim mode, and history search.",
-                                                         "status":  "MISSING",
+                                                         "notes":  "LBE provider/continuation mechanics are PASS; Rust multiline editor and reference UX remain missing.",
+                                                         "status":  "PARTIAL — LBE PROVIDER/CONTINUATION MECHANICS PASS; RUST EDITOR MISSING",
                                                          "relevance":  "CORE",
                                                          "depends_on":  [
 
                                                                         ]
                                                      },
                     "26_statusline_title.md":  {
-                                                   "notes":  "Missing statusline/title customization.",
-                                                   "status":  "MISSING",
+                                                   "notes":  "LBE interface projections are PASS; Rust statusline/title configuration remains missing.",
+                                                   "status":  "PARTIAL — LBE INTERFACE SURFACE PASS; RUST CONFIGURATION MISSING",
                                                    "relevance":  "UX SUPPORT",
                                                    "depends_on":  [
                                                                       "24_projects_settings.md"
                                                                   ]
                                                },
                     "27_code_search.md":  {
-                                              "notes":  "Missing /codesearch command and results/navigation UI.",
-                                              "status":  "MISSING",
+                                              "notes":  "LBE workspace/evidence owners exist; complete governed search product and Rust UI remain missing.",
+                                              "status":  "PARTIAL — LBE EVIDENCE/WORKSPACE READ OWNERS EXIST; SEARCH UI MISSING",
                                               "relevance":  "CORE",
                                               "depends_on":  [
                                                                  "07_tools_registry.md",
@@ -244,16 +244,16 @@
                                                              ]
                                           },
                     "28_usage_quotas.md":  {
-                                               "notes":  "Missing usage/credits/quota/rate-limit frontend.",
-                                               "status":  "MISSING",
+                                               "notes":  "LBE provider health/capability owners exist; verified quota/billing projection is not proven; Rust UI remains missing.",
+                                               "status":  "PARTIAL — LBE PROVIDER HEALTH/CAPABILITY OWNERS EXIST; QUOTA PRODUCT NOT PROVEN",
                                                "relevance":  "SUPPORTING",
                                                "depends_on":  [
                                                                   "06_provider_configuration.md"
                                                               ]
                                            },
                     "29_workspace_changes_diff.md":  {
-                                                         "notes":  "Missing workspace status, changed-files list, diff summary, hunk navigation, and validation/checkpoint linkage.",
-                                                         "status":  "MISSING",
+                                                         "notes":  "LBE governed mutation/evidence/diff owners are PASS; Rust changes/diff UI remains missing.",
+                                                         "status":  "PARTIAL — LBE GOVERNED MUTATION/EVIDENCE/DIFF OWNERS PASS; RUST UI MISSING",
                                                          "relevance":  "CORE",
                                                          "depends_on":  [
                                                                             "03_checkpoints_restore.md",
@@ -261,8 +261,8 @@
                                                                         ]
                                                      },
                     "30_file_editor_patch_review.md":  {
-                                                           "notes":  "Missing proposed edit/patch review, accept/reject, conflict, and provenance UI.",
-                                                           "status":  "MISSING",
+                                                           "notes":  "LBE mutation is authorization/receipt/evidence-bound; Rust proposed-edit review UI remains missing.",
+                                                           "status":  "PARTIAL — LBE GOVERNED MUTATION PASS; RUST PATCH REVIEW MISSING",
                                                            "relevance":  "CORE",
                                                            "depends_on":  [
                                                                               "17_policy_hooks_permissions.md",
@@ -271,7 +271,7 @@
                                                                           ]
                                                        },
                     "31_cline_interop_reuse_strategy.md":  {
-                                                               "status":  "MISSING",
+                                                               "status":  "PASS — CLINE AUDIT COMPLETE; OPENCODE PINNED REVIEW RECORDED; ADAPTER PENDING",
                                                                "relevance":  "STRATEGIC",
                                                                "depends_on":  [
                                                                                   "17_policy_hooks_permissions.md",
@@ -289,36 +289,46 @@
                                                                                   "29_workspace_changes_diff.md",
                                                                                   "30_file_editor_patch_review.md"
                                                                               ],
-                                                               "notes":  "Missing current-source Cline adopt/adapt/wrap/native decisions for Modules 17-30. Prevents rebuilding generic coding-agent frontend features without evidence."
+                                                                                      "notes":  "Cline and pinned OpenCode revision dc4449d are classified as reuse inputs. The LBE-owned adapter and installed Rust/TUI proof remain pending."
                                                            },
                     "32_deterministic_runtime_state_machine.md":  {
-                                                                   "status":  "IMPLEMENTED_PRE_INTEGRATION",
-                                                                   "relevance":  "CORE / BLOCKING",
-                                                                   "depends_on":  [
-                                                                                      "04_sessions.md",
-                                                                                      "05_background_processes.md",
-                                                                                      "07_tools_registry.md",
-                                                                                      "13_lifecycle_acceptance.md"
-                                                                                  ],
-                                                                   "notes":  "Deterministic mock-runtime hardening substantially implemented, including terminal idempotency (duplicate terminal lifecycle event suppression), guarded transitions, timeout enforcement, and identity isolation. RealLbeWrapper read-only skeleton now exists behind LbeWrapper. Real Agent Wall attachment and feature-specific wall capabilities (memory, provenance, impact analysis, hypothesis/test/verify, task graph, validation strategies, documentation artifacts) remain pending."
-                                                               },
+                                                                      "status":  "CLOSED — LOCAL PRE-INTEGRATION FOUNDATION; LBE RUNTIME AUTHORITY PASS",
+                                                                      "relevance":  "CORE / BLOCKING",
+                                                                      "depends_on":  [
+                                                                                         "04_sessions.md",
+                                                                                         "05_background_processes.md",
+                                                                                         "07_tools_registry.md",
+                                                                                         "13_lifecycle_acceptance.md"
+                                                                                     ],
+                                                                      "notes":  "Local deterministic mock foundation remains closed for test scope; LBE complete runtime is the production authority and Rust must integrate it rather than extend mock authority."
+                                                                  },
                     "33_real_cli_ide_implementation_plan.md":  {
-                                                                   "status":  "PLANNED",
+                                                                   "status":  "ACTIVE — REAL LBE + CLINE/OPENCODE REUSE INTEGRATION REQUIRED",
                                                                    "relevance":  "CORE / SEQUENCING",
                                                                    "depends_on":  [
                                                                                       "31_cline_interop_reuse_strategy.md",
                                                                                       "32_deterministic_runtime_state_machine.md"
                                                                                   ],
-                                                                   "notes":  "Ordered implementation plan: RealLbeWrapper skeleton exists, real wall attachment and snapshot/event stream mapping remain pending, then governed execution, policy/sandbox, provider loop, IDE review surfaces, persistence, headless mode, background processes, and multi-agent work."
+                                                                   "notes":  "LBE runtime owners are accepted; Rust must reuse/adapt Cline/OpenCode mechanics through a governed LBE adapter. Pinned OpenCode source validation, live event mapping, and installed interactive acceptance remain pending."
+                                                               },
+                    "36_p2_p3_client_contract.md":  {
+                                                                   "status":  "LIVE READ-ONLY ADAPTER PROVEN — FULL P2/P3 INCOMPLETE",
+                                                                   "relevance":  "CONTRACT",
+                                                                   "depends_on":  [
+                                                                                      "33_real_cli_ide_implementation_plan.md",
+                                                                                      "34_p1_live_readonly_acceptance.md",
+                                                                                      "35_p1_live_acceptance_evidence_record.md"
+                                                                                  ],
+                                                                   "notes":  "Real Rust adapter and isolated live Agent Wall validation pass for workspace.read, workspace.list, workspace.glob, workspace.search, and read-only denial of modify with LBE receipt/evidence projection; configured MCP metadata refresh and Rust MCP projection are proven with 178 Rust tests; approval-enabled mutation, interactive receipt/diff/evidence rendering, installed interactive /mcp PTY/E2E acceptance, and full installed P2/P3 acceptance remain pending."
                                                                },
                     "34_autonomous_developer_frontend.md":  {
-                                                                   "status":  "PARTIAL",
-                                                                   "relevance":  "CORE",
-                                                                   "depends_on":  [
-                                                                                      "32_deterministic_runtime_state_machine.md",
-                                                                                      "33_real_cli_ide_implementation_plan.md"
-                                                                                  ],
-                                                                   "notes":  "Maps TUI-33 through TUI-40 (autonomous developer frontend features) to current implementation state. Frontend scaffolding exists across all eight features (varying degree). Full completion requires real Agent Wall attachment, authoritative event/snapshot stream, and feature-specific wall capabilities (memory, provenance, impact analysis, hypothesis/test/verify, task graph, validation strategies, documentation artifacts) -- not another state-machine pass. Documents per-feature runtime gap using Handoff Result Format."
-                                                               }
+                                                                "status":  "PARTIAL — LBE BACKEND CAPABILITIES PASS; RUST FEATURE SURFACES PARTIAL",
+                                                                "relevance":  "CORE",
+                                                                "depends_on":  [
+                                                                                   "32_deterministic_runtime_state_machine.md",
+                                                                                   "33_real_cli_ide_implementation_plan.md"
+                                                                               ],
+                                                                "notes":  "LBE backend owners are accepted; Rust frontend scaffolding remains partial until it consumes authoritative projections."
+                                                            }
                 }
 }
