@@ -12,16 +12,16 @@ Update this file only when a module changes.
 | `05_background_processes.md` | PARTIAL — LBE OWNER EXISTS; RUST LIVE PROJECTION PENDING |CORE |- |LBE process/runtime owners exist; Rust detached-process projection is local and live event binding remains pending. |
 | `06_provider_configuration.md` | PARTIAL — LBE PROVIDER LIFECYCLE PASS; RUST UI PARTIAL |CORE |- |LBE provider registry/configuration/health/continuation are accepted; Rust richer editing and live binding remain pending. |
 | `07_tools_registry.md` | PARTIAL — LBE R6E PASS; RUST PROJECTION PARTIAL |CORE |- |LBE ToolRegistry/orchestration/authorization/receipt/continuation are PASS; Rust live registry projection remains open. |
-| `08_evidence_browser.md` | PARTIAL — LBE EVIDENCE OWNER PASS; RUST BROWSER PARTIAL |CORE |07 |LBE EvidenceService is PASS; Rust typed live evidence browser remains open. |
-| `09_receipts_browser.md` | PARTIAL — LBE RECEIPT OWNER PASS; RUST BROWSER PARTIAL |CORE |08 |LBE receipt lifecycle is PASS; Rust structured live receipt browser remains open. |
-| `10_mcp_surface.md` | PROVEN — RUST METADATA PROJECTION; INSTALLED ACCEPTANCE OPEN |CORE |- |LBE capability discovery is authoritative; RealLbeWrapper invokes `capabilities list`, configured live MCP refresh passed, Rust retains typed metadata, and `/mcp` renders it. Rust transport/execution/authorization remain absent; installed interactive `/mcp` PTY/E2E acceptance is not proven. |
+| `08_evidence_browser.md` | IMPLEMENTED / LOCAL TESTED — LIVE EVIDENCE ACCEPTANCE OPEN |CORE |07 |LBE EvidenceService is PASS; Rust typed evidence projection and local rendering are implemented and tested; installed live evidence acceptance remains open. |
+| `09_receipts_browser.md` | IMPLEMENTED / LOCAL TESTED — LIVE RECEIPT ACCEPTANCE OPEN |CORE |08 |LBE receipt lifecycle is PASS; Rust structured receipt projection and local rendering are implemented and tested; installed live receipt acceptance remains open. |
+| `10_mcp_surface.md` | GOVERNED BIRDEYE ROUTING IMPLEMENTED — LIVE MCP PROOF OPEN; UI ACCEPTANCE SEQUENCED |CORE |- |Rust BirdEye requests now cross the existing LBE `ToolRegistry`/R6C/R6E boundary through `tool mcp.birdeye.<tool>`; local governed routing/receipt projection validation passed. Installed registry execution, DENY-zero, ALLOW-exactly-one, persisted MCP ordering, provider continuation, and installed UI acceptance remain open. |
 | `11_terminal_compatibility.md` | PARTIAL — LBE TEXTUAL SURFACE PASS; RUST COMPATIBILITY MISSING |CORE |- |LBE interface surface is PASS; Rust NO_COLOR, ASCII fallback, and wide-character acceptance remain missing. |
 | `12_plain_cli_mode.md` | PARTIAL — LBE CLI PASS; RUST NON-TUI PATH MISSING |CORE |- |LBE CLI/product entry is PASS; Rust --no-tui/headless path remains missing. |
 | `13_lifecycle_acceptance.md` | PARTIAL — LBE RUNTIME PASS; RUST PTY NOT PROVEN |CORE |14 |LBE live lifecycle/interface is accepted; Rust external PTY/ConPTY cleanup smoke remains unproven. |
 | `14_responsive_acceptance.md` | PARTIAL — LBE TEXTUAL RESPONSIVE SURFACE PASS; RUST NARROW ACCEPTANCE OPEN |CORE |- |LBE interface is accepted; Rust populated narrow-width and long-name tests remain open. |
 | `15_session_memory_recall.md` | PARTIAL — LBE MEMORY OWNER IMPLEMENTED; RUST INTEGRATION PENDING |CORE |04 |LBE memory/promotion/recovery owners are accepted; Rust durable recall/context integration remains pending. |
 | `16_browser_chat_bridge.md` | CLOSED_PRE_INTEGRATION — LBE EXTERNAL CAPABILITY BOUNDARY PASS |EXTERNAL INTERACTION |15 |Pre-integration browser contract is closed; LBE external capability boundary is PASS; live browser automation remains unproven. |
-| `17_policy_hooks_permissions.md` | PARTIAL — LBE AUTHORIZATION/POLICY PASS; RUST UI PARTIAL |CORE |07 |LBE authorization/policy is PASS; Rust projection exists and installed interactive approval UX remains open. |
+| `17_policy_hooks_permissions.md` | IMPLEMENTED / LOCAL TESTED — LIVE AUTHORIZATION ACCEPTANCE OPEN |CORE |- |LBE authorization/policy is PASS; Rust approval-required/allow/deny projection and fail-closed continuation are implemented and tested; dedicated permissions/sandbox projection and installed live approval remain open. |
 | `18_schedules.md` | MISSING — NO CURRENT LBE SCHEDULE OWNER EVIDENCE |SUPPORTING |- |No current LBE schedule product contract is proven; Rust schedules remain unimplemented. |
 | `19_connectors.md` | PARTIAL — LBE EXTERNAL REGISTRATION ONLY; CONNECTOR PRODUCT NOT PROVEN |SUPPORTING |- |LBE external registration exists; connector lifecycle/product is not proven; Rust UI remains unimplemented. |
 | `20_agent_teams.md` | PARTIAL — LBE EXTERNAL/SUBAGENT REGISTRATION ONLY; TEAM PRODUCT NOT PROVEN |ADVANCED CORE |04, 23 |LBE registration is governed; coordinated team/task-board product is not proven; Rust UI remains unimplemented. |
@@ -33,17 +33,40 @@ Update this file only when a module changes.
 | `26_statusline_title.md` | PARTIAL — LBE INTERFACE SURFACE PASS; RUST CONFIGURATION MISSING |UX SUPPORT |24 |LBE interface projections are PASS; Rust statusline/title configuration remains missing. |
 | `27_code_search.md` | PARTIAL — LBE EVIDENCE/WORKSPACE READ OWNERS EXIST; SEARCH UI MISSING |CORE |07, 24 |LBE workspace/evidence owners exist; complete governed search product and Rust UI remain missing. |
 | `28_usage_quotas.md` | PARTIAL — LBE PROVIDER HEALTH/CAPABILITY OWNERS EXIST; QUOTA PRODUCT NOT PROVEN |SUPPORTING |06 |LBE provider health/capability owners exist; verified quota/billing projection is not proven; Rust UI remains missing. |
-| `29_workspace_changes_diff.md` | PARTIAL — LBE GOVERNED MUTATION/EVIDENCE/DIFF OWNERS PASS; RUST UI MISSING |CORE |03, 08 |LBE governed mutation/evidence/diff owners are PASS; Rust changes/diff UI remains missing. |
-| `30_file_editor_patch_review.md` | PARTIAL — LBE GOVERNED MUTATION PASS; RUST PATCH REVIEW MISSING |CORE |17, 22, 29 |LBE mutation is authorization/receipt/evidence-bound; Rust proposed-edit review UI remains missing. |
+| `29_workspace_changes_diff.md` | IMPLEMENTED / LOCAL TESTED — LIVE WRITABLE ACCEPTANCE OPEN |CORE |03, 08 |LBE governed mutation/evidence/diff owners are PASS; Rust changes/diff projection and local rendering are implemented and tested; live writable mutation and installed acceptance remain open. |
+| `30_file_editor_patch_review.md` | IMPLEMENTED / LOCAL TESTED — LIVE PATCH ACCEPTANCE OPEN |CORE |17, 22, 29 |LBE mutation is authorization/receipt/evidence-bound; Rust patch review, accept/reject routing, identity checks, and diff/receipt/evidence projection are implemented and tested; live writable execution remains open. |
 | `31_cline_interop_reuse_strategy.md` | PASS — CLINE AUDIT COMPLETE; OPENCODE PINNED REVIEW RECORDED; ADAPTER PENDING |STRATEGIC |17-30 |Cline and pinned OpenCode revision `dc4449d` are classified as reuse inputs. The LBE-owned adapter and installed Rust/TUI proof remain pending. |
 | `32_deterministic_runtime_state_machine.md` | CLOSED — LOCAL PRE-INTEGRATION FOUNDATION; LBE RUNTIME AUTHORITY PASS |CORE / BLOCKING |04, 05, 07, 13 |Local deterministic mock foundation remains closed for test scope; LBE complete runtime is the production authority and Rust must integrate it rather than extend mock authority. |
 | `33_real_cli_ide_implementation_plan.md` | ACTIVE — REAL LBE + CLINE/OPENCODE REUSE INTEGRATION REQUIRED |CORE / SEQUENCING |31, 32 |LBE runtime owners are accepted; Rust must reuse/adapt Cline/OpenCode mechanics through a governed LBE adapter. Pinned OpenCode source validation, live event mapping, and installed interactive acceptance remain pending. |
 | `34_p1_live_readonly_acceptance.md` | PASS — BOUNDED HISTORICAL RUST P1 CONTRACT |ACCEPTANCE |32, 33 |P1 contract remains valid for bounded read-only wrapper scope; it does not prove full current LBE/TUI integration. |
 | `35_p1_live_acceptance_evidence_record.md` | HISTORICAL PASS — SUPERSEDED CURRENT LBE STATUS |ACCEPTANCE |34 |Historical Rust P1 evidence retained; current LBE status is defined by later canonical LBE checkpoints. |
-| `36_p2_p3_client_contract.md` | LIVE READ-ONLY ADAPTER PROVEN — MCP PROJECTION IMPLEMENTED — FULL P2/P3 INCOMPLETE |CONTRACT |33, 34, 35 |Real Rust adapter and isolated live Agent Wall validation pass for workspace.read, workspace.list, workspace.glob, workspace.search, and read-only denial of modify with LBE receipt/evidence projection; MCP metadata bridge/state/UI projection is implemented and tested; approval-enabled mutation, interactive receipt/diff/evidence rendering, and full installed P2/P3 acceptance remain pending. |
+| `36_p2_p3_client_contract.md` | LIVE READ-ONLY ADAPTER PROVEN — LOCAL APPROVAL/DIFF/RECEIPT/EVIDENCE PROJECTION TESTED — FULL P2/P3 INCOMPLETE |CONTRACT |33, 34, 35 |Real Rust adapter and isolated live Agent Wall validation pass for workspace.read, workspace.list, workspace.glob, workspace.search, and read-only denial of modify with LBE receipt/evidence projection; approval routing, patch review, diff rendering, and typed receipt/evidence projection are locally tested; credentialed writable mutation, installed live validation/completion, and full installed P2/P3 acceptance remain pending. |
 | `34_autonomous_developer_frontend.md` | PARTIAL — LBE BACKEND CAPABILITIES PASS; RUST FEATURE SURFACES PARTIAL |CORE |32, 33 |LBE backend owners are accepted; Rust frontend scaffolding remains partial until it consumes authoritative projections. |
+| `documentation_companion_plugin/` | VENDORED ISOLATED PROTOTYPE — NOT WIRED INTO RUNTIME | DOCUMENTATION SUPPORT | 00, 36 |Optional Python companion consumes LBE-owned identifiers/events and renders derived Markdown only when explicitly invoked; it has no runtime, authorization, execution, evidence, receipt, validation, completion, or persistence authority. |
 
 
 ## Current LBE workspace reconciliation (2026-08-31)
 
 The LBE workspace is the authority for implemented runtime capabilities. Its current accepted slices include complete runtime/session/application ownership, R6E governed tool orchestration, external capability registration, Cline provider continuation, and interface control/evidence surfaces. Official Cline and pinned OpenCode sources are reuse inputs, not replacement authorities. TUI module status must distinguish LBE OWNER PASS from RUST TUI INTEGRATION PENDING; a local mock or projection does not replace the LBE owner, and an equivalent generic feature must not be recreated without a documented incompatibility or LBE-specific requirement.
+
+## MCP/BirdEye sequencing checkpoint (2026-09-02)
+
+The working MCP implementation is `C:\MCP Local\Letterblack_BirdEye\mcp_server.py`. Its existing hashing, indexing, freshness, cache, and governed MCP surfaces are the implementation inputs for the backend integration slice. The TUI must consume those capabilities through the LBE-owned registry, authorization, execution, receipt, and evidence seams; it must not copy the server, create a second hash/index/cache store, or bypass governance. Backend MCP proof is active and independent of the separate UI agent. Only UI-dependent projection and installed UI acceptance are sequenced behind completion of the UI work.
+
+Backend/integration proof obligations:
+
+1. Resolve the canonical capability registry.
+2. Verify BirdEye registration in LBE.
+3. Prove unregistered capability rejection.
+4. Prove authorization precedes BirdEye invocation.
+5. Prove `DENY` equals zero BirdEye execution.
+6. Prove `ALLOW` equals exactly one invocation.
+7. Correlate result → LBE receipt → evidence.
+8. Prove provider continuation.
+9. Prove persisted event sequence.
+
+## MCP/BirdEye implementation update (2026-09-02)
+
+The Rust adapter no longer invokes `C:\MCP Local\Letterblack_BirdEye\mcp_server.py` directly for BirdEye queries. It now invokes the existing LBE product command `tool mcp.birdeye.<tool>` with session, workspace, and operation identity. The LBE runtime registers bounded BirdEye capabilities behind its existing `ToolRegistry` and `GovernedToolOrchestrator`, preserving authorization-before-handler execution, receipt generation, evidence projection, and operation-id idempotency ownership in LBE.
+
+Validation: LBE focused external-capability/product/orchestration tests `75 passed`; Rust full suite `205 passed`; Rust `cargo check` passed; Python compilation passed. `cargo fmt -- --check` remains failed because of existing formatting differences in unrelated working-tree changes. The installed live MCP proof gate remains open: the configured live registry/runtime fixture was unavailable, so BirdEye registration in the installed registry, DENY-zero, ALLOW-exactly-one, persisted event ordering, provider continuation, and installed Rust/TUI acceptance are not claimed complete.

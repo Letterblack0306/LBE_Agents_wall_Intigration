@@ -1,7 +1,7 @@
 {
     "schema_version":  3,
     "project":  "LBE TUI governed coding frontend roadmap",
-     "integration_phase":  "LBE_RUNTIME_IMPLEMENTED_RUST_MCP_PROJECTION_INTEGRATION_PENDING",
+     "integration_phase":  "LBE_RUNTIME_IMPLEMENTED_BIRDEYE_AUTHORITY_CONFIRMED_BACKEND_MCP_PROOF_ACTIVE_UI_PROJECTION_SEQUENCED",
     "product_scope":  [
                           "Governance / audit frontend",
                           "Coding-agent frontend",
@@ -66,32 +66,41 @@
                                                                         ]
                                                      },
                     "07_tools_registry.md":  {
-                                                 "notes":  "LBE ToolRegistry/orchestration/authorization/receipt/continuation are PASS; Rust live registry projection remains open.",
-                                                 "status":  "PARTIAL — LBE R6E PASS; RUST PROJECTION PARTIAL",
+                                                  "notes":  "LBE ToolRegistry/orchestration/authorization/receipt/continuation are PASS; Rust typed request/risk/authorization projection is implemented and locally tested; installed live acceptance remains open.",
+                                                  "status":  "IMPLEMENTED / LOCAL TESTED — LIVE REGISTRY ACCEPTANCE OPEN",
                                                  "relevance":  "CORE",
                                                  "depends_on":  [
 
                                                                 ]
-                                             },
+                                              },
+                    "documentation_companion_plugin":  {
+                                                   "notes":  "Vendored optional Python documentation companion; consumes LBE-owned identifiers/events and renders derived Markdown only when explicitly invoked; not imported by the active Rust/LBE runtime.",
+                                                   "status":  "VENDORED ISOLATED PROTOTYPE — NOT WIRED INTO RUNTIME",
+                                                   "relevance":  "DOCUMENTATION SUPPORT",
+                                                   "depends_on":  [
+                                                                      "00_integration_alignment.md",
+                                                                      "36_p2_p3_client_contract.md"
+                                                                  ]
+                                               },
                     "08_evidence_browser.md":  {
-                                                   "notes":  "LBE EvidenceService is PASS; Rust typed live evidence browser remains open.",
-                                                   "status":  "PARTIAL — LBE EVIDENCE OWNER PASS; RUST BROWSER PARTIAL",
+                                                   "notes":  "LBE EvidenceService is PASS; Rust typed evidence projection and local rendering are implemented and tested; installed live evidence acceptance remains open.",
+                                                   "status":  "IMPLEMENTED / LOCAL TESTED — LIVE EVIDENCE ACCEPTANCE OPEN",
                                                    "relevance":  "CORE",
                                                    "depends_on":  [
                                                                       "07_tools_registry.md"
                                                                   ]
                                                },
                     "09_receipts_browser.md":  {
-                                                   "notes":  "LBE receipt lifecycle is PASS; Rust structured live receipt browser remains open.",
-                                                   "status":  "PARTIAL — LBE RECEIPT OWNER PASS; RUST BROWSER PARTIAL",
+                                                   "notes":  "LBE receipt lifecycle is PASS; Rust structured receipt projection and local rendering are implemented and tested; installed live receipt acceptance remains open.",
+                                                   "status":  "IMPLEMENTED / LOCAL TESTED — LIVE RECEIPT ACCEPTANCE OPEN",
                                                    "relevance":  "CORE",
                                                    "depends_on":  [
                                                                       "08_evidence_browser.md"
                                                                   ]
                                                },
-                     "10_mcp_surface.md":  {
-                                               "notes":  "LBE capability discovery is authoritative; configured RealLbeWrapper attachment and live capabilities.list refresh passed, returning schema_version=1, count=0, integrations=[], and execution_attempted=false. Rust retains typed metadata and /mcp renders it. Rust transport/execution/authorization remain absent; installed interactive /mcp PTY/E2E acceptance is not proven.",
-                                               "status":  "PROVEN — RUST METADATA PROJECTION; INSTALLED ACCEPTANCE OPEN",
+                      "10_mcp_surface.md":  {
+                                                "notes":  "Rust BirdEye requests now cross the existing LBE ToolRegistry/R6C/R6E boundary through tool mcp.birdeye.<tool>; local governed routing and receipt/evidence projection validation passed. The working MCP authority remains C:\\MCP Local\\Letterblack_BirdEye\\mcp_server.py, with BirdEye hashing, indexing, freshness, cache, and MCP transport ownership preserved. Installed registry execution, DENY-zero, ALLOW-exactly-one, persisted MCP ordering, provider continuation, and installed Rust/TUI acceptance remain open because the configured live registry/runtime fixture was unavailable.",
+                                                 "status":  "GOVERNED BIRDEYE ROUTING IMPLEMENTED — LIVE MCP PROOF OPEN; UI ACCEPTANCE SEQUENCED",
                                               "relevance":  "CORE",
                                               "depends_on":  [
 
@@ -146,8 +155,8 @@
                                                                      ]
                                                   },
                     "17_policy_hooks_permissions.md":  {
-                                                           "notes":  "LBE authorization/policy is PASS; Rust projection exists and installed interactive approval UX remains open.",
-                                                           "status":  "PARTIAL — LBE AUTHORIZATION/POLICY PASS; RUST UI PARTIAL",
+                                                           "notes":  "LBE authorization/policy is PASS; Rust approval-required/allow/deny projection and fail-closed continuation are implemented and tested; dedicated permissions/sandbox projection and installed live approval remain open.",
+                                                           "status":  "IMPLEMENTED / LOCAL TESTED — LIVE AUTHORIZATION ACCEPTANCE OPEN",
                                                            "relevance":  "CORE",
                                                            "depends_on":  [
                                                                               "07_tools_registry.md"
@@ -252,8 +261,8 @@
                                                               ]
                                            },
                     "29_workspace_changes_diff.md":  {
-                                                         "notes":  "LBE governed mutation/evidence/diff owners are PASS; Rust changes/diff UI remains missing.",
-                                                         "status":  "PARTIAL — LBE GOVERNED MUTATION/EVIDENCE/DIFF OWNERS PASS; RUST UI MISSING",
+                                                         "notes":  "LBE governed mutation/evidence/diff owners are PASS; Rust changes/diff projection and local rendering are implemented and tested; live writable mutation and installed acceptance remain open.",
+                                                         "status":  "IMPLEMENTED / LOCAL TESTED — LIVE WRITABLE ACCEPTANCE OPEN",
                                                          "relevance":  "CORE",
                                                          "depends_on":  [
                                                                             "03_checkpoints_restore.md",
@@ -261,8 +270,8 @@
                                                                         ]
                                                      },
                     "30_file_editor_patch_review.md":  {
-                                                           "notes":  "LBE mutation is authorization/receipt/evidence-bound; Rust proposed-edit review UI remains missing.",
-                                                           "status":  "PARTIAL — LBE GOVERNED MUTATION PASS; RUST PATCH REVIEW MISSING",
+                                                           "notes":  "LBE mutation is authorization/receipt/evidence-bound; Rust patch review, accept/reject routing, identity checks, and diff/receipt/evidence projection are implemented and tested; live writable execution remains open.",
+                                                           "status":  "IMPLEMENTED / LOCAL TESTED — LIVE PATCH ACCEPTANCE OPEN",
                                                            "relevance":  "CORE",
                                                            "depends_on":  [
                                                                               "17_policy_hooks_permissions.md",
@@ -312,14 +321,14 @@
                                                                    "notes":  "LBE runtime owners are accepted; Rust must reuse/adapt Cline/OpenCode mechanics through a governed LBE adapter. Pinned OpenCode source validation, live event mapping, and installed interactive acceptance remain pending."
                                                                },
                     "36_p2_p3_client_contract.md":  {
-                                                                   "status":  "LIVE READ-ONLY ADAPTER PROVEN — FULL P2/P3 INCOMPLETE",
+                                                                   "status":  "LIVE READ-ONLY ADAPTER PROVEN — LOCAL APPROVAL/DIFF/RECEIPT/EVIDENCE PROJECTION TESTED — FULL P2/P3 INCOMPLETE",
                                                                    "relevance":  "CONTRACT",
                                                                    "depends_on":  [
                                                                                       "33_real_cli_ide_implementation_plan.md",
                                                                                       "34_p1_live_readonly_acceptance.md",
                                                                                       "35_p1_live_acceptance_evidence_record.md"
                                                                                   ],
-                                                                   "notes":  "Real Rust adapter and isolated live Agent Wall validation pass for workspace.read, workspace.list, workspace.glob, workspace.search, and read-only denial of modify with LBE receipt/evidence projection; configured MCP metadata refresh and Rust MCP projection are proven with 178 Rust tests; approval-enabled mutation, interactive receipt/diff/evidence rendering, installed interactive /mcp PTY/E2E acceptance, and full installed P2/P3 acceptance remain pending."
+                                                                   "notes":  "Real Rust adapter and isolated live Agent Wall validation pass for workspace.read, workspace.list, workspace.glob, workspace.search, and read-only denial of modify with LBE receipt/evidence projection; approval routing, patch review, diff rendering, and typed receipt/evidence projection are locally tested; credentialed writable mutation, installed live validation/completion, installed interactive /mcp PTY/E2E acceptance, and full installed P2/P3 acceptance remain pending."
                                                                },
                     "34_autonomous_developer_frontend.md":  {
                                                                 "status":  "PARTIAL — LBE BACKEND CAPABILITIES PASS; RUST FEATURE SURFACES PARTIAL",
