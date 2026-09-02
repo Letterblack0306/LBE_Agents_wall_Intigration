@@ -107,16 +107,16 @@
                                                              ]
                                           },
                     "11_terminal_compatibility.md":  {
-                                                         "notes":  "LBE interface surface is PASS; Rust NO_COLOR, ASCII fallback, and wide-character acceptance remain missing.",
-                                                         "status":  "PARTIAL — LBE TEXTUAL SURFACE PASS; RUST COMPATIBILITY MISSING",
+                                                          "notes":  "Rust NO_COLOR handling, ASCII fallbacks, Unicode-width truncation, and local compatibility tests are implemented; external PTY/ConPTY lifecycle acceptance remains open.",
+                                                          "status":  "IMPLEMENTED / LOCAL TESTED — LIVE TERMINAL ACCEPTANCE OPEN",
                                                          "relevance":  "CORE",
                                                          "depends_on":  [
 
                                                                         ]
                                                      },
                     "12_plain_cli_mode.md":  {
-                                                 "notes":  "LBE CLI/product entry is PASS; Rust --no-tui/headless path remains missing.",
-                                                 "status":  "PARTIAL — LBE CLI PASS; RUST NON-TUI PATH MISSING",
+                                                  "notes":  "Rust --no-tui/headless routing, structured stdout events/results, stderr diagnostics, and exit-code contract are implemented; live governed completion remains runtime-dependent.",
+                                                  "status":  "IMPLEMENTED / LOCAL TESTED — LIVE GOVERNED COMPLETION ACCEPTANCE OPEN",
                                                  "relevance":  "CORE",
                                                  "depends_on":  [
 
@@ -131,8 +131,8 @@
                                                                       ]
                                                    },
                     "14_responsive_acceptance.md":  {
-                                                        "notes":  "LBE interface is accepted; Rust populated narrow-width and long-name tests remain open.",
-                                                        "status":  "PARTIAL — LBE TEXTUAL RESPONSIVE SURFACE PASS; RUST NARROW ACCEPTANCE OPEN",
+                                                         "notes":  "Rust compact 60x18/80x18 layouts, populated panel rendering, long-name truncation, and minimum-size fallback are locally tested; external terminal acceptance remains open.",
+                                                         "status":  "IMPLEMENTED / LOCAL TESTED — LIVE TERMINAL ACCEPTANCE OPEN",
                                                         "relevance":  "CORE",
                                                         "depends_on":  [
 

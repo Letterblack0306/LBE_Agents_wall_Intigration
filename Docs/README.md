@@ -100,10 +100,10 @@ Module `33` defines the implementation sequence from mock TUI contract preview t
 | `08_evidence_browser.md` | Evidence Browser | CORE | IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN |
 | `09_receipts_browser.md` | Receipt Browser | CORE | IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN |
 | `10_mcp_surface.md` | MCP Registry Surface | CORE | PROVEN — METADATA/CONNECTED PROJECTION; INSTALLED ACCEPTANCE OPEN |
-| `11_terminal_compatibility.md` | Terminal Compatibility | CORE | MISSING |
-| `12_plain_cli_mode.md` | Plain / Non-TUI Mode Contract | CORE | MISSING |
+| `11_terminal_compatibility.md` | Terminal Compatibility | CORE | IMPLEMENTED / LOCAL TESTED — LIVE ACCEPTANCE OPEN |
+| `12_plain_cli_mode.md` | Plain / Non-TUI Mode Contract | CORE | IMPLEMENTED / LOCAL TESTED — LIVE GOVERNED COMPLETION ACCEPTANCE OPEN |
 | `13_lifecycle_acceptance.md` | Terminal Lifecycle Acceptance | CORE | NOT_PROVEN |
-| `14_responsive_acceptance.md` | Responsive and Minimum-Size Acceptance | CORE | PARTIAL |
+| `14_responsive_acceptance.md` | Responsive and Minimum-Size Acceptance | CORE | IMPLEMENTED / LOCAL TESTED — LIVE TERMINAL ACCEPTANCE OPEN |
 | `15_session_memory_recall.md` | Session Memory and Recall | CORE | PARTIAL |
 | `16_browser_chat_bridge.md` | Browser Chat Interaction Bridge | EXTERNAL INTERACTION | CLOSED_PRE_INTEGRATION |
 | `17_policy_hooks_permissions.md` | Permissions / Policy / Sandbox | CORE | IMPLEMENTED / LOCAL TESTED — LIVE ACCEPTANCE OPEN |

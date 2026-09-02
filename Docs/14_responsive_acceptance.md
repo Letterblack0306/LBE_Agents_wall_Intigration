@@ -2,7 +2,7 @@
 
 ## Status
 
-`PARTIAL`
+`IMPLEMENTED / LOCAL TESTED — LIVE TERMINAL ACCEPTANCE OPEN`
 
 ## Scope
 
@@ -10,15 +10,15 @@ This module is part of the pre-integration TUI implementation. It must remain co
 
 ## Work Items
 
-- [ ] Add pinned render tests at 60x18 and 80x24 for populated states.
-- [ ] Test provider/model/doctor/session panels at narrow widths.
-- [ ] Test long workspace paths and model names.
-- [ ] Confirm explicit too-small behavior remains truthful.
+- [x] Add pinned render tests at 60x18 and 80x24 for populated states.
+- [x] Test provider/model/doctor/session panels at narrow widths.
+- [x] Test long workspace paths and model names.
+- [x] Confirm explicit too-small behavior remains truthful.
 
 ## Acceptance Criteria
 
-- [ ] Main populated screens are usable at the declared minimum.
-- [ ] Overflow/truncation behavior is deterministic.
+- [x] Main populated screens are usable at the declared minimum.
+- [x] Overflow/truncation behavior is deterministic.
 
 ## Out of Scope
 
@@ -28,9 +28,14 @@ This module is part of the pre-integration TUI implementation. It must remain co
 
 ## Evidence / Notes
 
-- Two pinned render tests already exist and cover exactly the two sizes named in the work items: `welcome_frame_renders_the_supplied_logo_at_80_by_24` (populated-state, 80×24) and `below_minimum_size_shows_an_honest_fallback` (59×17, confirms the "LBE terminal needs at least 60×18" message).
-- **Not yet built:** no narrow-width tests for the provider/model/doctor/session panels specifically (only the welcome screen is pinned), and no long-workspace-path / long-model-name test yet.
+- Pinned render tests cover 80×24 welcome, 60×18 compact, 80×18 compact-height, and 59×17 too-small fallback behavior.
+- `populated_panels_render_without_overflow_at_the_compact_terminal_size` covers provider, model, doctor, and session panels at 60×18.
+- `truncate_text` tests cover wide CJK characters and long ASCII labels using terminal cell width.
 
 ## Completion
 
 When all work items and acceptance criteria are satisfied, change this module status to `CLOSED` and update `STATUS.md`.
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: canonical Textual interface is accepted. Rust TUI: local populated narrow-width, minimum-size, and long-name acceptance is implemented; external PTY/ConPTY acceptance remains open. Evidence: `C:\LBE-TUI-Lab\src\ui.rs`, `C:\LBE-TUI-Lab\src\tests.rs`, and `C:\Agents-Memory-Tool-v6-integration\docs\acceptance\LBE_INTERFACE_PRODUCT_SURFACE_CHECKPOINT.md:9-32`.

@@ -3000,6 +3000,34 @@ fn compact_height_keeps_the_workflow_usable_at_80_by_18() {
 }
 
 #[test]
+fn populated_panels_render_without_overflow_at_the_compact_terminal_size() {
+    let panels = [
+        (MockPanel::Provider, "Providers"),
+        (MockPanel::Model, "Models"),
+        (MockPanel::Doctor, "Doctor"),
+        (MockPanel::Session, "Sessions"),
+    ];
+    for (panel, title) in panels {
+        let backend = TestBackend::new(60, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
+        let mut app = App::default();
+        app.panel = Some(panel);
+        terminal
+            .draw(|frame| draw(frame, &app))
+            .expect("populated compact panel should render");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains(title), "panel {title} was not rendered");
+        assert!(!rendered.contains("LBE terminal needs at least"));
+    }
+}
+
+#[test]
 fn opened_file_projection_renders_read_only_content_and_provenance() {
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).expect("test terminal should initialize");

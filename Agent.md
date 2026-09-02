@@ -640,6 +640,42 @@ Remaining limitation:
   MCP execution ordering, and full installed P2/P3 acceptance remain open;
 - the active machine gate remains OPEN and no phase advancement is claimed.
 
+## Terminal, Headless, and Responsive Acceptance Checkpoint — 2026-09-02
+
+```text
+DATE: 2026-09-02
+PHASE: P2/P3 — GOVERNED EXECUTION INTEGRATION
+SLICE: TERMINAL COMPATIBILITY / HEADLESS CONTRACT / RESPONSIVE UI
+STATUS: IMPLEMENTED / LOCALLY PROVEN — EXTERNAL ACCEPTANCE OPEN
+REPOSITORY HEAD: e29fe1e04c6894324ebf580e45bea34c2cf1feeb
+BRANCH: main
+```
+
+Reconciled the existing Rust implementation with its roadmap contracts:
+
+- `NO_COLOR` clears rendered styles after drawing;
+- `LBE_ASCII` selects explicit ASCII-safe markers and logo tokens;
+- Unicode-width-aware truncation protects long paths, model names, and wide
+  characters;
+- populated provider, model, doctor, and session panels render at the compact
+  60×18 terminal size;
+- `--no-tui`/`run` bypass alternate-screen initialization and expose structured
+  headless result/event output with stderr diagnostics and meaningful exit codes;
+- the minimum-size fallback remains explicit and truthful.
+
+Validation:
+
+- focused compatibility/headless/responsive tests: PASS;
+- Rust full suite: PASS;
+- `cargo check`: PASS;
+- `git diff --check` for the affected files: PASS.
+
+Remaining limitation:
+
+- external PTY/ConPTY lifecycle smoke, installed live governed completion, and
+  full P2/P3 acceptance remain open;
+- the active machine gate remains OPEN.
+
 ## Cross-Workspace Provider Integration Checkpoint — 2026-09-02
 
 ```text
