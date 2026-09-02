@@ -1,7 +1,7 @@
 # Statusline / Title
 
 ## Status
-MISSING
+`PARTIAL — LBE INTERFACE SURFACE PASS; RUST CONFIGURATION MISSING`
 
 ## Product Relevance
 UX SUPPORT
@@ -27,3 +27,9 @@ The TUI renders status/title state. LBE owns canonical runtime/session/project v
 
 ## Reuse Strategy
 Before implementing this module natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping that surface instead of recreating it, unless LBE governance, provenance, policy, evidence, receipt, validation, or memory authority requires native implementation.
+
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: canonical interface/status projections exist. Rust TUI: configurable statusline/title remains unimplemented. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\LBE_INTERFACE_PRODUCT_SURFACE_CHECKPOINT.md:9-19.
+

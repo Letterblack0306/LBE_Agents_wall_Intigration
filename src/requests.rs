@@ -1,6 +1,6 @@
 use crate::{
     browser_chat::BrowserChatProvider,
-    types::{AgentMode, ModelRef},
+    types::{AgentMode, ModelRef, ProviderId},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9,11 +9,24 @@ pub(crate) enum UserRequest {
         intent: String,
         mode: AgentMode,
     },
+    StartSession,
+    ListSessions,
+    ResumeSession {
+        session_id: String,
+    },
+    CloseSession {
+        session_id: String,
+    },
     Continue {
         session_id: String,
         message: String,
     },
     RefreshRuntimeSnapshot,
+    RefreshMcpRegistry,
+    QueryBirdEye {
+        tool: String,
+        arguments: serde_json::Value,
+    },
     InspectWorkspace {
         path: String,
     },
@@ -38,8 +51,25 @@ pub(crate) enum UserRequest {
         capability: String,
     },
     RefreshProviderCatalog,
+    ConfigureProvider {
+        provider_id: ProviderId,
+        base_url: Option<String>,
+        credential_ref: Option<String>,
+    },
+    ValidateProvider {
+        provider_id: ProviderId,
+    },
+    RemoveProvider {
+        provider_id: ProviderId,
+    },
     SelectModel {
         model: ModelRef,
+    },
+    CompareCheckpoint {
+        checkpoint_id: String,
+    },
+    RestoreCheckpoint {
+        checkpoint_id: String,
     },
     CompactContext,
     RunDiagnostics,

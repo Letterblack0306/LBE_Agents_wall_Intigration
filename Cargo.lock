@@ -222,6 +222,7 @@ dependencies = [
  "serde",
  "serde_json",
  "termina",
+ "unicode-width",
 ]
 
 [[package]]

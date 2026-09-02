@@ -1,7 +1,7 @@
 # Artifacts / Diff / Test Review
 
 ## Status
-MISSING
+`PARTIAL — LBE EVIDENCE/DIFF SURFACES PASS; ARTIFACT REVIEW UI NOT PROVEN`
 
 ## Product Relevance
 CORE
@@ -28,3 +28,9 @@ The TUI renders artifacts and user decisions. LBE owns artifact provenance, vali
 
 ## Reuse Strategy
 Before implementing this module natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping that surface instead of recreating it, unless LBE governance, provenance, policy, evidence, receipt, validation, or memory authority requires native implementation.
+
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: interface evidence, receipt, diff, and validation projections are accepted. A complete artifact review workflow is not proven. Rust TUI: artifact review remains unimplemented. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\LBE_INTERFACE_CONTROL_EVIDENCE_SURFACES_CHECKPOINT.md:34-49.
+

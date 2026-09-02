@@ -1,7 +1,7 @@
 # Projects / Settings
 
 ## Status
-MISSING
+`PARTIAL — LBE HOME/PROVIDER/SESSION OWNERS PASS; RUST UI MISSING`
 
 ## Product Relevance
 CORE
@@ -28,3 +28,9 @@ The TUI displays and requests setting changes. LBE owns project trust, persisted
 
 ## Reuse Strategy
 Before implementing this module natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping that surface instead of recreating it, unless LBE governance, provenance, policy, evidence, receipt, validation, or memory authority requires native implementation.
+
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: project/config/provider/session ownership and Home/provider contract surfaces are implemented. Rust TUI: project/settings panels remain unimplemented. Evidence: C:\Agents-Memory-Tool-v6-integration\PROJECT_INDEX.md:12-16,28-30.
+

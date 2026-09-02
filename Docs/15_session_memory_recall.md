@@ -1,7 +1,7 @@
 # Session Memory and Recall
 
 ## Status
-PARTIAL
+`PARTIAL — LBE MEMORY OWNER IMPLEMENTED; RUST INTEGRATION PENDING`
 
 ## Existing Authority
 Canonical LBE runtime owns durable memory and verified promotion.
@@ -25,3 +25,8 @@ Canonical LBE runtime owns durable memory and verified promotion.
 - [x] Unrelated sessions are not dumped into context by the mock recall query
 - [x] Verified memory has explicit truth state for ranking by the runtime adapter
 - [ ] Real integration uses existing LBE persistence owner
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: SessionMemoryRuntimeBridge, WorkspaceMemoryStore, MemoryPromoter, recovery, and verified promotion are implemented/accepted. Rust TUI: local memory projection exists; durable live recall/context references remain pending. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\CURRENT_STATUS.md:115-161.
+

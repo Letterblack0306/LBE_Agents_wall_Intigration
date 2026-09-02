@@ -1,7 +1,7 @@
 # Conversation Handoff
 
 ## Status
-MISSING
+`PARTIAL — LBE SESSION PERSISTENCE PASS; HANDOFF PRODUCT NOT PROVEN`
 
 ## Product Relevance
 CORE FOR MULTI-CLIENT USE
@@ -28,3 +28,9 @@ The TUI creates/consumes handoff requests. LBE owns canonical session identity, 
 
 ## Reuse Strategy
 Before implementing this module natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping that surface instead of recreating it, unless LBE governance, provenance, policy, evidence, receipt, validation, or memory authority requires native implementation.
+
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: persisted session identity/resume is accepted. A cross-client handoff package/export contract is not proven in the current evidence. Rust TUI: handoff UI remains unimplemented. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\SESSION_APPLICATION_CONTRACT_UNIFICATION_CHECKPOINT.md:28-51.
+

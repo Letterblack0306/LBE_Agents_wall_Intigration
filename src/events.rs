@@ -7,12 +7,21 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LbeEvent {
+    WrapperError {
+        message: String,
+    },
     SessionStarted {
         session_id: String,
     },
     SessionRestored {
+        session_id: String,
+    },
+    SessionListUpdated {
+        sessions: Vec<crate::types::SessionSummary>,
+    },
+    SessionClosed {
         session_id: String,
     },
     RuntimeAttachmentUpdated {
@@ -27,6 +36,32 @@ pub(crate) enum LbeEvent {
     },
     SnapshotUpdated {
         snapshot: crate::types::LbeSnapshot,
+    },
+    WorkspaceListingReady {
+        path: String,
+        entries: Vec<crate::types::WorkspaceEntry>,
+        evidence_ref: Option<String>,
+        receipt_id: Option<String>,
+    },
+    WorkspaceReadReady {
+        path: String,
+        content: String,
+        content_sha256: String,
+        evidence_ref: Option<String>,
+        receipt_id: Option<String>,
+    },
+    WorkspacePatchReady {
+        patch: crate::types::WorkspacePatch,
+    },
+    McpRegistryUpdated {
+        schema_version: u64,
+        integrations: Vec<crate::types::McpIntegration>,
+    },
+    BirdEyeQueryReady {
+        tool: String,
+        payload: serde_json::Value,
+        evidence_ref: Option<String>,
+        receipt_id: Option<String>,
     },
     ProviderCatalogDiscovered {
         providers: Vec<ProviderProjection>,
@@ -160,6 +195,27 @@ pub(crate) enum LbeEvent {
     },
     AssistantTextDelta {
         text: String,
+    },
+    ConversationalTurnMessage {
+        session_id: String,
+        turn_id: String,
+        event_id: String,
+        text: String,
+    },
+    ConversationalToolReceipt {
+        session_id: String,
+        turn_id: String,
+        event_id: String,
+        operation_id: Option<String>,
+        tool_id: String,
+        status: String,
+        receipt_id: Option<String>,
+        evidence_ref: Option<String>,
+    },
+    ConversationalTurnCompleted {
+        session_id: String,
+        turn_id: String,
+        event_id: String,
     },
     ProposalCreated {
         approval_id: String,

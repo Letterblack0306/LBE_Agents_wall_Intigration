@@ -2,7 +2,7 @@
 
 ## Status
 
-`PARTIAL`
+`PARTIAL — LBE RUNTIME PASS; RUST PTY NOT PROVEN`
 
 ## Scope
 
@@ -68,3 +68,8 @@ A real PTY/ConPTY lifecycle smoke remains unproven. A bounded Windows ConPTY exp
 - Replacing `LbeWrapper` with direct runtime logic.
 - Agent Wall changes.
 - Real read/write execution integration.
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: installed live session/interface lifecycle is accepted. Rust TUI: external PTY/ConPTY cleanup smoke remains unproven. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\LBE_INTERFACE_PRODUCT_SURFACE_CHECKPOINT.md:21-33; Rust limitation remains in this document.
+

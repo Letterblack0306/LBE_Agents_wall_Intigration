@@ -2,7 +2,7 @@
 
 ## Status
 
-`MISSING`
+`IMPLEMENTED / LOCAL`
 
 ## Scope
 
@@ -29,8 +29,13 @@ This module is part of the pre-integration TUI implementation. It must remain co
 
 ## Evidence / Notes
 
-_Confirmed MISSING: `App.transcript` is a flat `Vec<String>` with no scroll offset, follow-tail flag, or detail-view state anywhere in `main.rs`. Nothing to build on yet — this is a clean start._
+_Confirmed MISSING: `App.transcript` is a flat `Vec<String>` with no scroll offset, follow-tail flag, or detail-view state anywhere in `main.rs`. Nothing to build on yet â€” this is a clean start._
 
 ## Completion
 
 When all work items and acceptance criteria are satisfied, change this module status to `CLOSED` and update `STATUS.md`.
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: IMPLEMENTED / PASS — persisted provider/event history and conversation projections exist in the canonical runtime. Rust TUI: implemented local projection; live LBE event binding and PTY acceptance remain open. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\LBE_AGENT_CONVERSATION_CONTINUATION_CHECKPOINT.md:8-32.
+

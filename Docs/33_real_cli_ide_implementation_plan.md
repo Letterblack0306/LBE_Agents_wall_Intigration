@@ -1,8 +1,8 @@
-# Module 33 — Real CLI IDE Implementation Plan
+# Module 33 â€” Real CLI IDE Implementation Plan
 
 ## Status
 
-PLANNED
+`ACTIVE — REAL LBE + CLINE/OPENCODE REUSE INTEGRATION REQUIRED`
 
 ## Product Relevance
 
@@ -10,33 +10,40 @@ CORE / SEQUENCING
 
 ## Purpose
 
-Define the ordered implementation path from the current mock LBE TUI contract preview to a real governed CLI IDE.
+Define the ordered implementation path for the active Rust/Ratatui client over
+the authoritative Python LBE runtime.
+
+The Python TUI is retired/reference-only and has no further implementation path.
+The Rust TUI owns interaction and projection contracts only; LBE remains the
+authority for providers, governance, authorization, execution, evidence,
+receipts, validation, persistence, and completion truth.
 
 This module is a planning gate, not a feature implementation.
 
 ## Verified Current State
 
-At repository revision `4f596f71c3f4cee54d37a5b2fe93acdb8add47f6`, the workspace is still pre-integration:
-
-```text
-TUI shell                         IMPLEMENTED
-MockLbeWrapper                    IMPLEMENTED
-Deterministic mock lifecycle      IMPLEMENTED / HARDENING
-Provider/model UI contract        IMPLEMENTED MOCK
-Evidence/receipt UI contract      IMPLEMENTED/PARTIAL MOCK
-Plan/Audit modes                  IMPLEMENTED MOCK
-Checkpoint contract               IMPLEMENTED/PARTIAL
-
-RealLbeWrapper                    MISSING
-Real providers                    MISSING
-Real tool/command execution       MISSING
-Real sandbox/policy enforcement   MISSING
-Persistent sessions               MISSING
-Canonical evidence/receipts       MISSING
-Real Agent Wall attachment        MISSING
+The current bounded integration state is:
+Rust/Ratatui TUI                  ACTIVE
+Python TUI                        RETIRED / REFERENCE-ONLY
+LBE Python runtime                AUTHORITATIVE BACKEND / GOVERNANCE
+Real provider/model binding       LBE PASS; Rust projection integration pending
+Audit provider round trip         LBE PASS
+Governed read-only tool path      LBE PASS
+Receipt/evidence continuation     LBE PASS
+Plan/investigation mode           LBE PASS
+Runtime/read-only mode            LBE PASS
+Read-only mutation denial         LBE PASS
+Rust real-wrapper projection      BOUNDED P1 PASS; full integration pending
+Installed PTY interactive TUI     NOT PROVEN
+Persistent sessions               LBE PASS; Rust integration pending
+Canonical evidence/receipts       LBE PASS; Rust structured projection pending
+Real Agent Wall attachment        LBE runtime PASS; Rust live adapter integration pending
 ```
 
-The README remains authoritative for the current runtime boundary: the TUI routes through `LbeWrapper` and renders `MockLbeWrapper` snapshots/events. It must not claim live LBE authorization, execution, validation, evidence, receipts, providers, or model integration until those paths exist.
+The current runtime boundary is: Rust/Ratatui routes through `LbeWrapper` and
+renders authoritative projections from the Python LBE runtime. The Rust client
+must not claim or implement independent authorization, execution, validation,
+evidence, receipt, provider, or completion authority.
 
 ## Non-Negotiable Architecture
 
@@ -74,13 +81,16 @@ LBE Coding TUI / CLI
 
 The TUI may become IDE-like, but canonical authority remains outside the TUI.
 
-## Reference Use Rule
+## Reference and Reuse Rule
 
-External agent IDEs/CLIs may inform interaction design, but must not become LBE authority.
+External agent IDEs/CLIs may supply reusable implementation mechanics and interaction patterns, but must not become LBE authority. Cline and OpenCode must be checked before implementing any equivalent capability in the Rust client.
 
 ```text
-Cline-style reference
--> runtime/session/tool/provider patterns
+ Cline implementation/reference
+ -> agent loop, provider streaming, tools, approvals, MCP, teams, schedules, connectors, SDK/headless flows
+
+OpenCode implementation/reference
+-> terminal/desktop/IDE surfaces, build/plan agents, subagents, multi-session, provider breadth, extension patterns
 
 Antigravity-style reference
 -> terminal IDE UX patterns
@@ -107,9 +117,35 @@ store raw provider credentials in TUI state
 claim evidence/receipt truth without LBE ownership
 ```
 
+## Upstream Capability Reuse Decision
+
+OpenCode and Cline are reuse sources, not parallel LBE authorities. Their session,
+provider, tool, approval, process, MCP, subagent, team, connector, diff, and
+headless-event patterns must be adopted, adapted, or wrapped where compatible,
+and only behind the existing `LbeWrapper` boundary.
+
+```text
+OpenCode / Cline behavior patterns
+        -> neutral adapter contract
+        -> LbeWrapper / RealLbeWrapper
+        -> authoritative LBE runtime
+        -> typed LbeEvent / LbeSnapshot projection
+        -> Letterblack-branded Ratatui UI
+```
+
+The LBE workspace contains Cline reference/source material under
+`C:\Agents-Memory-Tool-v6-integration\vendor\cline-cli` and
+`C:\Agents-Memory-Tool-v6-integration\unused-in-repo\cline-cli-reference-copy-2026-08-27`.
+OpenCode remains an official external source to cross-check at its pinned
+revision. Reuse must be selective and source-backed: do not import either
+runtime as LBE authority, call their provider/auth services as canonical,
+store raw credentials in TUI state, or project their results as LBE evidence or
+receipts. The missing implementation is the governed LBE adapter, not a second
+generic agent runtime.
+
 ## Implementation Milestones
 
-### Milestone A — Runtime Attachment Foundation
+### Milestone A â€” Runtime Attachment Foundation
 
 Build the smallest real-runtime slice first:
 
@@ -118,7 +154,8 @@ Build the smallest real-runtime slice first:
 2. attach / disconnect / reconnect lifecycle
 3. authoritative snapshot projection
 4. real session identity
-5. one read-only runtime operation
+5. Cline/OpenCode reuse adapter inventory and pinned-source compatibility checks
+6. one read-only runtime operation
 ```
 
 Acceptance:
@@ -140,7 +177,7 @@ Constraints:
 - no direct UI-owned runtime state;
 - reconnect must fail closed if runtime truth cannot be recovered.
 
-### Milestone B — Real Coding Execution
+### Milestone B â€” Real Coding Execution
 
 Add governed execution only after the read-only runtime boundary is proven:
 
@@ -171,7 +208,7 @@ User task
 
 Direct command execution must not be implemented first with governance added later.
 
-### Milestone C — Provider + Agent Loop
+### Milestone C â€” Provider + Agent Loop
 
 Connect the model loop after governed tool execution exists:
 
@@ -188,7 +225,7 @@ context compaction
 
 The provider gateway remains LBE-owned. The TUI may display redacted provider/model state but must not own credentials or provider authority.
 
-### Milestone D — IDE Workflow
+### Milestone D â€” IDE Workflow
 
 Activate the coding frontend surfaces after the single-agent execution path is governed:
 
@@ -217,7 +254,7 @@ Relevant modules:
 
 Diff/change review should precede multi-agent features.
 
-### Milestone E — Persistence
+### Milestone E â€” Persistence
 
 Convert the CLI from an execution console into a durable workspace:
 
@@ -234,7 +271,7 @@ receipt/evidence history
 
 Persistent data must remain LBE-owned or explicitly projected from LBE-owned storage.
 
-### Milestone F — Agent Workspace
+### Milestone F â€” Agent Workspace
 
 Only after the single-agent path is deterministic and governed:
 
@@ -268,7 +305,7 @@ P10 Connectors / schedules / advanced UX
 
 ## Gate Conditions
 
-### P0 Gate — Deterministic Wrapper Invariants
+### P0 Gate â€” Deterministic Wrapper Invariants
 
 - [x] Module 32 is closed for the deterministic pre-integration runtime scope.
 - [x] Terminal state is emitted exactly once.
@@ -277,18 +314,18 @@ P10 Connectors / schedules / advanced UX
 - [x] Timeout/abort/reject/failure/success all terminalize deterministically.
 - [x] Retry and reconnect/interruption semantics are implemented and tested behind the wrapper; real Agent Wall attachment remains separate.
 
-### P1 Gate — Read-Only RealLbeWrapper Attachment
+### P1 Gate â€” Read-Only RealLbeWrapper Attachment
 
-- [ ] `RealLbeWrapper` exists behind the same `LbeWrapper` trait.
-- [ ] Runtime attach event is projected into `LbeSnapshot`.
-- [ ] Runtime disconnect event is projected into `LbeSnapshot`.
-- [ ] Runtime reconnect event is projected into `LbeSnapshot`.
-- [ ] Real session identity is displayed.
-- [ ] At least one read-only operation returns an LBE-owned event.
-- [ ] No mutation-capable operation is enabled.
-- [ ] Mock mode remains available and truth-labeled.
+- [x] `RealLbeWrapper` exists behind the same `LbeWrapper` trait.
+- [x] Runtime attach event is projected into `LbeSnapshot`.
+- [x] Runtime disconnect event is projected into `LbeSnapshot`.
+- [x] Runtime reconnect event is projected into `LbeSnapshot`.
+- [ ] Real session identity is displayed and externally accepted in a live configured run.
+- [x] At least one read-only operation returns an LBE-owned event (`RefreshRuntimeSnapshot`).
+- [x] No mutation-capable operation is enabled.
+- [x] Mock mode remains available and truth-labeled.
 
-### P2/P3 Gate — Governed Execution
+### P2/P3 Gate â€” Governed Execution
 
 - [ ] Every mutation-capable operation routes through LBE authorization.
 - [ ] Tool registry exposes risk and permission metadata.
@@ -298,7 +335,7 @@ P10 Connectors / schedules / advanced UX
 - [ ] Receipt is produced only after validation/completion acceptance.
 - [ ] Timeout and abort clear pending work and terminalize exactly once.
 
-### P4 Gate — Provider + Agent Loop
+### P4 Gate â€” Provider + Agent Loop
 
 - [ ] Provider gateway is LBE-owned.
 - [ ] Credentials are referenced, never rendered raw.
@@ -306,7 +343,7 @@ P10 Connectors / schedules / advanced UX
 - [ ] Streaming model events are ordered and recoverable.
 - [ ] Tool calls route back through governed execution.
 
-### P5 Gate — IDE Workflow
+### P5 Gate â€” IDE Workflow
 
 - [ ] Code search results are evidence-linked.
 - [ ] Workspace changes are visible before approval.
@@ -314,21 +351,21 @@ P10 Connectors / schedules / advanced UX
 - [ ] Patch acceptance/rejection is policy-bound.
 - [ ] Artifacts link to evidence, validation, and receipts.
 
-### P6 Gate — Persistence
+### P6 Gate â€” Persistence
 
 - [ ] Sessions survive process restart.
 - [ ] `/resume` restores real session state.
 - [ ] Checkpoints/artifacts/evidence/receipts remain queryable.
 - [ ] Stale or unresolved runtime truth is visible, not guessed.
 
-### P7 Gate — Headless JSON / CI Mode
+### P7 Gate â€” Headless JSON / CI Mode
 
 - [ ] Non-TUI mode exists.
 - [ ] JSON output is deterministic and schema-versioned.
 - [ ] Exit codes distinguish success, validation failure, policy denial, timeout, abort, and runtime unavailable.
 - [ ] No interactive prompt occurs in CI/headless mode.
 
-### P8/P9 Gate — Background and Multi-Agent
+### P8/P9 Gate â€” Background and Multi-Agent
 
 - [ ] Background processes have IDs, states, logs, timeout, and kill/cancel.
 - [ ] Subagents have isolated identities and event streams.
@@ -359,3 +396,8 @@ It only records the implementation order and gates.
 - [ ] Diff/file/artifact review precedes multi-agent work.
 - [ ] Persistence and headless mode are separately gated.
 - [ ] External references are constrained to patterns/primitives, not authority.
+
+## Cross-workspace status (2026-08-31)
+
+The LBE workspace has accepted complete-runtime, session/application, governed-tool, external-capability, provider-continuation, and interface-control slices. The remaining Rust work is the live adapter/event projection and installed interactive acceptance; do not add another mock authority. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\CURRENT_IMPLEMENTATION_GATE.md:10-36.
+

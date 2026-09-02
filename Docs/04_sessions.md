@@ -2,7 +2,7 @@
 
 ## Status
 
-`PARTIAL`
+`IMPLEMENTED / LBE OWNER PASS; RUST ADAPTER PARTIAL`
 
 ## Scope
 
@@ -10,16 +10,16 @@ This module is part of the pre-integration TUI implementation. It must remain co
 
 ## Work Items
 
-- [ ] Define requests for new/list/restore/switch/close session.
-- [ ] Replace local-only /new reset with runtime request contract.
-- [ ] Add session list/detail projection.
-- [ ] Keep durable identity runtime-owned.
+- [x] Define requests for close session.
+- [x] Replace local-only /new reset with runtime request contract.
+- [x] Add session list/detail projection.
+- [x] Keep durable identity runtime-owned.
 
 ## Acceptance Criteria
 
-- [ ] Session IDs originate from runtime projection.
-- [ ] Session switching/restoring is request-based.
-- [ ] UI never invents durable session authority.
+- [x] Session IDs originate from runtime projection.
+- [x] Session switching/restoring is request-based.
+- [x] UI never invents durable session authority.
 
 ## Out of Scope
 
@@ -30,9 +30,14 @@ This module is part of the pre-integration TUI implementation. It must remain co
 ## Evidence / Notes
 
 - `SessionLineage`, `SessionStatus`, and `LbeEvent::SessionStarted` / `SessionRestored` already exist.
-- `/session` opens `MockPanel::Session`, which renders `root_session_id`, `parent_session_id` (or "none"), and `origin` from `snapshot.lineage`.
-- **Not yet built:** `/new` (in `handle_command`) is still a fully local reset — `self.transcript.clear(); self.phase = Phase::Welcome;` — with no wrapper request involved at all. This is exactly the "Replace local-only /new reset with runtime request contract" work item, confirmed still open. No list/switch/close requests exist in `UserRequest` yet either.
+- `/session` and `/sessions` open `MockPanel::Session`; `/sessions` requests runtime-owned session summaries and renders bounded ID/status/parent rows.
+- `/new`, `/sessions`, `/resume <session_id>`, and `/close <session_id>` dispatch runtime-owned requests. Closing the active session is rejected without a replacement. The mock wrapper emits runtime-owned session identity, parent lineage, summaries, restore, and close events. The real wrapper remains fail-closed while disconnected.
 
 ## Completion
 
 When all work items and acceptance criteria are satisfied, change this module status to `CLOSED` and update `STATUS.md`.
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: IMPLEMENTED / PASS — LbeSessionService, SessionMemoryRuntimeBridge, WorkspaceMemoryStore, and PersistentTurnControl own lifecycle. Rust TUI: contracts/local projection exist, but direct live service/event integration remains pending. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\SESSION_APPLICATION_CONTRACT_UNIFICATION_CHECKPOINT.md:28-47,53-79.
+

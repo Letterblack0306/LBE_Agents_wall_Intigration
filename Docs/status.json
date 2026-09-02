@@ -280,7 +280,7 @@
                                                                           ]
                                                        },
                     "31_cline_interop_reuse_strategy.md":  {
-                                                               "status":  "PASS — CLINE AUDIT COMPLETE; OPENCODE PINNED REVIEW RECORDED; ADAPTER PENDING",
+                                                               "status":  "PASS — CLINE/OPENCODE AUDIT COMPLETE; LBE ADAPTER COMPOSITION PROVEN; LIVE ACCEPTANCE OPEN",
                                                                "relevance":  "STRATEGIC",
                                                                "depends_on":  [
                                                                                   "17_policy_hooks_permissions.md",

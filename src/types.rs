@@ -105,6 +105,11 @@ pub(crate) const PALETTE: Palette = Palette {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Phase {
     Welcome,
+    PatchReview {
+        path: String,
+        expected_sha256: String,
+        replacement_content: String,
+    },
     AwaitingApproval {
         approval_id: String,
         proposal: String,
@@ -194,7 +199,7 @@ impl AgentMode {
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Audit => "Lbe Audit",
-            Self::Regular => "Agent regular",
+            Self::Regular => "Runtime",
             Self::Plan => "Plan",
         }
     }
@@ -256,6 +261,7 @@ pub(crate) struct LbeSnapshot {
     pub(crate) lineage: SessionLineage,
     pub(crate) session_id: Option<String>,
     pub(crate) session_state: SessionStatus,
+    pub(crate) sessions: Vec<SessionSummary>,
     pub(crate) turn_id: Option<String>,
     pub(crate) workspace_id: Option<String>,
     pub(crate) workspace_label: String,
@@ -300,6 +306,12 @@ impl Default for LbeSnapshot {
             },
             session_id: Some("sess_mock_7f31".to_owned()),
             session_state: SessionStatus::Idle,
+            sessions: vec![SessionSummary {
+                session_id: "sess_mock_7f31".to_owned(),
+                status: SessionStatus::Idle,
+                origin: SessionOrigin::User,
+                parent_session_id: None,
+            }],
             turn_id: Some("turn_mock_0".to_owned()),
             workspace_id: Some("workspace_mock_lbe_tui_lab".to_owned()),
             workspace_label: r"C:\Users\".to_owned(),
@@ -365,26 +377,51 @@ impl RuntimeMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ProviderId {
     OpenAi,
+    OpenAiNative,
     Anthropic,
     Gemini,
     Bedrock,
+    Vertex,
     Mistral,
     OpenAiCompatible,
     LmStudio,
     Ollama,
+    OpenRouter,
+    OpenCode,
 }
 
 impl ProviderId {
+    pub(crate) fn cli_name(self) -> &'static str {
+        match self {
+            Self::OpenAi => "openai",
+            Self::OpenAiNative => "openai-native",
+            Self::Anthropic => "anthropic",
+            Self::Gemini => "gemini",
+            Self::Bedrock => "bedrock",
+            Self::Vertex => "vertex",
+            Self::Mistral => "mistral",
+            Self::OpenAiCompatible => "openai-compatible",
+            Self::LmStudio => "lm-studio",
+            Self::Ollama => "ollama",
+            Self::OpenRouter => "openrouter",
+            Self::OpenCode => "opencode",
+        }
+    }
+
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::OpenAi => "OpenAI",
+            Self::OpenAiNative => "OpenAI native",
             Self::Anthropic => "Anthropic",
             Self::Gemini => "Google Gemini",
             Self::Bedrock => "AWS Bedrock",
+            Self::Vertex => "Google Vertex",
             Self::Mistral => "Mistral",
             Self::OpenAiCompatible => "OpenAI-compatible",
             Self::LmStudio => "LM Studio",
             Self::Ollama => "Ollama",
+            Self::OpenRouter => "OpenRouter",
+            Self::OpenCode => "OpenCode",
         }
     }
 }
@@ -875,6 +912,14 @@ pub(crate) struct SessionLineage {
     pub(crate) origin: SessionOrigin,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionSummary {
+    pub(crate) session_id: String,
+    pub(crate) status: SessionStatus,
+    pub(crate) origin: SessionOrigin,
+    pub(crate) parent_session_id: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // CompactionState
 // ---------------------------------------------------------------------------
@@ -968,6 +1013,7 @@ pub(crate) fn mock_diagnostics() -> Vec<DiagnosticCheck> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MockPanel {
     Account,
+    Activity,
     Provider,
     Model,
     Mcp,
@@ -979,6 +1025,83 @@ pub(crate) enum MockPanel {
     Status,
     Memory,
     Browser,
+    Processes,
     Undo,
+    Changes,
     Doctor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspaceEntry {
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) entry_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspaceListing {
+    pub(crate) path: String,
+    pub(crate) entries: Vec<WorkspaceEntry>,
+    pub(crate) evidence_ref: Option<String>,
+    pub(crate) receipt_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspaceFile {
+    pub(crate) path: String,
+    pub(crate) content: String,
+    pub(crate) content_sha256: String,
+    pub(crate) evidence_ref: Option<String>,
+    pub(crate) receipt_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspacePatch {
+    pub(crate) path: String,
+    pub(crate) created: bool,
+    pub(crate) updated: bool,
+    pub(crate) bytes: u64,
+    pub(crate) before_sha256: String,
+    pub(crate) sha256: String,
+    pub(crate) patch: String,
+    pub(crate) evidence_ref: Option<String>,
+    pub(crate) receipt_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EvidenceProjection {
+    pub(crate) reference: String,
+    pub(crate) source: String,
+    pub(crate) session_id: Option<String>,
+    pub(crate) execution_id: Option<String>,
+    pub(crate) tool_id: Option<String>,
+    pub(crate) summary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReceiptProjection {
+    pub(crate) receipt_id: String,
+    pub(crate) source: String,
+    pub(crate) session_id: Option<String>,
+    pub(crate) execution_id: Option<String>,
+    pub(crate) tool_id: Option<String>,
+    pub(crate) status: String,
+    pub(crate) evidence_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct McpIntegration {
+    pub(crate) integration_id: String,
+    pub(crate) adapter_id: String,
+    pub(crate) tool_id: String,
+    pub(crate) description: String,
+    pub(crate) enabled: bool,
+    pub(crate) credential_ref_configured: bool,
+    pub(crate) availability: String,
+    pub(crate) rationale: String,
+    pub(crate) access_class: String,
+    pub(crate) network_behavior: String,
+    pub(crate) risk_class: String,
+    pub(crate) timeout_seconds: f64,
+    pub(crate) retry_policy: String,
 }

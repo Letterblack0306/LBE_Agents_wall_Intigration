@@ -1,4 +1,4 @@
-# 34 — P1 Live Read-Only Acceptance
+# 34 â€” P1 Live Read-Only Acceptance
 
 ## Scope
 
@@ -111,3 +111,9 @@ After all six live checks PASS:
 - Do not treat `insufficient_evidence` as `PASS`.
 - Do not fall back from real mode to mock while claiming real attachment.
 - Do not start P2+ mutation/provider work before P1 live acceptance passes.
+
+
+## Cross-workspace status (2026-08-31)
+
+This is a bounded historical P1 acceptance contract for the Rust wrapper. The current LBE workspace has progressed to accepted complete-runtime, session/application, provider continuation, governed-tool, and interface-control slices, but this document does not prove full Rust integration or P2/P3 mutation capability.
+

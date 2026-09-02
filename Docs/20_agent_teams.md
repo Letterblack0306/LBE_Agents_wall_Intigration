@@ -1,7 +1,7 @@
 # Agent Teams
 
 ## Status
-MISSING
+`PARTIAL — LBE EXTERNAL/SUBAGENT REGISTRATION ONLY; TEAM PRODUCT NOT PROVEN`
 
 ## Product Relevance
 ADVANCED CORE
@@ -28,3 +28,9 @@ The TUI orchestrates display and user requests. LBE owns team/session state, tas
 
 ## Reuse Strategy
 Before implementing this module natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping that surface instead of recreating it, unless LBE governance, provenance, policy, evidence, receipt, validation, or memory authority requires native implementation.
+
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: subagent/external capability registration is accepted, but a coordinated team/task-board product is not specified as complete. Rust TUI: teams remain unimplemented. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\GOVERNED_EXTERNAL_CAPABILITY_REGISTRATION_CHECKPOINT.md:32-43.
+

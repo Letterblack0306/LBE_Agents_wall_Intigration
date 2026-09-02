@@ -1,7 +1,7 @@
 # Autonomous Developer Frontend Features (Handoff)
 
 ## Status
-IMPLEMENTED (frontend scaffolding exists; blocked on real Agent Wall integration)
+`PARTIAL — LBE BACKEND CAPABILITIES PASS; RUST FEATURE SURFACES PARTIAL`
 
 ## Product Relevance
 CORE / BLOCKING (full completion requires real Agent Wall attachment and feature-specific wall capabilities)
@@ -258,9 +258,9 @@ deterministic mock runtime
 RealLbeWrapper skeleton
         |
         +-- skeleton: IMPLEMENTED (wrapper.rs:1000-1123)
-        +-- real attachment: PENDING
-        +-- real snapshot stream: PENDING
-        +-- real event/request mapping: PENDING
+         +-- real attachment: IMPLEMENTED / LIVE CONFIGURATION-DEPENDENT
+         +-- real snapshot stream: IMPLEMENTED / READ-ONLY PROVEN
+         +-- real event/request mapping: IMPLEMENTED / LOCAL TESTED; WRITABLE LIVE PATH OPEN
                 |
                 v
 Agent Wall capabilities
@@ -276,10 +276,10 @@ Agent Wall capabilities
 Evidence for skeleton existence (PROVEN):
 - RealLbeWrapper struct defined at wrapper.rs:1000-1123
 - RealLbeWrapper::new() constructs snapshot with Disconnected state
-- RealLbeWrapper::attach() returns error without wall endpoint (stubbed)
-- RealLbeWrapper::poll_event() returns None (no stream yet)
-- RealLbeWrapper requires connection for mutation-bearing requests (wrapper.rs:1094-1104)
-- build_wrapper() selects RealLbeWrapper when LBE_RUNTIME=real (main.rs:73-77)
+- RealLbeWrapper::attach() validates Agent Wall projections and enters `Connected` only after identity checks
+- RealLbeWrapper::poll_event() projects authoritative snapshot and operation events
+- RealLbeWrapper requires a connected runtime for mutation-bearing requests
+- `build_wrapper()` selects RealLbeWrapper when `LBE_RUNTIME=real`
 
 What becomes "real" when the gap closes:
 - LbeSnapshot fields transition from mock-fabricated to wall-provided values
@@ -294,16 +294,16 @@ What remains TUI-only (presentation/navigation/editing):
 - Layout rendering, responsive behavior, terminal compatibility
 - Local state limited to presentation/navigation/editing per handoff rules
 
-Next implementation step is NOT another state-machine pass. It is completing RealLbeWrapper real attachment and Agent Wall contracts.
+Next implementation step is live credentialed writable acceptance: provide the canonical capability registry, use an existing disposable file or an LBE-owned create capability, then prove authorization, exactly-once mutation, receipt/evidence, validation/completion, and installed Rust projection.
 
 ---
 
 ## Validation Performed
 
-- 42/42 unit tests pass (cargo test --quiet)
+- 193/193 Rust tests pass (`cargo test`)
 - Code compiles with warnings only (unused imports/dead code - not blocking)
 - All handoff features (TUI-33 -> TUI-40) mapped to existing code
-- Runtime gap precisely identified: RealLbeWrapper real attachment + Agent Wall capabilities
+- Runtime gap precisely identified: credentialed writable Agent Wall acceptance and installed live completion proof
 - No assumptions made beyond directly observed code evidence
 - CORRECTION APPLIED (2026-08-29): Module 32 status updated from MISSING to IMPLEMENTED_PRE_INTEGRATION across STATUS.md, README.md, and status.json
 - CORRECTION APPLIED (2026-08-29): RealLbeWrapper described as "absent" corrected to "skeleton exists"
@@ -318,6 +318,10 @@ Next implementation step is NOT another state-machine pass:
 
 ---
 *Documented from direct codebase inspection on 8/29/2026. All evidence levels marked as PROVEN where directly observed, HYPOTHESIS where requiring inference from existing patterns.*
-Requires real Agent Wall for: file-level diff rendering, hunk navigation, test-result artifact display, generated files/screenshots browser, validation summary, artifact provenance tracking, accept/reject/comment controls
+Requires real Agent Wall for: writable mutation, live validation/completion, installed event persistence, complete hunk navigation, test-result artifact display, generated files/screenshots browser, validation summary, artifact provenance tracking, and accept/reject/comment controls
 SCOPE CHANGE
 NONE
+
+## Cross-workspace status (2026-08-31)
+
+The LBE workspace has implemented the runtime owners needed for session, provider, governed tools, evidence, receipts, persistence, continuation, completion, and interface control. Rust local projection and approval/diff scaffolding are implemented and tested; credentialed writable mutation, live validation/completion, and installed end-to-end proof remain open. Evidence: `C:\LBE-TUI-Lab\src\app.rs`, `C:\LBE-TUI-Lab\src\wrapper.rs`, `C:\LBE-TUI-Lab\src\ui.rs`, `C:\LBE-TUI-Lab\src\tests.rs`, and `C:\Agents-Memory-Tool-v6-integration\docs\acceptance\LBE_INTERFACE_PRODUCT_SURFACE_CHECKPOINT.md:5-49`.

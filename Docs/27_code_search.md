@@ -1,7 +1,7 @@
 # Code Search
 
 ## Status
-MISSING
+`PARTIAL — LBE EVIDENCE/WORKSPACE READ OWNERS EXIST; SEARCH UI MISSING`
 
 ## Product Relevance
 CORE
@@ -28,3 +28,9 @@ The TUI requests search and renders results. LBE/tool layer owns filesystem acce
 
 ## Reuse Strategy
 Before implementing this module natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping that surface instead of recreating it, unless LBE governance, provenance, policy, evidence, receipt, validation, or memory authority requires native implementation.
+
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: workspace/evidence owners exist, but a complete semantic code-search product contract is not proven in current acceptance records. Rust TUI: code search remains unimplemented. Evidence: C:\Agents-Memory-Tool-v6-integration\PROJECT_INDEX.md:14-18,32-34.
+

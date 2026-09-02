@@ -1,8 +1,8 @@
-# Module 32 — Deterministic Runtime State Machine
+# Module 32 â€” Deterministic Runtime State Machine
 
 ## Contents
 
-- [Module 32 — Deterministic Runtime State Machine](#module-32--deterministic-runtime-state-machine)
+- [Module 32 â€” Deterministic Runtime State Machine](#module-32--deterministic-runtime-state-machine)
 - [Status](#status)
 - [Product Relevance](#product-relevance)
 - [Purpose](#purpose)
@@ -46,7 +46,7 @@
 
 ## Status
 
-CLOSED — CLOSURE VALIDATED 2026-08-29
+`CLOSED — LOCAL PRE-INTEGRATION FOUNDATION; LBE RUNTIME AUTHORITY PASS`
 
 ## Product Relevance
 
@@ -133,17 +133,17 @@ The target architecture is:
 
 ```text
 UserRequest
-    ↓
+    â†“
 LbeWrapper
-    ↓
+    â†“
 ExecutionStateMachine
-    ↓
+    â†“
 validated transition
-    ↓
+    â†“
 authoritative LbeSnapshot + LbeEvent
-    ↓
+    â†“
 App
-    ↓
+    â†“
 projection / rendering only
 ```
 
@@ -242,22 +242,22 @@ Required success flow:
 
 ```text
 ExecutionStarted
-    ↓
+    â†“
 tool / command lifecycle
-    ↓
+    â†“
 ExecutionCompleted
-    ↓
+    â†“
 ValidationStarted
-    ↓
+    â†“
 ValidationCompleted(Passed)
-    ↓
+    â†“
 LbeCompletionAccepted
-    ↓
+    â†“
 execution status = Completed
 session status   = Completed
-    ↓
+    â†“
 SnapshotUpdated / SessionStatusUpdated
-    ↓
+    â†“
 App renders Completed
 ```
 
@@ -339,10 +339,10 @@ Where applicable, maintain parent linkage:
 
 ```text
 session
-  └─ execution
-       ├─ tool call
-       │    └─ command
-       └─ validation
+  â””â”€ execution
+       â”œâ”€ tool call
+       â”‚    â””â”€ command
+       â””â”€ validation
 ```
 
 IDs must not be reused across concurrent active lifecycles.
@@ -357,19 +357,19 @@ Timeout must become deterministic runtime behavior.
 
 ```text
 ExecutionStarted
-    ↓
+    â†“
 deadline = execution_start + timeout
-    ↓
+    â†“
 LbeWrapper::next_wake()
-    ↓
+    â†“
 deadline reached
-    ↓
-Running → TimedOut
-    ↓
+    â†“
+Running â†’ TimedOut
+    â†“
 clear/cancel pending execution work
-    ↓
+    â†“
 terminalize exactly once
-    ↓
+    â†“
 emit authoritative state/event update
 ```
 
@@ -394,16 +394,16 @@ Failure events must have explicit deterministic consequences.
 
 ```text
 ValidationCompleted(Failed)
-→ execution terminal = Failed
+â†’ execution terminal = Failed
 
 TimedOut
-→ execution terminal = TimedOut
+â†’ execution terminal = TimedOut
 
 Abort
-→ execution terminal = Aborted
+â†’ execution terminal = Aborted
 
 Reject
-→ execution terminal = Rejected
+â†’ execution terminal = Rejected
 ```
 
 For:
@@ -595,7 +595,7 @@ This module must not:
 
 - attach the real Agent Wall;
 - add new coding-frontend features;
-- implement roadmap Modules 17–30;
+- implement roadmap Modules 17â€“30;
 - redesign provider interfaces;
 - add direct tool execution to the TUI;
 - move authorization into the UI;
@@ -604,7 +604,7 @@ This module must not:
 - remove `MockLbeWrapper`;
 - bypass `LbeWrapper`.
 
-## Closure Decision — 2026-08-29
+## Closure Decision â€” 2026-08-29
 
 Module 32 is **CLOSED** for the deterministic pre-integration runtime scope.
 The terminal, ordering, timeout, abort, rejection, retry, interruption,
@@ -630,8 +630,8 @@ Only then should the real adapter replace or coexist with the mock implementatio
 
 ```text
 LbeWrapper
-├─ MockLbeWrapper
-└─ RealLbeWrapper / real adapter
+â”œâ”€ MockLbeWrapper
+â””â”€ RealLbeWrapper / real adapter
 ```
 
 ## Completion Result
@@ -678,3 +678,8 @@ PASS
 REAL WALL ATTACHMENT GATE
 OPEN
 ```
+
+## Cross-workspace status (2026-08-31)
+
+The deterministic Rust mock state machine remains closed for its local test scope, but it is not the production runtime authority. The LBE workspace now owns the accepted complete runtime, recovery, completion, persistence, authorization, receipts, and evidence. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\COMPLETE_LBE_AGENT_RUNTIME_GATE.md:20-46,48-59.
+

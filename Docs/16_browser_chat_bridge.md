@@ -2,7 +2,7 @@
 
 ## Status
 
-CLOSED_PRE_INTEGRATION
+`CLOSED_PRE_INTEGRATION — LBE EXTERNAL CAPABILITY BOUNDARY PASS`
 
 ## Scope Boundary
 
@@ -28,23 +28,23 @@ Browser chat is a reasoning/conversation surface, not the execution authority.
 ## Target Architecture
 
 Browser Chat
-    ↓
+    â†“
 Browser Chat Adapter
-    ↓
+    â†“
 LBE Bridge Protocol
-    ↓
+    â†“
 LbeWrapper
-    ↓
+    â†“
 Canonical LBE Runtime
 
 Return path:
 
 Canonical LBE Runtime
-    ↓
+    â†“
 structured result/event
-    ↓
+    â†“
 Browser Chat Adapter
-    ↓
+    â†“
 Browser Chat
 
 ## Work Items
@@ -93,3 +93,8 @@ Browser Chat
 - [x] Browser chat history is not treated as canonical LBE memory by itself.
 - [x] Relevant LBE session memory linkage is represented for later browser-turn recall.
 - [x] Bridge failure does not bypass LBE.
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: external capabilities are registered through the governed ToolRegistry; no direct external executor is authorized. Rust TUI: browser bridge remains a pre-integration contract and does not prove live browser automation. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\GOVERNED_EXTERNAL_CAPABILITY_REGISTRATION_CHECKPOINT.md:32-51.
+

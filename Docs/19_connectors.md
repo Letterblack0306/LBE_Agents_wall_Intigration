@@ -1,7 +1,7 @@
 # Connectors
 
 ## Status
-MISSING
+`PARTIAL — LBE EXTERNAL REGISTRATION ONLY; CONNECTOR PRODUCT NOT PROVEN`
 
 ## Product Relevance
 SUPPORTING
@@ -28,3 +28,9 @@ Connectors are external interaction surfaces. LBE owns session identity, tool ex
 
 ## Reuse Strategy
 Before implementing this module natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping that surface instead of recreating it, unless LBE governance, provenance, policy, evidence, receipt, validation, or memory authority requires native implementation.
+
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: external capability registration exists, but a Slack/Discord/Linear connector lifecycle is not proven by the current acceptance records. Rust TUI: connectors remain unimplemented. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\GOVERNED_EXTERNAL_CAPABILITY_REGISTRATION_CHECKPOINT.md:7-11,32-51.
+

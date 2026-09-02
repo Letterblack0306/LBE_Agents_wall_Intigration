@@ -1,4 +1,4 @@
-# 35 — P1 Live Acceptance Evidence Record
+# 35 â€” P1 Live Acceptance Evidence Record
 
 ## Purpose
 
@@ -14,7 +14,7 @@ LBE_TARGET_WORKSPACE=C:\LBE-TUI-Lab
 LBE_WALL_DATABASE=C:\Agents-Memory-Tool-v6-integration\state\lbe-runtime.db
 LBE_SESSION_ID=tui-fb2fe3a87da24552910a5b2d8fb45c7d
 LBE_TASK_ID=null
-LBE_WALL_PYTHON=C:\Python314\python.exe
+LBE_WALL_PYTHON=C:\LBE_RUNTIME_PY312\Scripts\python.exe
 ```
 
 No credentials, tokens, provider secrets, or provider task were used.
@@ -43,7 +43,7 @@ task_id: null
 project_truth_outcome: insufficient_evidence
 ```
 
-## Check 1 — Real attachment projection
+## Check 1 â€” Real attachment projection
 
 Evidence:
 
@@ -59,12 +59,12 @@ raw_evidence_reference: unavailable; observed by focused live Rust test and Agen
 
 Verdict: `PASS`
 
-## Check 2 — Real identity projection
+## Check 2 â€” Real identity projection
 
 Evidence:
 
 ```text
-session_panel_connection_state: CONNECTED · authoritative Agent Wall projection
+session_panel_connection_state: CONNECTED Â· authoritative Agent Wall projection
 session_panel_session_id: tui-fb2fe3a87da24552910a5b2d8fb45c7d
 session_panel_workspace_id: workspace_681a91b3a62538ad
 session_panel_task_state: null / not attached
@@ -74,7 +74,7 @@ raw_evidence_reference: unavailable; covered by session-panel regression test an
 
 Verdict: `PASS`
 
-## Check 3 — Read-only runtime refresh
+## Check 3 â€” Read-only runtime refresh
 
 Evidence:
 
@@ -94,7 +94,7 @@ raw_evidence_reference: unavailable; focused live refresh test passed
 
 Verdict: `PASS`
 
-## Check 4 — Disconnect/reconnect projection
+## Check 4 â€” Disconnect/reconnect projection
 
 Evidence:
 
@@ -110,7 +110,7 @@ raw_evidence_reference: unavailable; focused live reconnect test passed
 
 Verdict: `PASS`
 
-## Check 5 — No mock fallback
+## Check 5 â€” No mock fallback
 
 Evidence:
 
@@ -125,7 +125,7 @@ raw_evidence_reference: unavailable; no-fallback Rust regression test passed
 
 Verdict: `PASS`
 
-## Check 6 — No mutation capability
+## Check 6 â€” No mutation capability
 
 Evidence:
 
@@ -175,3 +175,8 @@ P1_READ_ONLY_REAL_LBE_WRAPPER=PASS
 All six bounded checks passed, local validation passed, and no P2+ capability
 was introduced. Commit only the intended P1 source files and this evidence
 record; preserve unrelated dirty files outside that commit.
+
+## Cross-workspace status (2026-08-31)
+
+This record remains an immutable historical P1 snapshot for the Rust wrapper. Current LBE authority is documented by later complete-runtime, session, provider-continuation, and interface checkpoints. Do not use this older record as the current LBE HEAD or full-product status. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\CURRENT_STATUS.md:23-36,52-72.
+

@@ -1,7 +1,7 @@
 # Schedules
 
 ## Status
-MISSING
+`MISSING — NO CURRENT LBE SCHEDULE OWNER EVIDENCE`
 
 ## Product Relevance
 SUPPORTING
@@ -27,3 +27,9 @@ The TUI requests schedule changes. LBE owns schedule persistence, execution, loc
 
 ## Reuse Strategy
 Before implementing this module natively, inspect whether Cline already provides an equivalent CLI/frontend primitive. Prefer adopting, adapting, or wrapping that surface instead of recreating it, unless LBE governance, provenance, policy, evidence, receipt, validation, or memory authority requires native implementation.
+
+
+## Cross-workspace status (2026-08-31)
+
+Current LBE evidence reviewed for this update does not specify an implemented schedule product contract. Rust TUI: schedules remain unimplemented. Evidence boundary: C:\Agents-Memory-Tool-v6-integration\PROJECT_INDEX.md:9-40.
+
