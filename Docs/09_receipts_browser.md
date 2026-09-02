@@ -2,7 +2,7 @@
 
 ## Status
 
-`PLACEHOLDER`
+`IMPLEMENTED / LOCAL TESTED — LIVE RECEIPT ACCEPTANCE OPEN`
 
 ## Scope
 
@@ -10,14 +10,14 @@ This module is part of the pre-integration TUI implementation. It must remain co
 
 ## Work Items
 
-- [ ] Add structured receipt projection.
-- [ ] Render receipt ID, execution ID, authorization, execution, validation and completion state.
-- [ ] Expose evidence references attached to receipts.
+- [x] Add structured receipt projection.
+- [x] Render receipt ID, source, session/execution/tool, status, and evidence reference.
+- [x] Expose evidence references attached to receipts.
 
 ## Acceptance Criteria
 
-- [ ] Receipts remain canonical runtime artifacts.
-- [ ] UI presents rather than generates receipt truth.
+- [x] Receipts remain canonical runtime artifacts.
+- [x] UI presents rather than generates receipt truth.
 
 ## Out of Scope
 
@@ -27,8 +27,12 @@ This module is part of the pre-integration TUI implementation. It must remain co
 
 ## Evidence / Notes
 
-_Confirmed PLACEHOLDER: `/receipts` → `MockPanel::Receipts` is a static two-line placeholder that currently hardcodes a fake reference ("Mock receipt rcpt_demo_7f31 is not a canonical receipt.") rather than reading from a real projection. `receipt_id: Option<String>` already exists on both `ExecutionCompleted` and `LbeCompletionAccepted`, so — like evidence — the reference hook exists but there's no structured receipt type or list/detail rendering yet._
+The former fake-reference placeholder has been replaced. `App` retains typed `ReceiptProjection` records from workspace, execution, and conversational tool events, de-duplicates them by receipt ID, and `/receipts` renders the canonical receipt/evidence references. Connected-state labeling and receipt empty-state handling are also locally tested; installed live receipt retrieval and full completion acceptance remain open.
 
 ## Completion
 
 When all work items and acceptance criteria are satisfied, change this module status to `CLOSED` and update `STATUS.md`.
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: ToolReceipt lifecycle and receipt-backed continuation are accepted. Rust TUI: structured receipt projection, local rendering, connected-state labeling, and receipt empty-state handling are implemented and tested; installed live receipt retrieval and completion acceptance remain open. Evidence: `C:\LBE-TUI-Lab\src\app.rs`, `C:\LBE-TUI-Lab\src\ui.rs`, `C:\LBE-TUI-Lab\src\tests.rs`, and `C:\Agents-Memory-Tool-v6-integration\docs\acceptance\R6E_GOVERNED_TOOL_ORCHESTRATION_ACCEPTANCE_CHECKPOINT.md:20-27,65-85`.

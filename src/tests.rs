@@ -1,17 +1,137 @@
 use crate::{
     app::App,
     events::{LbeEvent, ToolRisk, ValidationStatus},
-    requests::UserRequest,
+    headless_prompt,
+    requests::{LbeError, UserRequest},
     types::*,
-    ui::*,
+    ui::{mock_panel_text_for_app, *},
     wrapper::{
-        LbeWrapper, MockLbeWrapper, RealLbeWrapper, validate_provenance, validate_validation,
+        LbeWrapper, MockLbeWrapper, RealLbeWrapper, executed_receipt_id, governed_response_status,
+        parse_provider_check_payload, parse_provider_list_payload, parse_workspace_payload,
+        validate_provenance, validate_validation, workspace_glob_matches, workspace_list_entries,
+        workspace_patch_result, workspace_read_content, workspace_search_results,
     },
 };
 
 use ratatui::termina::event::{KeyCode, KeyEvent, Modifiers};
 use ratatui::{Terminal, backend::TestBackend};
 use std::time::{Duration, Instant};
+
+struct RecordingWrapper {
+    requests: Vec<UserRequest>,
+}
+
+impl RecordingWrapper {
+    fn new() -> Self {
+        Self {
+            requests: Vec::new(),
+        }
+    }
+}
+
+impl LbeWrapper for RecordingWrapper {
+    fn snapshot(&self) -> LbeSnapshot {
+        LbeSnapshot::default()
+    }
+
+    fn submit(&mut self, request: UserRequest, _now: Instant) -> Result<(), LbeError> {
+        self.requests.push(request);
+        Ok(())
+    }
+
+    fn poll_event(&mut self, _now: Instant) -> Result<Option<LbeEvent>, LbeError> {
+        Ok(None)
+    }
+
+    fn next_wake(&self, _now: Instant) -> Option<Duration> {
+        None
+    }
+}
+
+#[test]
+fn executed_receipt_contract_accepts_and_normalizes_a_non_empty_receipt() {
+    let payload = serde_json::json!({"receipt_id": "  receipt-123  "});
+    assert_eq!(
+        executed_receipt_id(&payload, "workspace.read").unwrap(),
+        "receipt-123"
+    );
+}
+
+#[test]
+fn headless_prompt_collects_arguments_after_no_tui_and_ignores_json_flag() {
+    let arguments = vec![
+        "--no-tui".to_owned(),
+        "inspect".to_owned(),
+        "workspace".to_owned(),
+        "--json".to_owned(),
+    ];
+    assert_eq!(headless_prompt(&arguments).unwrap(), "inspect workspace");
+}
+
+#[test]
+fn executed_receipt_contract_rejects_a_missing_receipt() {
+    let payload = serde_json::json!({});
+    let error = executed_receipt_id(&payload, "workspace.list").unwrap_err();
+    assert!(error.message.contains("workspace.list"));
+    assert!(error.message.contains("omitted receipt_id"));
+}
+
+#[test]
+fn executed_receipt_contract_rejects_a_blank_receipt() {
+    let payload = serde_json::json!({"receipt_id": "   "});
+    let error = executed_receipt_id(&payload, "workspace.patch").unwrap_err();
+    assert!(error.message.contains("workspace.patch"));
+    assert!(error.message.contains("omitted receipt_id"));
+}
+
+#[test]
+fn executed_receipt_contract_rejects_a_non_string_receipt() {
+    let payload = serde_json::json!({"receipt_id": 42});
+    assert!(executed_receipt_id(&payload, "workspace.read").is_err());
+}
+
+#[test]
+fn executed_receipt_contract_is_independent_of_non_executed_status_handling() {
+    let denied = serde_json::json!({
+        "status": "DENIED",
+        "error_code": "AUTHORIZATION_DENIED"
+    });
+    assert!(executed_receipt_id(&denied, "workspace.patch").is_err());
+}
+
+#[test]
+fn governed_response_status_accepts_only_contract_statuses() {
+    for status in ["EXECUTED", "DENIED", "ESCALATED", "FAILED"] {
+        assert_eq!(
+            governed_response_status(&serde_json::json!({"status": status}), "workspace.read")
+                .unwrap(),
+            status
+        );
+    }
+}
+
+#[test]
+fn governed_response_status_rejects_missing_non_string_and_unknown_statuses() {
+    let missing = governed_response_status(&serde_json::json!({}), "workspace.list").unwrap_err();
+    assert!(
+        missing
+            .message
+            .contains("workspace.list response omitted status")
+    );
+
+    let non_string =
+        governed_response_status(&serde_json::json!({"status": 42}), "workspace.glob").unwrap_err();
+    assert!(
+        non_string
+            .message
+            .contains("workspace.glob response omitted status")
+    );
+
+    let unknown =
+        governed_response_status(&serde_json::json!({"status": "SUCCESS"}), "workspace.patch")
+            .unwrap_err();
+    assert!(unknown.message.contains("unsupported status SUCCESS"));
+}
 
 fn start_mock_execution(wrapper: &mut MockLbeWrapper, now: Instant) {
     wrapper
@@ -974,6 +1094,399 @@ fn continuation_requires_the_active_session_and_projects_assistant_text() {
 }
 
 #[test]
+fn new_command_requests_a_runtime_owned_session_and_projects_lineage() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+    app.transcript.push("old transcript".to_owned());
+    let previous_session_id = app.snapshot.session_id.clone();
+
+    app.handle_command("/new", &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    let current_session_id = app
+        .snapshot
+        .session_id
+        .clone()
+        .expect("new session must have a runtime-projected ID");
+    assert_ne!(Some(current_session_id.clone()), previous_session_id);
+    assert_eq!(app.snapshot.lineage.parent_session_id, previous_session_id);
+    assert_eq!(app.snapshot.lineage.root_session_id, current_session_id);
+    assert_eq!(app.phase, Phase::Welcome);
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("SESSION  started"))
+    );
+    assert!(!app.transcript.iter().any(|line| line == "old transcript"));
+}
+
+#[test]
+fn sessions_command_projects_runtime_owned_session_summaries() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/new", &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+    app.handle_command("/sessions", &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    assert_eq!(app.snapshot.sessions.len(), 2);
+    assert_eq!(
+        app.snapshot
+            .sessions
+            .last()
+            .map(|session| session.session_id.as_str()),
+        Some("sess_mock_0002")
+    );
+    let session_text = mock_panel_text(MockPanel::Session, &app.snapshot).to_string();
+    assert!(session_text.contains("Known sessions 2"));
+    assert!(session_text.contains("sess_mock_0002"));
+}
+
+#[test]
+fn real_wrapper_rejects_list_sessions_while_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(UserRequest::ListSessions, Instant::now())
+        .expect_err("real session listing must remain runtime-owned");
+    assert!(error.message.contains("requires a connected LBE runtime"));
+}
+
+#[test]
+fn resume_command_requests_runtime_owned_session_restore() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+    let original_session = app.snapshot.session_id.clone().unwrap();
+
+    app.handle_command("/new", &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+    app.handle_command(&format!("/resume {original_session}"), &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    assert_eq!(
+        app.snapshot.session_id.as_deref(),
+        Some(original_session.as_str())
+    );
+    assert_eq!(app.snapshot.lineage.root_session_id, original_session);
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("SESSION  restored"))
+    );
+    assert_eq!(app.phase, Phase::Welcome);
+}
+
+#[test]
+fn real_wrapper_rejects_resume_session_while_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(
+            UserRequest::ResumeSession {
+                session_id: "sess_any".to_owned(),
+            },
+            Instant::now(),
+        )
+        .expect_err("real session restore must remain runtime-owned");
+    assert!(error.message.contains("requires a connected LBE runtime"));
+}
+
+#[test]
+fn close_command_removes_non_active_runtime_session() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+    let original_session = app.snapshot.session_id.clone().unwrap();
+
+    app.handle_command("/new", &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+    app.handle_command(&format!("/close {original_session}"), &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    assert_eq!(app.snapshot.sessions.len(), 1);
+    assert!(
+        !app.snapshot
+            .sessions
+            .iter()
+            .any(|s| s.session_id == original_session)
+    );
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("SESSION  closed"))
+    );
+}
+
+#[test]
+fn close_command_cannot_close_active_session() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+    let active = app.snapshot.session_id.clone().unwrap();
+
+    app.handle_command(&format!("/close {active}"), &mut wrapper);
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("active session cannot be closed"))
+    );
+}
+
+#[test]
+fn real_wrapper_rejects_close_session_while_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(
+            UserRequest::CloseSession {
+                session_id: "sess_any".to_owned(),
+            },
+            Instant::now(),
+        )
+        .expect_err("real session close must remain runtime-owned");
+    assert!(error.message.contains("requires a connected LBE runtime"));
+}
+
+#[test]
+fn provider_config_command_projects_configured_auth_without_raw_credentials() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/provider-config openai", &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    let provider = app
+        .snapshot
+        .providers
+        .iter()
+        .find(|provider| provider.provider_id == ProviderId::OpenAi)
+        .expect("configured provider must remain in the catalog");
+    assert_eq!(provider.auth_state, AuthState::Configured);
+    assert_eq!(provider.health, ProviderHealth::Unknown);
+    let panel = mock_panel_text(MockPanel::Provider, &app.snapshot).to_string();
+    assert!(!panel.contains("opaque-ref"));
+}
+
+#[test]
+fn real_wrapper_rejects_provider_configuration_while_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(
+            UserRequest::ConfigureProvider {
+                provider_id: ProviderId::OpenAi,
+                base_url: None,
+                credential_ref: Some("opaque-ref".to_owned()),
+            },
+            Instant::now(),
+        )
+        .expect_err("real provider configuration must remain runtime-owned");
+    assert!(error.message.contains("requires a connected LBE runtime"));
+}
+
+#[test]
+fn provider_check_payload_projects_model_and_capabilities() {
+    let model = parse_provider_check_payload(
+        &serde_json::json!({
+            "action": "provider.check",
+            "ok": true,
+            "provider_id": "openai-compatible",
+            "provider_model": "gpt-4o",
+            "status": "READY",
+            "capabilities": {
+                "streaming": false,
+                "tool_calls": true,
+                "structured_output": true,
+                "context_limit": 128000
+            }
+        }),
+        ProviderId::OpenAiCompatible,
+    )
+    .expect("valid provider.check payload should decode");
+    assert_eq!(model.model_id, "gpt-4o");
+    assert_eq!(model.context_window, Some(128000));
+    assert!(model.capabilities.tools);
+}
+
+#[test]
+fn provider_check_payload_rejects_identity_or_readiness_mismatch() {
+    let error = parse_provider_check_payload(
+        &serde_json::json!({
+            "action": "provider.check",
+            "ok": true,
+            "provider_id": "openai",
+            "provider_model": "gpt-4o",
+            "status": "READY",
+            "capabilities": {}
+        }),
+        ProviderId::OpenAiCompatible,
+    )
+    .unwrap_err();
+    assert!(error.message.contains("identity or readiness mismatch"));
+}
+
+#[test]
+fn provider_list_payload_projects_registered_openai_compatible_provider() {
+    let providers = parse_provider_list_payload(&serde_json::json!({
+        "action": "provider.list",
+        "ok": true,
+        "providers": ["openai-compatible"],
+    }))
+    .expect("valid provider.list payload should decode");
+    assert_eq!(providers, vec![ProviderId::OpenAiCompatible]);
+}
+
+#[test]
+fn provider_list_payload_accepts_all_registered_lbe_provider_ids() {
+    let providers = parse_provider_list_payload(&serde_json::json!({
+        "action": "provider.list",
+        "ok": true,
+        "providers": [
+            "openai", "openai-native", "anthropic", "gemini", "vertex", "bedrock",
+            "ollama", "lmstudio", "openrouter", "opencode", "openai-compatible"
+        ],
+    }))
+    .expect("registered LBE provider IDs should decode");
+    assert_eq!(
+        providers,
+        vec![
+            ProviderId::OpenAi,
+            ProviderId::OpenAiNative,
+            ProviderId::Anthropic,
+            ProviderId::Gemini,
+            ProviderId::Vertex,
+            ProviderId::Bedrock,
+            ProviderId::Ollama,
+            ProviderId::LmStudio,
+            ProviderId::OpenRouter,
+            ProviderId::OpenCode,
+            ProviderId::OpenAiCompatible,
+        ]
+    );
+}
+
+#[test]
+fn provider_list_payload_rejects_missing_or_malformed_provider_list() {
+    let missing = parse_provider_list_payload(&serde_json::json!({
+        "action": "provider.list",
+        "ok": true,
+    }))
+    .unwrap_err();
+    assert!(missing.message.contains("omitted providers"));
+
+    let malformed = parse_provider_list_payload(&serde_json::json!({
+        "action": "provider.list",
+        "ok": true,
+        "providers": [42],
+    }))
+    .unwrap_err();
+    assert!(malformed.message.contains("was not a string"));
+}
+
+#[test]
+fn provider_list_payload_rejects_unknown_provider_identity() {
+    let error = parse_provider_list_payload(&serde_json::json!({
+        "action": "provider.list",
+        "ok": true,
+        "providers": ["arbitrary-provider"],
+    }))
+    .unwrap_err();
+    assert!(error.message.contains("unsupported provider"));
+}
+
+#[test]
+fn provider_validate_command_projects_ready_auth_and_health() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/provider-validate openai", &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    let provider = app
+        .snapshot
+        .providers
+        .iter()
+        .find(|provider| provider.provider_id == ProviderId::OpenAi)
+        .expect("validated provider must remain in the catalog");
+    assert_eq!(provider.auth_state, AuthState::Ready);
+    assert_eq!(provider.health, ProviderHealth::Ready);
+}
+
+#[test]
+fn real_wrapper_rejects_provider_validation_while_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(
+            UserRequest::ValidateProvider {
+                provider_id: ProviderId::OpenAi,
+            },
+            Instant::now(),
+        )
+        .expect_err("real provider validation must remain runtime-owned");
+    assert!(error.message.contains("requires a connected LBE runtime"));
+}
+
+#[test]
+fn provider_remove_command_removes_provider_and_models_from_projection() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/provider-remove openai", &mut wrapper);
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    assert!(
+        !app.snapshot
+            .providers
+            .iter()
+            .any(|provider| provider.provider_id == ProviderId::OpenAi)
+    );
+    assert!(
+        !app.snapshot
+            .models
+            .iter()
+            .any(|model| model.provider_id == ProviderId::OpenAi)
+    );
+}
+
+#[test]
+fn real_wrapper_rejects_provider_removal_while_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(
+            UserRequest::RemoveProvider {
+                provider_id: ProviderId::OpenAi,
+            },
+            Instant::now(),
+        )
+        .expect_err("real provider removal must remain runtime-owned");
+    assert!(error.message.contains("requires a connected LBE runtime"));
+}
+
+#[test]
+fn real_wrapper_rejects_start_session_while_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let error = wrapper
+        .submit(UserRequest::StartSession, Instant::now())
+        .expect_err("real session creation must remain runtime-owned");
+    assert!(error.message.contains("requires a connected LBE runtime"));
+}
+
+#[test]
 fn commands_open_mock_panels_without_claiming_runtime_integration() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
@@ -981,6 +1494,21 @@ fn commands_open_mock_panels_without_claiming_runtime_integration() {
     assert_eq!(app.panel, Some(MockPanel::Tools));
     let text = mock_panel_text(MockPanel::Tools, &app.snapshot).to_string();
     assert!(text.contains("MOCK / NOT CONNECTED"));
+}
+
+#[test]
+fn activity_projection_is_bounded_and_reachable() {
+    let mut app = App::default();
+    for _ in 0..70 {
+        app.reduce_lbe_event(LbeEvent::WrapperError {
+            message: "runtime unavailable".to_owned(),
+        });
+    }
+    assert_eq!(app.activity_log.len(), 64);
+    assert!(app.activity_log.iter().all(|entry| entry == "WrapperError"));
+    let mut wrapper = MockLbeWrapper::default();
+    app.handle_command("/activity", &mut wrapper);
+    assert_eq!(app.panel, Some(MockPanel::Activity));
 }
 
 #[test]
@@ -1008,7 +1536,21 @@ fn read_command_requires_a_relative_path_argument() {
     assert!(
         app.transcript
             .iter()
-            .any(|line| line.contains("usage: /read <relative-path>"))
+            .any(|line| line.contains("usage: /open <relative-path>"))
+    );
+}
+
+#[test]
+fn open_alias_uses_the_same_governed_read_request_as_read() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/open README.md", &mut wrapper);
+
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("governed workspace inspection is unavailable in mock mode"))
     );
 }
 
@@ -1078,21 +1620,466 @@ fn search_command_requires_a_query_argument() {
     assert!(
         app.transcript
             .iter()
-            .any(|line| line.contains("usage: /search <query>"))
+            .any(|line| line.contains("usage: /find <query>"))
     );
 }
 
 #[test]
-fn mock_patch_command_fails_closed_without_fabricating_mutation() {
+fn mock_patch_command_prepares_review_without_mutating() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
 
     app.handle_command("/patch file.txt abc replacement", &mut wrapper);
 
+    assert!(matches!(app.phase, Phase::PatchReview { .. }));
     assert!(
         app.transcript
             .iter()
-            .any(|line| line.contains("governed workspace patching is unavailable in mock mode"))
+            .any(|line| line.contains("PATCH  review ready"))
+    );
+}
+
+#[test]
+fn patch_review_escape_cancels_before_sending_a_mutation_request() {
+    let mut app = App::default();
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_command("/patch file.txt abc replacement", &mut wrapper);
+    app.dismiss_or_reject(&mut wrapper);
+
+    assert_eq!(app.phase, Phase::Welcome);
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("review cancelled"))
+    );
+    assert!(app.pending_patch.is_none());
+}
+
+#[test]
+fn patch_review_requests_authorization_before_submitting_patch() {
+    let mut app = App::default();
+    let mut wrapper = RecordingWrapper::new();
+    app.handle_command("/patch file.txt expected replacement", &mut wrapper);
+
+    app.submit_or_approve(&mut wrapper, Instant::now());
+
+    assert_eq!(wrapper.requests.len(), 1);
+    assert!(matches!(
+        wrapper.requests.first(),
+        Some(UserRequest::RequestAuthorization { capability }) if capability == "modify"
+    ));
+    assert!(app.pending_patch.is_some());
+    assert!(matches!(app.phase, Phase::PatchReview { .. }));
+}
+
+#[test]
+fn allowed_patch_submits_the_retained_payload_exactly_once() {
+    let mut app = App::default();
+    let mut wrapper = RecordingWrapper::new();
+    app.handle_command("/patch file.txt expected replacement", &mut wrapper);
+    app.submit_or_approve(&mut wrapper, Instant::now());
+    app.reduce_lbe_event(LbeEvent::AuthorizationRequired {
+        operation_id: "op-patch".to_owned(),
+        approval_id: "approval-patch".to_owned(),
+        capability: "modify".to_owned(),
+        rationale: "approval required".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::AuthorizationResolved {
+        operation_id: "op-patch".to_owned(),
+        approval_id: "approval-patch".to_owned(),
+        verdict: "ALLOW".to_owned(),
+        rationale: "approved".to_owned(),
+    });
+
+    app.continue_authorized_patch(&mut wrapper, Instant::now());
+    app.continue_authorized_patch(&mut wrapper, Instant::now());
+
+    assert_eq!(wrapper.requests.len(), 2);
+    assert!(matches!(
+        wrapper.requests.get(1),
+        Some(UserRequest::PatchWorkspace { path, content, expected_sha256 })
+            if path == "file.txt" && content == "replacement" && expected_sha256 == "expected"
+    ));
+    assert!(app.pending_patch.is_none());
+    assert_eq!(app.phase, Phase::Running);
+}
+
+#[test]
+fn denied_or_escalated_patch_waits_without_submitting_mutation() {
+    let mut denied = App::default();
+    let mut denied_wrapper = RecordingWrapper::new();
+    denied.handle_command("/patch file.txt expected replacement", &mut denied_wrapper);
+    denied.submit_or_approve(&mut denied_wrapper, Instant::now());
+    denied.reduce_lbe_event(LbeEvent::AuthorizationRequired {
+        operation_id: "op-deny".to_owned(),
+        approval_id: "approval-deny".to_owned(),
+        capability: "modify".to_owned(),
+        rationale: "approval required".to_owned(),
+    });
+    denied.reduce_lbe_event(LbeEvent::AuthorizationResolved {
+        operation_id: "op-deny".to_owned(),
+        approval_id: "approval-deny".to_owned(),
+        verdict: "DENY".to_owned(),
+        rationale: "policy denied".to_owned(),
+    });
+    denied.continue_authorized_patch(&mut denied_wrapper, Instant::now());
+    assert_eq!(denied_wrapper.requests.len(), 1);
+    assert!(denied.pending_patch.is_none());
+
+    let mut escalated = App::default();
+    let mut escalated_wrapper = RecordingWrapper::new();
+    escalated.handle_command(
+        "/patch file.txt expected replacement",
+        &mut escalated_wrapper,
+    );
+    escalated.submit_or_approve(&mut escalated_wrapper, Instant::now());
+    escalated.reduce_lbe_event(LbeEvent::AuthorizationRequired {
+        operation_id: "op-escalate".to_owned(),
+        approval_id: "approval-escalate".to_owned(),
+        capability: "modify".to_owned(),
+        rationale: "human approval required".to_owned(),
+    });
+    escalated.reduce_lbe_event(LbeEvent::AuthorizationResolved {
+        operation_id: "op-escalate".to_owned(),
+        approval_id: "approval-escalate".to_owned(),
+        verdict: "REQUIRE_APPROVAL".to_owned(),
+        rationale: "human approval required".to_owned(),
+    });
+    escalated.continue_authorized_patch(&mut escalated_wrapper, Instant::now());
+    assert_eq!(escalated_wrapper.requests.len(), 1);
+    assert!(escalated.pending_patch.is_some());
+}
+
+#[test]
+fn patch_approval_escape_clears_retained_patch_before_rejection_resolves() {
+    let mut app = App::default();
+    let mut wrapper = RecordingWrapper::new();
+    app.handle_command("/patch file.txt expected replacement", &mut wrapper);
+    app.submit_or_approve(&mut wrapper, Instant::now());
+    app.reduce_lbe_event(LbeEvent::AuthorizationRequired {
+        operation_id: "op-escape".to_owned(),
+        approval_id: "approval-escape".to_owned(),
+        capability: "modify".to_owned(),
+        rationale: "approval required".to_owned(),
+    });
+
+    app.dismiss_or_reject(&mut wrapper);
+
+    assert!(app.pending_patch.is_none());
+    assert!(matches!(
+        wrapper.requests.last(),
+        Some(UserRequest::Reject { approval_id }) if approval_id == "approval-escape"
+    ));
+}
+
+#[test]
+fn foreign_duplicate_and_disconnect_authorization_events_cannot_release_patch() {
+    let mut app = App::default();
+    let mut wrapper = RecordingWrapper::new();
+    app.handle_command("/patch file.txt expected replacement", &mut wrapper);
+    app.submit_or_approve(&mut wrapper, Instant::now());
+    app.reduce_lbe_event(LbeEvent::AuthorizationRequired {
+        operation_id: "op-safe".to_owned(),
+        approval_id: "approval-safe".to_owned(),
+        capability: "modify".to_owned(),
+        rationale: "approval required".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::AuthorizationResolved {
+        operation_id: "foreign-op".to_owned(),
+        approval_id: "approval-safe".to_owned(),
+        verdict: "ALLOW".to_owned(),
+        rationale: "foreign".to_owned(),
+    });
+    app.continue_authorized_patch(&mut wrapper, Instant::now());
+    assert_eq!(wrapper.requests.len(), 1);
+    assert!(app.pending_patch.is_some());
+
+    app.reduce_lbe_event(LbeEvent::AuthorizationResolved {
+        operation_id: "op-safe".to_owned(),
+        approval_id: "approval-safe".to_owned(),
+        verdict: "ALLOW".to_owned(),
+        rationale: "approved".to_owned(),
+    });
+    app.continue_authorized_patch(&mut wrapper, Instant::now());
+    app.reduce_lbe_event(LbeEvent::AuthorizationResolved {
+        operation_id: "op-safe".to_owned(),
+        approval_id: "approval-safe".to_owned(),
+        verdict: "ALLOW".to_owned(),
+        rationale: "duplicate".to_owned(),
+    });
+    app.continue_authorized_patch(&mut wrapper, Instant::now());
+    assert_eq!(wrapper.requests.len(), 2);
+
+    let mut disconnected = App::default();
+    let mut disconnected_wrapper = RecordingWrapper::new();
+    disconnected.handle_command(
+        "/patch file.txt expected replacement",
+        &mut disconnected_wrapper,
+    );
+    disconnected.submit_or_approve(&mut disconnected_wrapper, Instant::now());
+    disconnected.reduce_lbe_event(LbeEvent::AuthorizationRequired {
+        operation_id: "op-disconnect".to_owned(),
+        approval_id: "approval-disconnect".to_owned(),
+        capability: "modify".to_owned(),
+        rationale: "approval required".to_owned(),
+    });
+    disconnected.reduce_lbe_event(LbeEvent::RuntimeAttachmentUpdated {
+        connection: RuntimeConnection::Disconnected,
+        runtime_id: None,
+        runtime_mode: RuntimeMode::Local,
+        attached_client_count: 0,
+    });
+    disconnected.reduce_lbe_event(LbeEvent::AuthorizationResolved {
+        operation_id: "op-disconnect".to_owned(),
+        approval_id: "approval-disconnect".to_owned(),
+        verdict: "ALLOW".to_owned(),
+        rationale: "stale".to_owned(),
+    });
+    disconnected.continue_authorized_patch(&mut disconnected_wrapper, Instant::now());
+    assert_eq!(disconnected_wrapper.requests.len(), 1);
+    assert!(disconnected.pending_patch.is_none());
+}
+
+#[test]
+fn opened_file_scroll_keys_move_through_the_read_only_buffer() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::WorkspaceReadReady {
+        path: "src/lib.rs".to_owned(),
+        content: "one\ntwo\nthree\nfour\n".to_owned(),
+        content_sha256: "hash".to_owned(),
+        evidence_ref: None,
+        receipt_id: None,
+    });
+    let mut wrapper = MockLbeWrapper::default();
+    let now = Instant::now();
+
+    app.handle_key(KeyCode::Down.into(), &mut wrapper, now);
+    assert_eq!(app.workspace_file_scroll, 1);
+    app.handle_key(KeyCode::End.into(), &mut wrapper, now);
+    assert_eq!(app.workspace_file_scroll, 3);
+    app.handle_key(KeyCode::Home.into(), &mut wrapper, now);
+    assert_eq!(app.workspace_file_scroll, 0);
+}
+
+#[test]
+fn transcript_scroll_keys_support_explicit_navigation_and_follow_tail() {
+    let mut app = App::default();
+    app.transcript = (0..20).map(|index| format!("line {index}")).collect();
+    let mut wrapper = MockLbeWrapper::default();
+    let now = Instant::now();
+
+    assert_eq!(app.transcript_scroll, None);
+    app.handle_key(KeyCode::Home.into(), &mut wrapper, now);
+    assert_eq!(app.transcript_scroll, Some(0));
+    app.handle_key(KeyCode::Down.into(), &mut wrapper, now);
+    assert_eq!(app.transcript_scroll, Some(1));
+    app.handle_key(KeyCode::PageDown.into(), &mut wrapper, now);
+    assert_eq!(app.transcript_scroll, Some(11));
+    app.handle_key(KeyCode::PageUp.into(), &mut wrapper, now);
+    assert_eq!(app.transcript_scroll, Some(1));
+    app.handle_key(KeyCode::End.into(), &mut wrapper, now);
+    assert_eq!(app.transcript_scroll, None);
+}
+
+#[test]
+fn transcript_navigation_preserves_input_history_when_composer_has_text() {
+    let mut app = App::default();
+    app.input_history = vec!["first".to_owned(), "second".to_owned()];
+    app.input = "draft".to_owned();
+    app.transcript = vec!["event".to_owned()];
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_key(KeyCode::Up.into(), &mut wrapper, Instant::now());
+    assert_eq!(app.input, "second");
+    assert_eq!(app.transcript_scroll, None);
+}
+
+#[test]
+fn model_picker_navigates_and_selects_only_from_the_discovered_catalog() {
+    let mut app = App::default();
+    app.snapshot.models = vec![
+        ModelDescriptor {
+            provider_id: ProviderId::Gemini,
+            model_id: "gemini-one".to_owned(),
+            display_name: "Gemini One".to_owned(),
+            context_window: Some(100),
+            max_output_tokens: Some(20),
+            capabilities: ProviderCapabilities {
+                streaming: true,
+                tools: true,
+                reasoning: false,
+                images: false,
+                prompt_caching: false,
+                max_context: Some(100),
+                max_output: Some(20),
+            },
+        },
+        ModelDescriptor {
+            provider_id: ProviderId::OpenAi,
+            model_id: "openai-two".to_owned(),
+            display_name: "OpenAI Two".to_owned(),
+            context_window: Some(200),
+            max_output_tokens: Some(40),
+            capabilities: ProviderCapabilities {
+                streaming: true,
+                tools: true,
+                reasoning: true,
+                images: true,
+                prompt_caching: true,
+                max_context: Some(200),
+                max_output: Some(40),
+            },
+        },
+    ];
+    app.panel = Some(MockPanel::Model);
+    let mut wrapper = MockLbeWrapper::default();
+    let now = Instant::now();
+
+    app.handle_key(KeyCode::Down.into(), &mut wrapper, now);
+    assert_eq!(app.model_picker_index, 1);
+    app.handle_key(KeyCode::Down.into(), &mut wrapper, now);
+    assert_eq!(app.model_picker_index, 1);
+    app.panel = None;
+    let selected = mock_model_catalog()[0].clone();
+    app.snapshot.models = vec![selected.clone()];
+    app.model_picker_index = 0;
+    app.panel = Some(MockPanel::Model);
+    app.handle_key(KeyCode::Enter.into(), &mut wrapper, now);
+    assert_eq!(app.panel, None);
+    app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
+    assert_eq!(
+        app.snapshot
+            .selected_model
+            .as_ref()
+            .map(|model| model.model_id.as_str()),
+        Some(selected.model_id.as_str())
+    );
+}
+
+#[test]
+fn model_picker_escape_closes_without_selecting() {
+    let mut app = App::default();
+    let original = app.snapshot.selected_model.clone();
+    app.panel = Some(MockPanel::Model);
+    let mut wrapper = MockLbeWrapper::default();
+
+    app.handle_key(KeyCode::Escape.into(), &mut wrapper, Instant::now());
+
+    assert_eq!(app.panel, None);
+    assert_eq!(app.snapshot.selected_model, original);
+    assert!(wrapper.poll_event(Instant::now()).unwrap().is_none());
+}
+
+#[test]
+fn checkpoint_panel_compare_projects_changed_files_through_lbe() {
+    let mut wrapper = MockLbeWrapper::default();
+    let now = Instant::now();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::CheckpointCreated {
+            checkpoint: CheckpointDescriptor {
+                checkpoint_id: "chk_test".to_owned(),
+                created_at: "2026-08-30T00:00:00Z".to_owned(),
+                workspace_revision: "rev_test".to_owned(),
+                changed_files: vec!["src/app.rs".to_owned(), "src/ui.rs".to_owned()],
+            },
+        },
+        now,
+    );
+    let checkpoint_event = wrapper.poll_event(Instant::now()).unwrap().unwrap();
+    let mut app = App::default();
+    app.reduce_lbe_event(checkpoint_event);
+    let checkpoint = wrapper
+        .snapshot()
+        .latest_checkpoint
+        .clone()
+        .expect("mock wrapper should project a checkpoint");
+    app.panel = Some(MockPanel::Undo);
+
+    app.handle_key(KeyCode::Char('c').into(), &mut wrapper, Instant::now());
+    let event = wrapper
+        .poll_event(Instant::now())
+        .unwrap()
+        .expect("compare should emit a projection event");
+    app.reduce_lbe_event(event);
+
+    assert_eq!(app.checkpoint_changed_files, checkpoint.changed_files);
+}
+
+#[test]
+fn changes_panel_projects_checkpoint_files_and_patch_provenance() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::CheckpointCreated {
+        checkpoint: CheckpointDescriptor {
+            checkpoint_id: "chk_changes".to_owned(),
+            created_at: "2026-08-30T00:00:00Z".to_owned(),
+            workspace_revision: "rev_changes".to_owned(),
+            changed_files: vec!["src/app.rs".to_owned(), "src/ui.rs".to_owned()],
+        },
+    });
+    app.reduce_lbe_event(LbeEvent::WorkspacePatchReady {
+        patch: WorkspacePatch {
+            path: "src/app.rs".to_owned(),
+            created: false,
+            updated: true,
+            bytes: 12,
+            before_sha256: "before".to_owned(),
+            sha256: "after".to_owned(),
+            patch: "-old\n+new\n".to_owned(),
+            evidence_ref: Some("evidence-changes".to_owned()),
+            receipt_id: "receipt-changes".to_owned(),
+        },
+    });
+
+    let text = mock_panel_text_for_app(MockPanel::Changes, &app).to_string();
+    assert!(text.contains("chk_changes"));
+    assert!(text.contains("[changed] src/app.rs"));
+    assert!(text.contains("latest patch src/app.rs"));
+    assert!(text.contains("receipt-changes"));
+    assert!(text.contains("evidence-changes"));
+}
+
+#[test]
+fn checkpoint_restore_is_requested_then_blocked_without_local_mutation() {
+    let mut wrapper = MockLbeWrapper::default();
+    let now = Instant::now();
+    wrapper.inject_due_event_for_test(
+        LbeEvent::CheckpointCreated {
+            checkpoint: CheckpointDescriptor {
+                checkpoint_id: "chk_test".to_owned(),
+                created_at: "2026-08-30T00:00:00Z".to_owned(),
+                workspace_revision: "rev_test".to_owned(),
+                changed_files: vec!["src/app.rs".to_owned()],
+            },
+        },
+        now,
+    );
+    let checkpoint_event = wrapper.poll_event(Instant::now()).unwrap().unwrap();
+    let mut app = App::default();
+    app.reduce_lbe_event(checkpoint_event);
+    let _ = drain_wrapper(&mut wrapper, now + Duration::from_millis(300));
+    let before = app
+        .snapshot
+        .latest_checkpoint
+        .clone()
+        .expect("app should project a checkpoint");
+    app.panel = Some(MockPanel::Undo);
+
+    app.handle_key(KeyCode::Char('r').into(), &mut wrapper, Instant::now());
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        app.reduce_lbe_event(event);
+    }
+
+    assert!(matches!(
+        app.checkpoint_restore_status.as_deref(),
+        Some(status) if status.starts_with("BLOCKED")
+    ));
+    assert_eq!(
+        app.snapshot
+            .latest_checkpoint
+            .as_ref()
+            .map(|checkpoint| checkpoint.workspace_revision.as_str()),
+        Some(before.workspace_revision.as_str())
     );
 }
 
@@ -1175,7 +2162,7 @@ fn real_wrapper_rejects_foreign_approval_resolution() {
 }
 
 #[test]
-fn real_wrapper_projects_and_resolves_agent_wall_authorization() {
+fn real_wrapper_projects_agent_wall_authorization_denial_for_read_only_session() {
     let required = [
         "LBE_WALL_ROOT",
         "LBE_TARGET_WORKSPACE",
@@ -1201,22 +2188,22 @@ fn real_wrapper_projects_and_resolves_agent_wall_authorization() {
         )
         .expect("authorization evaluation must cross the Agent Wall boundary");
 
-    let required_event = wrapper
+    let resolved_event = wrapper
         .poll_event(Instant::now())
         .expect("authorization evaluation event polling must succeed")
         .expect("Agent Wall must emit an authorization event");
-    let approval_id = match required_event {
-        LbeEvent::AuthorizationRequired { approval_id, .. } => approval_id,
-        other => panic!("expected AuthorizationRequired, got {other:?}"),
-    };
-
-    wrapper
-        .submit(UserRequest::Approve { approval_id }, Instant::now())
-        .expect("approval resolution must cross the Agent Wall boundary");
     assert!(matches!(
-        wrapper.poll_event(Instant::now()).unwrap(),
-        Some(LbeEvent::AuthorizationResolved { verdict, .. }) if verdict == "ALLOW"
+        resolved_event,
+        LbeEvent::AuthorizationResolved {
+            approval_id,
+            verdict,
+            rationale,
+            ..
+        } if approval_id.is_empty()
+            && verdict == "DENY"
+            && rationale.contains("explicitly forbidden")
     ));
+    assert!(wrapper.poll_event(Instant::now()).unwrap().is_none());
 }
 
 #[test]
@@ -1277,6 +2264,310 @@ fn compact_and_doctor_commands_render_mock_runtime_projections() {
     assert!(doctor_text.contains("Mock diagnostics; no live checks are executed."));
     assert!(doctor_text.contains("runtime.mock"));
     assert!(doctor_text.contains("terminal.termina"));
+}
+
+#[test]
+fn evidence_and_receipt_panels_project_only_existing_workspace_references() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::WorkspaceListingReady {
+        path: ".".to_owned(),
+        entries: vec![],
+        evidence_ref: Some("evidence-list-1".to_owned()),
+        receipt_id: Some("receipt-list-1".to_owned()),
+    });
+    app.reduce_lbe_event(LbeEvent::WorkspaceReadReady {
+        path: "src/main.rs".to_owned(),
+        content: "fn main() {}".to_owned(),
+        content_sha256: "hash".to_owned(),
+        evidence_ref: Some("evidence-read-1".to_owned()),
+        receipt_id: Some("receipt-read-1".to_owned()),
+    });
+
+    let evidence = mock_panel_text_for_app(MockPanel::Evidence, &app).to_string();
+    assert!(evidence.contains("evidence-list-1"));
+    assert!(evidence.contains("evidence-read-1"));
+    assert!(!evidence.contains("MOCK / NOT CONNECTED"));
+    assert!(app.evidence_records.iter().any(|record| {
+        record.reference == "evidence-list-1"
+            && record.source == "workspace.list"
+            && record.tool_id.as_deref() == Some("workspace.list")
+    }));
+    assert!(app.evidence_records.iter().any(|record| {
+        record.reference == "evidence-read-1"
+            && record.source == "workspace.read"
+            && record.tool_id.as_deref() == Some("workspace.read")
+    }));
+
+    let receipts = mock_panel_text_for_app(MockPanel::Receipts, &app).to_string();
+    assert!(receipts.contains("receipt-list-1"));
+    assert!(receipts.contains("receipt-read-1"));
+    assert!(!receipts.contains("rcpt_demo_7f31"));
+    assert!(app.receipt_records.iter().any(|record| {
+        record.receipt_id == "receipt-list-1"
+            && record.source == "workspace.list"
+            && record.status == "EXECUTED"
+            && record.evidence_ref.as_deref() == Some("evidence-list-1")
+    }));
+    assert!(app.receipt_records.iter().any(|record| {
+        record.receipt_id == "receipt-read-1"
+            && record.source == "workspace.read"
+            && record.status == "EXECUTED"
+            && record.evidence_ref.as_deref() == Some("evidence-read-1")
+    }));
+}
+
+#[test]
+fn evidence_and_receipt_panels_remain_truthfully_empty_without_runtime_records() {
+    let app = App::default();
+    let evidence = mock_panel_text_for_app(MockPanel::Evidence, &app).to_string();
+    let receipts = mock_panel_text_for_app(MockPanel::Receipts, &app).to_string();
+    assert!(evidence.contains("No canonical evidence reference projected."));
+    assert!(receipts.contains("No canonical receipt projected."));
+}
+
+#[test]
+fn evidence_and_receipt_panels_project_registered_execution_references() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec-process".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::ToolCompleted {
+        execution_id: "exec-process".to_owned(),
+        tool_call_id: "tool-process".to_owned(),
+        evidence_ref: Some("evidence-process-1".to_owned()),
+    });
+    app.reduce_lbe_event(LbeEvent::ExecutionCompleted {
+        execution_id: "exec-process".to_owned(),
+        receipt_id: Some("receipt-process-1".to_owned()),
+    });
+
+    let evidence = mock_panel_text_for_app(MockPanel::Evidence, &app).to_string();
+    assert!(evidence.contains("evidence-process-1"));
+    let receipts = mock_panel_text_for_app(MockPanel::Receipts, &app).to_string();
+    assert!(receipts.contains("receipt-process-1"));
+}
+
+#[test]
+fn conversational_tool_receipt_projects_structured_identity_and_provenance() {
+    let mut app = App::default();
+    app.snapshot.session_id = Some("sess-conversation".to_owned());
+    app.reduce_lbe_event(LbeEvent::ConversationalToolReceipt {
+        session_id: "sess-conversation".to_owned(),
+        turn_id: "turn-7".to_owned(),
+        event_id: "event-9".to_owned(),
+        operation_id: Some("op-7".to_owned()),
+        tool_id: "codebase_query".to_owned(),
+        status: "tool.completed".to_owned(),
+        receipt_id: Some("receipt-7".to_owned()),
+        evidence_ref: Some("evidence-7".to_owned()),
+    });
+
+    let evidence = app
+        .evidence_records
+        .iter()
+        .find(|record| record.reference == "evidence-7")
+        .expect("conversational evidence must be projected");
+    assert_eq!(evidence.source, "conversational.tool");
+    assert_eq!(evidence.session_id.as_deref(), Some("sess-conversation"));
+    assert_eq!(evidence.execution_id.as_deref(), Some("op-7"));
+    assert_eq!(evidence.tool_id.as_deref(), Some("codebase_query"));
+
+    let receipt = app
+        .receipt_records
+        .iter()
+        .find(|record| record.receipt_id == "receipt-7")
+        .expect("conversational receipt must be projected");
+    assert_eq!(receipt.source, "conversational.tool");
+    assert_eq!(receipt.session_id.as_deref(), Some("sess-conversation"));
+    assert_eq!(receipt.execution_id.as_deref(), Some("op-7"));
+    assert_eq!(receipt.tool_id.as_deref(), Some("codebase_query"));
+    assert_eq!(receipt.status, "tool.completed");
+    assert_eq!(receipt.evidence_ref.as_deref(), Some("evidence-7"));
+}
+
+#[test]
+fn patch_projection_retains_authoritative_diff_metadata() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::WorkspacePatchReady {
+        patch: WorkspacePatch {
+            path: "src/main.rs".to_owned(),
+            created: false,
+            updated: true,
+            bytes: 19,
+            before_sha256: "before-hash".to_owned(),
+            sha256: "after-hash".to_owned(),
+            patch: "-old\n+new\n".to_owned(),
+            evidence_ref: Some("evidence-patch-1".to_owned()),
+            receipt_id: "receipt-patch-1".to_owned(),
+        },
+    });
+
+    let patch = app
+        .workspace_patch
+        .as_ref()
+        .expect("patch result must be projected");
+    assert_eq!(patch.path, "src/main.rs");
+    assert!(patch.updated);
+    assert_eq!(patch.bytes, 19);
+    assert_eq!(patch.before_sha256, "before-hash");
+    assert_eq!(patch.sha256, "after-hash");
+    assert_eq!(patch.patch, "-old\n+new\n");
+    assert_eq!(patch.evidence_ref.as_deref(), Some("evidence-patch-1"));
+    assert_eq!(patch.receipt_id, "receipt-patch-1");
+    assert!(
+        app.transcript
+            .iter()
+            .any(|line| line.contains("PATCH  executed") && line.contains("receipt-patch-1"))
+    );
+}
+
+#[test]
+fn processes_panel_projects_command_lifecycle_without_process_control() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec-command".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::CommandStarted {
+        execution_id: "exec-command".to_owned(),
+        tool_call_id: "tool-command".to_owned(),
+        command_id: "cmd-check".to_owned(),
+        command_summary: "cargo check".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::CommandStdoutDelta {
+        execution_id: "exec-command".to_owned(),
+        tool_call_id: "tool-command".to_owned(),
+        command_id: "cmd-check".to_owned(),
+        text: "finished".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::CommandCompleted {
+        execution_id: "exec-command".to_owned(),
+        tool_call_id: "tool-command".to_owned(),
+        command_id: "cmd-check".to_owned(),
+        exit_code: 0,
+    });
+
+    assert_eq!(app.panel, None);
+    let text = mock_panel_text_for_app(MockPanel::Processes, &app).to_string();
+    assert!(text.contains("cmd-check · state COMPLETED"));
+    assert!(text.contains("tool call tool-command · exit 0"));
+    assert!(text.contains("Projection only; process control remains runtime-owned."));
+}
+
+#[test]
+fn processes_panel_projects_detached_log_state() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec-detached".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::CommandStarted {
+        execution_id: "exec-detached".to_owned(),
+        tool_call_id: "tool-detached".to_owned(),
+        command_id: "cmd-watch".to_owned(),
+        command_summary: "watch".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::CommandDetached {
+        execution_id: "exec-detached".to_owned(),
+        command_id: "cmd-watch".to_owned(),
+        tool_call_id: "tool-detached".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::DetachedLogAvailable {
+        execution_id: "exec-detached".to_owned(),
+        command_id: "cmd-watch".to_owned(),
+    });
+
+    let text = mock_panel_text_for_app(MockPanel::Processes, &app).to_string();
+    assert!(text.contains("cmd-watch · state DETACHED / LOG AVAILABLE"));
+    assert!(text.contains("log available"));
+}
+
+#[test]
+fn processes_panel_retains_bounded_detached_detail_activity() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec-detail".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::CommandStarted {
+        execution_id: "exec-detail".to_owned(),
+        tool_call_id: "tool-detail".to_owned(),
+        command_id: "cmd-detail".to_owned(),
+        command_summary: "watch logs".to_owned(),
+    });
+    for index in 0..40 {
+        app.reduce_lbe_event(LbeEvent::DetachedCommandProgress {
+            execution_id: "exec-detail".to_owned(),
+            command_id: "cmd-detail".to_owned(),
+            text: format!("line-{index}"),
+        });
+    }
+
+    assert_eq!(app.last_process_detail.len(), 32);
+    let text = mock_panel_text_for_app(MockPanel::Processes, &app).to_string();
+    assert!(text.contains("detail"));
+    assert!(text.contains("detached: line-39"));
+    assert!(!text.contains("detached: line-0"));
+}
+
+#[test]
+fn tools_panel_projects_latest_tool_request_without_granting_permission() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::ExecutionStarted {
+        execution_id: "exec-tool".to_owned(),
+    });
+    app.reduce_lbe_event(LbeEvent::ToolRequested {
+        execution_id: "exec-tool".to_owned(),
+        tool_call_id: "tool-read".to_owned(),
+        tool_name: "workspace.read".to_owned(),
+        input_summary: "src/main.rs".to_owned(),
+        risk: ToolRisk::ReadOnly,
+    });
+
+    let text = mock_panel_text_for_app(MockPanel::Tools, &app).to_string();
+    assert!(text.contains("workspace.read · state REQUESTED · risk READ_ONLY"));
+    assert!(text.contains("input src/main.rs"));
+    assert!(text.contains("tool call tool-read"));
+    assert!(text.contains("observed request only; no permission is granted here"));
+    assert!(text.contains("authorization and permissions remain runtime-owned"));
+}
+
+#[test]
+fn tools_panel_remains_truthfully_empty_without_a_tool_request() {
+    let app = App::default();
+    let text = mock_panel_text_for_app(MockPanel::Tools, &app).to_string();
+    assert!(text.contains("No tool request projected."));
+}
+
+#[test]
+fn authorization_panel_projects_required_and_denied_runtime_decisions() {
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::AuthorizationRequired {
+        operation_id: "op-1".to_owned(),
+        approval_id: "approval-1".to_owned(),
+        capability: "workspace.patch".to_owned(),
+        rationale: "patch requires governed approval".to_owned(),
+    });
+
+    let required = mock_panel_text_for_app(MockPanel::Account, &app).to_string();
+    assert!(required.contains("verdict REQUIRED · capability workspace.patch"));
+    assert!(required.contains("approval approval-1"));
+    assert!(required.contains("patch requires governed approval"));
+    assert!(required.contains("authorization remains LBE-runtime-owned"));
+
+    app.reduce_lbe_event(LbeEvent::AuthorizationResolved {
+        operation_id: "op-1".to_owned(),
+        approval_id: "approval-1".to_owned(),
+        verdict: "DENY".to_owned(),
+        rationale: "policy denied mutation".to_owned(),
+    });
+    let resolved = mock_panel_text_for_app(MockPanel::Account, &app).to_string();
+    assert!(resolved.contains("verdict DENY · capability workspace.patch"));
+    assert!(resolved.contains("policy denied mutation"));
+}
+
+#[test]
+fn authorization_panel_remains_truthfully_empty_without_a_decision() {
+    let app = App::default();
+    let text = mock_panel_text_for_app(MockPanel::Account, &app).to_string();
+    assert!(text.contains("No authorization decision projected."));
 }
 
 #[test]
@@ -1388,6 +2679,81 @@ fn session_panel_displays_authoritative_real_session_identity_when_connected() {
     assert!(session_text.contains("Workspace workspace_real_456"));
     assert!(session_text.contains("Session identity is projected from the connected LBE runtime."));
     assert!(!session_text.contains("MOCK / NOT CONNECTED"));
+}
+
+#[test]
+fn provider_panel_projects_authoritative_provider_catalog_when_connected() {
+    let mut app = App::default();
+    app.snapshot.connection = RuntimeConnection::Connected;
+    app.reduce_lbe_event(LbeEvent::ProviderCatalogDiscovered {
+        providers: vec![ProviderProjection {
+            provider_id: ProviderId::OpenAiCompatible,
+            auth_state: AuthState::Ready,
+            health: ProviderHealth::Ready,
+            is_local: true,
+        }],
+    });
+
+    let text = mock_panel_text_for_app(MockPanel::Provider, &app).to_string();
+    assert!(text.contains("CONNECTED · authoritative LBE provider projection"));
+    assert!(text.contains("OpenAI-compatible  READY · READY · LOCAL"));
+    assert!(!text.contains("MOCK / NOT CONNECTED"));
+    assert!(!text.contains("UI CONTRACT PREVIEW"));
+}
+
+#[test]
+fn connected_runtime_panels_identify_authoritative_lbe_projections() {
+    let mut app = App::default();
+    app.snapshot.connection = RuntimeConnection::Connected;
+    app.last_tool_name = Some("workspace.read".to_owned());
+    app.last_tool_state = Some("REQUESTED".to_owned());
+    app.last_tool_risk = Some("READ_ONLY".to_owned());
+    app.last_process_command_id = Some("cmd-1".to_owned());
+    app.last_process_state = Some("COMPLETED".to_owned());
+    app.last_execution_receipt_id = Some("receipt-1".to_owned());
+    app.last_execution_evidence_ref = Some("evidence-1".to_owned());
+
+    let tools = mock_panel_text_for_app(MockPanel::Tools, &app).to_string();
+    let processes = mock_panel_text_for_app(MockPanel::Processes, &app).to_string();
+    let receipts = mock_panel_text_for_app(MockPanel::Receipts, &app).to_string();
+
+    assert!(tools.contains("CONNECTED · authoritative LBE tool projection"));
+    assert!(processes.contains("CONNECTED · authoritative LBE process projection"));
+    assert!(receipts.contains("CONNECTED · authoritative LBE receipt projection"));
+    assert!(!tools.contains("MOCK / NOT CONNECTED"));
+    assert!(!processes.contains("MOCK / NOT CONNECTED"));
+    assert!(!receipts.contains("MOCK / NOT CONNECTED"));
+}
+
+#[test]
+fn mcp_registry_event_replaces_retained_metadata_and_projects_it_in_mcp_panel() {
+    let mut app = App::default();
+    app.snapshot.connection = RuntimeConnection::Connected;
+    app.reduce_lbe_event(LbeEvent::McpRegistryUpdated {
+        schema_version: 1,
+        integrations: vec![McpIntegration {
+            integration_id: "mcp-files".to_owned(),
+            adapter_id: "mcp.files.local".to_owned(),
+            tool_id: "mcp.files.read".to_owned(),
+            description: "Local MCP file inspection".to_owned(),
+            enabled: true,
+            credential_ref_configured: false,
+            availability: "UNAVAILABLE".to_owned(),
+            rationale: "no host adapter factory is installed for adapter_id".to_owned(),
+            access_class: "read".to_owned(),
+            network_behavior: "none".to_owned(),
+            risk_class: "low".to_owned(),
+            timeout_seconds: 30.0,
+            retry_policy: "none".to_owned(),
+        }],
+    });
+
+    assert_eq!(app.mcp_schema_version, 1);
+    assert_eq!(app.mcp_integrations.len(), 1);
+    let text = mock_panel_text_for_app(MockPanel::Mcp, &app).to_string();
+    assert!(text.contains("CONNECTED · authoritative LBE MCP projection"));
+    assert!(text.contains("mcp-files · mcp.files.read · UNAVAILABLE"));
+    assert!(text.contains("execution, or authorization state"));
 }
 
 #[test]
@@ -1541,7 +2907,6 @@ fn welcome_frame_renders_the_supplied_logo_at_80_by_24() {
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
     let mut app = App::default();
-    app.intro_started_at = Instant::now() - Duration::from_millis(1800);
     terminal
         .draw(|frame| draw(frame, &app))
         .expect("frame should render");
@@ -1558,13 +2923,208 @@ fn welcome_frame_renders_the_supplied_logo_at_80_by_24() {
     assert!(!rendered.contains("runtime connected"));
     assert!(rendered.contains("███████████████████████████████████████"));
     assert!(rendered.contains("? for shortcuts"));
-    assert!(rendered.contains("Agent regular"));
+    assert!(rendered.contains("Runtime"));
     assert!(rendered.contains("C:\\Users\\"));
+    assert!(rendered.contains("Workspace C:\\Users\\"));
+    assert!(rendered.contains("Session   sess_mock_7f31"));
+    assert!(rendered.contains("Policy    MOCK / NOT CONNECTED · read-only UI contract"));
     assert!(rendered.contains("Model ID· low"));
     assert!(rendered.contains("Gemini (Context)"));
     assert!(rendered.contains("Lbe Audit"));
     assert!(rendered.contains("Plan"));
     assert!(rendered.contains("(Tab)"));
+}
+
+#[test]
+fn audit_mode_renders_a_real_read_only_projection_screen() {
+    let backend = TestBackend::new(100, 30);
+    let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
+    let mut app = App::default();
+    app.agent_mode = AgentMode::Audit;
+    app.activity_log.push("WorkspaceListingReady".to_owned());
+    terminal
+        .draw(|frame| draw(frame, &app))
+        .expect("audit frame should render");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("AUDIT MODE // READ-ONLY"));
+    assert!(rendered.contains("authorization required for mutation"));
+    assert!(rendered.contains("Grouped findings"));
+    assert!(rendered.contains("VERDICT   not yet projected by LBE"));
+    app.handle_key(KeyCode::PageDown.into(), &mut RecordingWrapper::new(), Instant::now());
+    assert_eq!(app.audit_scroll, 10);
+    app.handle_key(KeyCode::Home.into(), &mut RecordingWrapper::new(), Instant::now());
+    assert_eq!(app.audit_scroll, 0);
+}
+
+#[test]
+fn compact_frame_keeps_the_workflow_usable_at_60_by_18() {
+    let backend = TestBackend::new(60, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
+    terminal
+        .draw(|frame| draw(frame, &App::default()))
+        .expect("compact frame should render");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("LETTERBLACK ENGINE"));
+    assert!(rendered.contains("Enter submit"));
+    assert!(!rendered.contains("LBE terminal needs at least"));
+}
+
+#[test]
+fn compact_height_keeps_the_workflow_usable_at_80_by_18() {
+    let backend = TestBackend::new(80, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
+    terminal
+        .draw(|frame| draw(frame, &App::default()))
+        .expect("compact-height frame should render");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Enter submit"));
+    assert!(!rendered.contains("LBE terminal needs at least"));
+}
+
+#[test]
+fn opened_file_projection_renders_read_only_content_and_provenance() {
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("test terminal should initialize");
+    let mut app = App::default();
+    app.reduce_lbe_event(LbeEvent::WorkspaceReadReady {
+        path: "src/main.rs".to_owned(),
+        content: "fn main() {}\n".to_owned(),
+        content_sha256: "abc123".to_owned(),
+        evidence_ref: Some("workspace:ws-1:src/main.rs".to_owned()),
+        receipt_id: Some("receipt-1".to_owned()),
+    });
+    terminal
+        .draw(|frame| draw(frame, &app))
+        .expect("file frame should render");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("File · src/main.rs"));
+    assert!(rendered.contains("read-only · sha256 abc123"));
+    assert!(rendered.contains("workspace:ws-1:src/main.rs"));
+    assert!(rendered.contains("receipt-1"));
+    assert!(rendered.contains("1  fn main() {}"));
+}
+
+#[test]
+fn workspace_listing_supports_keyboard_cursor_and_real_open_requests() {
+    let mut app = App::default();
+    let mut wrapper = RecordingWrapper::new();
+    app.reduce_lbe_event(LbeEvent::WorkspaceListingReady {
+        path: ".".to_owned(),
+        entries: vec![
+            WorkspaceEntry {
+                name: "src".to_owned(),
+                path: "src".to_owned(),
+                entry_type: "directory".to_owned(),
+            },
+            WorkspaceEntry {
+                name: "README.md".to_owned(),
+                path: "README.md".to_owned(),
+                entry_type: "file".to_owned(),
+            },
+        ],
+        evidence_ref: Some("workspace:ws-1:.".to_owned()),
+        receipt_id: Some("receipt-1".to_owned()),
+    });
+    let now = Instant::now();
+
+    app.handle_key(KeyCode::Down.into(), &mut wrapper, now);
+    assert_eq!(app.workspace_cursor, 1);
+    app.handle_key(KeyCode::Enter.into(), &mut wrapper, now);
+
+    assert_eq!(
+        wrapper.requests,
+        vec![UserRequest::InspectWorkspace {
+            path: "README.md".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn workspace_directory_enter_requests_a_real_listing() {
+    let mut app = App::default();
+    let mut wrapper = RecordingWrapper::new();
+    app.reduce_lbe_event(LbeEvent::WorkspaceListingReady {
+        path: ".".to_owned(),
+        entries: vec![WorkspaceEntry {
+            name: "src".to_owned(),
+            path: "src".to_owned(),
+            entry_type: "directory".to_owned(),
+        }],
+        evidence_ref: None,
+        receipt_id: None,
+    });
+
+    app.handle_key(KeyCode::Enter.into(), &mut wrapper, Instant::now());
+
+    assert_eq!(
+        wrapper.requests,
+        vec![UserRequest::ListWorkspace {
+            path: "src".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn function_keys_open_provider_and_model_catalogs() {
+    let mut app = App::default();
+    let mut wrapper = RecordingWrapper::new();
+    let now = Instant::now();
+
+    app.handle_key(KeyCode::Function(2).into(), &mut wrapper, now);
+    assert_eq!(app.panel, Some(MockPanel::Provider));
+    app.handle_key(KeyCode::Escape.into(), &mut wrapper, now);
+    app.handle_key(KeyCode::Function(3).into(), &mut wrapper, now);
+    assert_eq!(app.panel, Some(MockPanel::Model));
+    assert_eq!(
+        wrapper.requests,
+        vec![
+            UserRequest::RefreshProviderCatalog,
+            UserRequest::RefreshProviderCatalog,
+        ]
+    );
+}
+
+#[test]
+fn command_palette_runs_existing_lbe_commands() {
+    let mut app = App::default();
+    let mut wrapper = RecordingWrapper::new();
+    let now = Instant::now();
+
+    app.handle_key(
+        KeyEvent::new(KeyCode::Char('p'), Modifiers::CONTROL),
+        &mut wrapper,
+        now,
+    );
+    assert!(app.show_command_palette);
+    app.handle_key(KeyCode::Down.into(), &mut wrapper, now);
+    app.handle_key(KeyCode::Enter.into(), &mut wrapper, now);
+
+    assert_eq!(app.panel, Some(MockPanel::Model));
+    assert_eq!(wrapper.requests, vec![UserRequest::RefreshProviderCatalog]);
 }
 
 #[test]
@@ -1630,6 +3190,19 @@ fn below_minimum_size_shows_an_honest_fallback() {
 }
 
 #[test]
+fn display_tokens_have_an_explicit_ascii_fallback() {
+    assert_eq!(display_token("●", "*", false), "●");
+    assert_eq!(display_token("●", "*", true), "*");
+    assert_eq!(display_token("…", "...", true), "...");
+}
+
+#[test]
+fn truncation_uses_terminal_cell_width_for_wide_characters() {
+    assert_eq!(truncate_text("界界界", 5), "界界…");
+    assert_eq!(truncate_text("abcdef", 4), "abc…");
+}
+
+#[test]
 fn real_wrapper_starts_disconnected_without_endpoint() {
     let wrapper = RealLbeWrapper::new();
     assert_eq!(wrapper.connection_state(), RuntimeConnection::Disconnected);
@@ -1652,6 +3225,25 @@ fn real_wrapper_submit_is_rejected_when_disconnected() {
         UserRequest::SubmitTask {
             intent: "inspect workspace".to_owned(),
             mode: AgentMode::Regular,
+        },
+        Instant::now(),
+    );
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .message
+            .contains("operation requires a connected LBE runtime")
+    );
+}
+
+#[test]
+fn real_wrapper_continuation_is_rejected_when_disconnected() {
+    let mut wrapper = RealLbeWrapper::new();
+    let result = wrapper.submit(
+        UserRequest::Continue {
+            session_id: "session-real".to_owned(),
+            message: "continue the inspection".to_owned(),
         },
         Instant::now(),
     );
@@ -1797,6 +3389,41 @@ fn real_wrapper_attaches_session_only_without_task_identity() {
 fn real_wrapper_poll_returns_none_when_disconnected() {
     let mut wrapper = RealLbeWrapper::new();
     assert!(wrapper.poll_event(Instant::now()).unwrap().is_none());
+}
+
+#[test]
+fn real_wrapper_refreshes_mcp_registry_through_authoritative_lbe() {
+    let required = [
+        "LBE_WALL_ROOT",
+        "LBE_TARGET_WORKSPACE",
+        "LBE_WALL_DATABASE",
+        "LBE_SESSION_ID",
+        "LBE_CAPABILITY_REGISTRY",
+    ];
+    if required.iter().any(|name| std::env::var_os(name).is_none()) {
+        return;
+    }
+
+    let mut wrapper = RealLbeWrapper::new();
+    wrapper
+        .attach()
+        .expect("configured Agent Wall must attach before MCP registry refresh");
+    wrapper
+        .submit(UserRequest::RefreshMcpRegistry, Instant::now())
+        .expect("MCP registry refresh must cross the Agent Wall boundary");
+
+    let mut events = Vec::new();
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        events.push(event);
+    }
+
+    assert!(events.iter().any(|event| matches!(
+        event,
+        LbeEvent::McpRegistryUpdated {
+            schema_version,
+            integrations,
+        } if *schema_version == 1 && integrations.is_empty()
+    )));
 }
 
 #[test]
@@ -2855,6 +4482,15 @@ fn real_wrapper_attach_retains_session_context_when_both_projections_succeed() {
             .as_ref()
             .map(|context| context.workspace_id.clone())
     );
+    assert_eq!(snapshot.model_id, "qwen/qwen3-vl-8b");
+    assert_eq!(snapshot.model_family, "OpenAI-compatible");
+    assert_eq!(
+        snapshot.selected_model,
+        Some(ModelRef {
+            provider_id: ProviderId::OpenAiCompatible,
+            model_id: "qwen/qwen3-vl-8b".to_owned(),
+        })
+    );
     assert_eq!(snapshot.runtime_id, None);
     assert_eq!(snapshot.turn_id, None);
     assert!(snapshot.latest_checkpoint.is_none());
@@ -3303,4 +4939,131 @@ fn terminal_restore_sequence_leaves_alt_screen_and_shows_cursor() {
         sequence.contains("\u{1b}[?25h"),
         "restore sequence must show cursor: {sequence:?}"
     );
+}
+
+#[test]
+fn workspace_payload_parser_rejects_invalid_json_and_non_utf8() {
+    let invalid_json = parse_workspace_payload(br#"{invalid}"#, "workspace.patch").unwrap_err();
+    assert!(
+        invalid_json
+            .message
+            .contains("invalid workspace.patch JSON")
+    );
+
+    let invalid_utf8 = parse_workspace_payload(&[0xff], "workspace.read").unwrap_err();
+    assert!(
+        invalid_utf8
+            .message
+            .contains("workspace.read stdout was not UTF-8")
+    );
+}
+
+#[test]
+fn workspace_read_payload_requires_content_and_hash() {
+    let missing_content =
+        workspace_read_content(&serde_json::json!({"content_sha256": "hash"})).unwrap_err();
+    assert!(missing_content.message.contains("omitted content"));
+
+    let missing_hash = workspace_read_content(&serde_json::json!({"content": "text"})).unwrap_err();
+    assert!(missing_hash.message.contains("omitted content hash"));
+}
+
+#[test]
+fn workspace_read_payload_accepts_content_and_hash() {
+    let result =
+        workspace_read_content(&serde_json::json!({"content": "text", "content_sha256": "hash"}))
+            .unwrap();
+    assert_eq!(result, ("text".to_owned(), "hash".to_owned()));
+}
+
+#[test]
+fn workspace_list_payload_requires_entries() {
+    let error = workspace_list_entries(&serde_json::json!({})).unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("workspace.list response omitted entries")
+    );
+}
+
+#[test]
+fn workspace_list_payload_rejects_incomplete_entries() {
+    let error =
+        workspace_list_entries(&serde_json::json!({"entries": [{"name": "src"}]})).unwrap_err();
+    assert!(error.message.contains("entry 0 omitted path"));
+}
+
+#[test]
+fn workspace_list_payload_accepts_complete_entries() {
+    let entries = workspace_list_entries(
+        &serde_json::json!({"entries": [{"name": "src", "path": "src", "type": "directory"}]}),
+    )
+    .unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "src");
+}
+
+#[test]
+fn workspace_glob_payload_requires_matching_paths_and_count() {
+    let missing = workspace_glob_matches(&serde_json::json!({"matches": []})).unwrap_err();
+    assert!(missing.message.contains("omitted match_count"));
+
+    let mismatch = workspace_glob_matches(&serde_json::json!({
+        "matches": [{"path": "src", "type": "directory"}],
+        "match_count": 0
+    }))
+    .unwrap_err();
+    assert!(mismatch.message.contains("match_count"));
+
+    workspace_glob_matches(&serde_json::json!({
+        "matches": [{"path": "src", "type": "directory"}],
+        "match_count": 1
+    }))
+    .unwrap();
+}
+
+#[test]
+fn workspace_search_payload_requires_results_and_consistent_counts() {
+    let missing = workspace_search_results(&serde_json::json!({"results": []})).unwrap_err();
+    assert!(missing.message.contains("indexed_result_count"));
+
+    let mismatch = workspace_search_results(&serde_json::json!({
+        "indexed_result_count": 1,
+        "current_result_count": 0,
+        "results": []
+    }))
+    .unwrap_err();
+    assert!(mismatch.message.contains("result counts"));
+
+    workspace_search_results(&serde_json::json!({
+        "indexed_result_count": 1,
+        "current_result_count": 1,
+        "results": [{"ref": "a"}, {"ref": "b"}]
+    }))
+    .unwrap();
+}
+
+#[test]
+fn workspace_patch_payload_requires_complete_governed_result() {
+    let missing = workspace_patch_result(&serde_json::json!({
+        "path": "src/main.rs",
+        "created": false,
+        "updated": true,
+        "bytes": 10,
+        "before_sha256": "before",
+        "sha256": "after"
+    }))
+    .unwrap_err();
+    assert!(missing.message.contains("omitted patch"));
+
+    workspace_patch_result(&serde_json::json!({
+        "path": "src/main.rs",
+        "created": false,
+        "updated": true,
+        "bytes": 10,
+        "before_sha256": "before",
+        "sha256": "after",
+        "patch": "-before\n+after\n"
+    }))
+    .unwrap();
 }

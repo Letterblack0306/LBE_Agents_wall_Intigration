@@ -15,6 +15,23 @@ use crate::{
     types::*,
 };
 
+fn configured_lbe_command(python: &Path, wall_root: &Path) -> Command {
+    let mut command = Command::new(python);
+    if std::env::var_os("LBE_GUARD_INSPECTOR_CONFIG_PATH").is_none() {
+        let config = wall_root.join("config.json");
+        if config.is_file() {
+            command.env("LBE_GUARD_INSPECTOR_CONFIG_PATH", config);
+        }
+    }
+    if std::env::var_os("LBE_GUARD_INSPECTOR_GOVERNANCE_PATH").is_none() {
+        let governance = wall_root.join("governance.json");
+        if governance.is_file() {
+            command.env("LBE_GUARD_INSPECTOR_GOVERNANCE_PATH", governance);
+        }
+    }
+    command
+}
+
 pub(crate) trait LbeWrapper {
     fn snapshot(&self) -> LbeSnapshot;
     fn submit(&mut self, request: UserRequest, now: Instant) -> Result<(), LbeError>;
@@ -1907,7 +1924,7 @@ impl RealLbeWrapper {
             .unwrap_or_else(|| PathBuf::from("python"));
 
         // Step 4 — export project_truth
-        let output = match Command::new(&python)
+        let output = match configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -1992,7 +2009,7 @@ impl RealLbeWrapper {
             }
         };
         // Step 9 — export session_context using the authoritative workspace_id
-        let sc_output = match Command::new(&python)
+        let sc_output = match configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -2074,7 +2091,7 @@ impl RealLbeWrapper {
 
         if let Some(task_id) = task_id.as_deref() {
             // Step 11 — export provenance using authoritative identities
-            let mut provenance_command = Command::new(&python);
+            let mut provenance_command = configured_lbe_command(&python, &wall_root);
             provenance_command
                 .current_dir(&wall_root)
                 .args([
@@ -2133,7 +2150,7 @@ impl RealLbeWrapper {
             }
 
             // Step 12 — export validation using only authoritative identities
-            let validation_output = match Command::new(&python)
+            let validation_output = match configured_lbe_command(&python, &wall_root)
                 .current_dir(&wall_root)
                 .args([
                     "-m",
@@ -2336,7 +2353,7 @@ impl RealLbeWrapper {
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -2417,7 +2434,7 @@ impl RealLbeWrapper {
             input_summary: tool.to_owned(),
             risk: ToolRisk::ReadOnly,
         });
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -2548,7 +2565,7 @@ impl RealLbeWrapper {
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -2575,7 +2592,7 @@ impl RealLbeWrapper {
             .iter()
             .filter_map(|provider_id| {
                 let provider_config = self.provider_config.as_ref()?;
-                let output = Command::new(&python)
+                let output = configured_lbe_command(&python, &wall_root)
                     .current_dir(&wall_root)
                     .args([
                         "-m",
@@ -2624,6 +2641,8 @@ impl RealLbeWrapper {
                 parse_provider_check_payload(payload, *provider_id).ok()
             })
             .collect::<Vec<_>>();
+        self.snapshot.providers = providers.clone();
+        self.snapshot.models = models.clone();
         self.pending_events
             .push_back(LbeEvent::ProviderDiscoveryStarted);
         self.pending_events
@@ -2665,7 +2684,7 @@ impl RealLbeWrapper {
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -2764,7 +2783,7 @@ impl RealLbeWrapper {
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -2845,7 +2864,7 @@ impl RealLbeWrapper {
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -3072,7 +3091,7 @@ impl RealLbeWrapper {
             tool_call_id: tool_call_id.clone(),
         });
 
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -3206,7 +3225,7 @@ impl RealLbeWrapper {
             tool_call_id: tool_call_id.clone(),
         });
 
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -3337,7 +3356,7 @@ impl RealLbeWrapper {
             tool_call_id: tool_call_id.clone(),
         });
 
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -3461,7 +3480,7 @@ impl RealLbeWrapper {
             tool_call_id: tool_call_id.clone(),
         });
 
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -3591,7 +3610,7 @@ impl RealLbeWrapper {
             tool_call_id: tool_call_id.clone(),
         });
 
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -3732,7 +3751,7 @@ impl RealLbeWrapper {
             tool_call_id: tool_call_id.clone(),
         });
 
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -3848,7 +3867,7 @@ impl RealLbeWrapper {
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -3971,7 +3990,7 @@ impl RealLbeWrapper {
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
-        let output = Command::new(&python)
+        let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
                 "-m",
@@ -4202,6 +4221,16 @@ pub(crate) fn parse_provider_list_payload(
                     LbeError::new(format!("provider.list provider {index} was not a string"))
                 })?;
             match value {
+                "openai" => Ok(ProviderId::OpenAi),
+                "openai-native" => Ok(ProviderId::OpenAiNative),
+                "anthropic" => Ok(ProviderId::Anthropic),
+                "gemini" => Ok(ProviderId::Gemini),
+                "vertex" => Ok(ProviderId::Vertex),
+                "bedrock" => Ok(ProviderId::Bedrock),
+                "ollama" => Ok(ProviderId::Ollama),
+                "lmstudio" | "lm-studio" => Ok(ProviderId::LmStudio),
+                "openrouter" => Ok(ProviderId::OpenRouter),
+                "opencode" => Ok(ProviderId::OpenCode),
                 "openai-compatible" => Ok(ProviderId::OpenAiCompatible),
                 _ => Err(LbeError::new(format!(
                     "provider.list returned unsupported provider: {value}"
@@ -4213,6 +4242,16 @@ pub(crate) fn parse_provider_list_payload(
 
 fn parse_provider_id(value: &str) -> Result<ProviderId, LbeError> {
     match value.trim() {
+        "openai" => Ok(ProviderId::OpenAi),
+        "openai-native" => Ok(ProviderId::OpenAiNative),
+        "anthropic" => Ok(ProviderId::Anthropic),
+        "gemini" => Ok(ProviderId::Gemini),
+        "vertex" => Ok(ProviderId::Vertex),
+        "bedrock" => Ok(ProviderId::Bedrock),
+        "ollama" => Ok(ProviderId::Ollama),
+        "lmstudio" | "lm-studio" => Ok(ProviderId::LmStudio),
+        "openrouter" => Ok(ProviderId::OpenRouter),
+        "opencode" => Ok(ProviderId::OpenCode),
         "openai-compatible" => Ok(ProviderId::OpenAiCompatible),
         other => Err(LbeError::new(format!(
             "session_context returned unsupported provider: {other}"

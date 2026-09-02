@@ -2,7 +2,7 @@
 
 ## Status
 
-`PARTIAL`
+`IMPLEMENTED / LOCAL — CATALOG ORDERING RECONCILED`
 
 ## Scope
 
@@ -10,17 +10,17 @@ This module is part of the pre-integration TUI implementation. It must remain co
 
 ## Work Items
 
-- [ ] Add selected-row state to /model.
-- [ ] Add Up/Down navigation.
-- [ ] Enter submits UserRequest::SelectModel.
-- [ ] Esc closes without mutation.
-- [ ] Surface wrapper errors for invalid selections.
+- [x] Add selected-row state to /model.
+- [x] Add Up/Down navigation.
+- [x] Enter submits UserRequest::SelectModel.
+- [x] Esc closes without mutation.
+- [x] Surface wrapper errors for invalid selections.
 
 ## Acceptance Criteria
 
-- [ ] Only models from the discovered catalog can be selected.
-- [ ] Current model is visibly marked.
-- [ ] Unknown models still fail closed through LbeWrapper.
+- [x] Only models from the discovered catalog can be selected.
+- [x] Current model is visibly marked.
+- [x] Unknown models still fail closed through LbeWrapper.
 
 ## Out of Scope
 
@@ -32,9 +32,14 @@ This module is part of the pre-integration TUI implementation. It must remain co
 
 - `/model` (in `handle_command`) already opens `MockPanel::Model` and fires `UserRequest::RefreshProviderCatalog`.
 - `mock_panel_text(MockPanel::Model, ...)` already renders the full catalog from `snapshot.models`: display name, context window, max output, and a capability marker row (streaming/tools/reasoning/images/caching) per model.
-- `UserRequest::SelectModel { model: ModelRef }` and the `ModelRef`/`ModelDescriptor` types already exist — the request contract is there.
-- **Not yet built:** no selected-row index on `App`, no Up/Down handling while the Model panel is open, and `Enter` still only calls `submit_or_approve` (composer/approval), never dispatches `SelectModel`. `Esc` closes the panel generically, not as a model-picker-specific no-op.
+- `UserRequest::SelectModel { model: ModelRef }` and the `ModelRef`/`ModelDescriptor` types already exist â€” the request contract is there.
+- The Rust client owns only picker cursor/projection state. Selection is dispatched through `LbeWrapper`; catalog membership and model authority remain runtime-owned.
+- Real startup now waits for the authoritative `ModelCatalogDiscovered` event before submitting a requested `SelectModel`, preventing a valid LBE model from being rejected while catalog discovery is still in flight.
 
 ## Completion
 
-When all work items and acceptance criteria are satisfied, change this module status to `CLOSED` and update `STATUS.md`.
+When PTY-level interactive acceptance is proven, change this module status to `CLOSED` and update `STATUS.md`.
+
+## Cross-workspace status (2026-08-31)
+
+LBE runtime: IMPLEMENTED / PASS — ProviderRegistry owns provider/model selection and first-run entry validates provider/model pairing. Rust TUI: local picker and catalog-before-selection ordering are implemented; installed live provider catalog acceptance remains open. Evidence: `C:\LBE-TUI-Lab\src\main.rs`, `C:\LBE-TUI-Lab\src\wrapper.rs`, `C:\LBE-TUI-Lab\src\tests.rs`, and `C:\Agents-Memory-Tool-v6-integration\docs\acceptance\FIRST_RUN_LIVE_SESSION_ENTRY_CHECKPOINT.md:32-43`.

@@ -600,3 +600,81 @@ The combined repository diff check reports only pre-existing dirty-work
 whitespace findings in unrelated files; those files were not reformatted or
 reset. No branch, worktree, staging, commit, push, or unrelated cleanup was
 performed.
+
+## UI Projection Checkpoint — 2026-09-02
+
+```text
+DATE: 2026-09-02
+PHASE: P2/P3 — GOVERNED EXECUTION INTEGRATION
+SLICE: CONNECTED RUNTIME USER-FACING PROJECTION
+STATUS: IMPLEMENTED / LOCALLY PROVEN — INSTALLED ACCEPTANCE OPEN
+REPOSITORY HEAD: 4be395a9dba52fa335151184bb84455931cd299b
+BRANCH: main
+```
+
+Implemented in the existing Rust/Ratatui client:
+
+- the welcome projection shows workspace identity, session identity, runtime
+  connection state, and explicit read-only/mutation authorization posture;
+- connected Tools, Processes, Receipts, and MCP panels identify their content
+  as authoritative LBE projections;
+- disconnected panels remain explicitly unavailable and do not claim live
+  runtime truth;
+- receipt empty-state rendering remains correct when only the projection status
+  line is present;
+- no provider backend, credential store, Python runtime, HTML server, or second
+  authority was added.
+
+Validation:
+
+- Rust full suite: `201 passed, 0 failed`;
+- `cargo check`: PASS;
+- focused connected-panel and MCP projection tests: PASS;
+- `git diff --check` for the affected Rust files: PASS.
+
+Remaining limitation:
+
+- `cargo fmt --check` continues to report pre-existing formatting differences
+  across unrelated dirty-work regions;
+- installed PTY/E2E acceptance, approval-enabled writable mutation, complete
+  MCP execution ordering, and full installed P2/P3 acceptance remain open;
+- the active machine gate remains OPEN and no phase advancement is claimed.
+
+## Cross-Workspace Provider Integration Checkpoint — 2026-09-02
+
+```text
+DATE: 2026-09-02
+PHASE: P2/P3 — GOVERNED EXECUTION INTEGRATION
+SLICE: LBE PROVIDER CATALOG / TUI ADAPTER RECONCILIATION
+STATUS: IMPLEMENTED / LOCALLY PROVEN — LIVE PROVIDER ACCEPTANCE OPEN
+SOURCE WORKSPACE HEAD: 5c3f24ca709b3b554eb24a75de5f787cb693a263
+TUI WORKSPACE HEAD: 4be395a9dba52fa335151184bb84455931cd299b
+BRANCH: main
+```
+
+Migrated from the canonical LBE runtime changes into the Rust client:
+
+- provider-list and session-context decoding now accepts the registered LBE
+  provider identities: `openai`, `openai-native`, `anthropic`, `gemini`,
+  `vertex`, `bedrock`, `ollama`, `lmstudio`/`lm-studio`, `openrouter`,
+  `opencode`, and `openai-compatible`;
+- real provider discovery updates the adapter snapshot before downstream model
+  selection;
+- headless and interactive startup wait for the authoritative
+  `ModelCatalogDiscovered` event before submitting a requested model;
+- no provider transport, backend, credential, or LBE authority was copied into
+  the TUI workspace.
+
+Validation:
+
+- Rust full suite: `202 passed, 0 failed`;
+- all-registered-provider decoder regression: PASS;
+- `cargo check`: PASS;
+- `git diff --check` for the affected Rust files: PASS.
+
+Remaining limitation:
+
+- live authenticated execution for every provider, provider continuation,
+  installed provider/model acceptance, and full installed P2/P3 acceptance
+  remain unproven;
+- the active machine gate remains OPEN.

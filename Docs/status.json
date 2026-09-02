@@ -26,8 +26,8 @@
                                                                      ]
                                                   },
                     "02_model_picker.md":  {
-                                               "notes":  "Rust picker is implemented; LBE provider/model owner and first-run pairing are PASS; live Rust catalog binding remains open.",
-                                               "status":  "IMPLEMENTED / LOCAL",
+                                               "notes":  "Rust picker and catalog-before-selection ordering are implemented; LBE provider/model owner and first-run pairing are PASS; installed live catalog acceptance remains open.",
+                                               "status":  "IMPLEMENTED / LOCAL — CATALOG ORDERING RECONCILED",
                                                "relevance":  "CORE",
                                                "depends_on":  [
 
@@ -58,8 +58,8 @@
                                                                       ]
                                                    },
                     "06_provider_configuration.md":  {
-                                                         "notes":  "LBE provider registry/configuration/health/continuation are accepted; Rust richer editing and live binding remain pending.",
-                                                         "status":  "PARTIAL — LBE PROVIDER LIFECYCLE PASS; RUST UI PARTIAL",
+                                                         "notes":  "LBE provider registry/configuration/health/continuation are accepted; Rust accepts registered provider IDs and waits for authoritative catalog events, while richer editing and installed live binding remain pending.",
+                                                         "status":  "PARTIAL — LBE PROVIDER LIFECYCLE PASS; RUST IDENTITY/CATALOG ADAPTER RECONCILED",
                                                          "relevance":  "CORE",
                                                          "depends_on":  [
 

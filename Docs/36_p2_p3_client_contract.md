@@ -14,6 +14,11 @@ failed statuses remain visible through the existing failure path. Full P2/P3
  diff rendering, and typed receipt/evidence projection are implemented and locally
  tested, but credentialed writable execution is not proven.
 
+The provider/catalog adapter reconciliation is also locally proven: registered LBE
+provider IDs are decoded by the Rust adapter, real discovery updates the adapter
+snapshot, and startup waits for `ModelCatalogDiscovered` before applying a requested
+model. This does not prove live authenticated execution for every provider.
+
 This document defines the smallest TUI-facing contract batch for the active
 `TUI_P2_P3_GOVERNED_EXECUTION_INTEGRATION` slice. It is an adapter contract,
 not a second runtime implementation.
@@ -269,7 +274,7 @@ LBE_WALL_ROOT=C:\Agents-Memory-Tool-v6-integration
 LBE_TARGET_WORKSPACE=C:\LBE-TUI-Lab
 LBE_WALL_DATABASE=C:\Agents-Memory-Tool-v6-integration\state\lbe-runtime.db
 LBE_SESSION_ID=tui-fb2fe3a87da24552910a5b2d8fb45c7d
-LBE_WALL_PYTHON=C:\Python314\python.exe
+LBE_WALL_PYTHON=C:\LBE_RUNTIME_PY312\Scripts\python.exe
 ```
 
 The following focused tests passed after adapting the Rust decoder to the
