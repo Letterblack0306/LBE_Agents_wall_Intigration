@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACTIVE — REAL LBE + CLINE/OPENCODE REUSE INTEGRATION REQUIRED`
+`ACTIVE — RUST/RATATUI CLIENT; REAL LBE + CLINE/OPENCODE REUSE BOUNDARY`
 
 ## Product Relevance
 
@@ -10,8 +10,10 @@ CORE / SEQUENCING
 
 ## Purpose
 
-Define the ordered implementation path for the active Rust/Ratatui client over
-the authoritative Python LBE runtime.
+Define the ordered integration path for the active Rust/Ratatui client over the
+authoritative Python LBE runtime. The separate HTML cockpit in the LBE workspace
+is a reference/coordination surface and does not change this repository's active
+interface or the machine gate.
 
 The Python TUI is retired/reference-only and has no further implementation path.
 The Rust TUI owns interaction and projection contracts only; LBE remains the
@@ -23,7 +25,7 @@ This module is a planning gate, not a feature implementation.
 ## Verified Current State
 
 The current bounded integration state is:
-Rust/Ratatui TUI                  ACTIVE
+Rust/Ratatui TUI                  ACTIVE INTERFACE / CLIENT PROJECTION
 Python TUI                        RETIRED / REFERENCE-ONLY
 LBE Python runtime                AUTHORITATIVE BACKEND / GOVERNANCE
 Real provider/model binding       LBE PASS; Rust projection integration pending
@@ -44,6 +46,12 @@ The current runtime boundary is: Rust/Ratatui routes through `LbeWrapper` and
 renders authoritative projections from the Python LBE runtime. The Rust client
 must not claim or implement independent authorization, execution, validation,
 evidence, receipt, provider, or completion authority.
+
+The HTML LBE cockpit at
+`C:\Agents-Memory-Tool-v6-integration\.ui-preview\agent_cockpit.html` is a
+separate backend-workspace reference/coordination surface. This Rust plan is the
+active interface implementation path for `C:\LBE-TUI-Lab`; neither UI owns LBE
+runtime authority.
 
 ## Non-Negotiable Architecture
 
@@ -399,5 +407,4 @@ It only records the implementation order and gates.
 
 ## Cross-workspace status (2026-08-31)
 
-The LBE workspace has accepted complete-runtime, session/application, governed-tool, external-capability, provider-continuation, and interface-control slices. The remaining Rust work is the live adapter/event projection and installed interactive acceptance; do not add another mock authority. Evidence: C:\Agents-Memory-Tool-v6-integration\docs\acceptance\CURRENT_IMPLEMENTATION_GATE.md:10-36.
-
+The LBE workspace has accepted complete-runtime, session/application, governed-tool, external-capability, provider-continuation, and interface-control slices. The remaining Rust work is configured live adapter/event projection and installed interactive acceptance; do not add another mock authority. Evidence: `C:\Agents-Memory-Tool-v6-integration\docs\acceptance\CURRENT_IMPLEMENTATION_GATE.md:10-36`.

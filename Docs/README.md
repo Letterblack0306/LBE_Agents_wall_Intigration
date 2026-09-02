@@ -4,9 +4,13 @@
 
 This package tracks the LBE terminal frontend as a governed coding-agent CLI/TUI, not only an audit surface. Audit is one mode of the product; the full product scope includes coding, runtime/session, tool/process, evidence/receipt, and external interaction frontends. Start with [`00_integration_alignment.md`](00_integration_alignment.md) for the two-repository ownership boundary, runtime modes, and integration sequence.
 
-Rust/Ratatui is the active interface implementation. The Python TUI direction is
-retired/reference-only and has no further implementation path. The Python LBE
-runtime remains authoritative for governance, providers, authorization,
+Rust/Ratatui is the active interface implementation and client/projection layer
+in this workspace. The HTML cockpit in
+`C:\Agents-Memory-Tool-v6-integration\.ui-preview\agent_cockpit.html` is a
+separate LBE-workspace reference/coordination surface, not a second interface
+authority for this repository. The Python TUI direction is retired/reference-only
+and has no further implementation path. The Python LBE runtime remains authoritative for provider adapters,
+governance, authorization,
 execution, evidence, receipts, validation, and completion truth. The Rust TUI
 must remain a client/projection layer over `LbeWrapper` and LBE.
 
@@ -77,9 +81,11 @@ Modules `17`-`30` cover remaining coding-client surfaces. Build each independent
 Module `31` prevents rebuilding generic coding-agent frontend and runtime capabilities that
 can be adopted, adapted, or wrapped from Cline/OpenCode surfaces. Module `32`
 records the deterministic runtime state-machine foundation. Python terminal UI
-is retired/reference-only; Rust/Ratatui is the active interface. The bounded
-governed read-only path is accepted, and the next work is Rust interactive
-acceptance plus remaining Rust client integration.
+is retired/reference-only; Rust/Ratatui is the active interface/client in this
+workspace. The bounded governed read-only path is accepted, and the next work in
+this workspace is Rust client integration/acceptance without making Rust a
+runtime authority. The separate HTML cockpit remains a reference/coordination
+surface owned by the LBE workspace.
 
 ### D. Real CLI IDE Implementation Plan
 
@@ -167,4 +173,21 @@ panels identify connected data as authoritative LBE projections and retain
 explicit unavailable/read-only language when disconnected. This is a local UI
 projection improvement only; it does not close installed PTY/E2E acceptance,
 approval-enabled mutation, or the full P2/P3 gate. Current local validation is
-the Rust suite (`201 passed`) and `cargo check` PASS.
+the Rust suite (`203 passed`) and `cargo check` PASS.
+
+## Current end-to-end continuation contract (2026-09-02)
+
+The active implementation path is `src/main.rs` → `WrapperClient`/
+`LbeWrapper` → `MockLbeWrapper` or `RealLbeWrapper` → authoritative LBE/Agent
+Wall → typed `LbeEvent`/`LbeSnapshot` → `App` reduction → Ratatui rendering.
+The Rust files `src/app.rs`, `src/events.rs`, `src/requests.rs`, and
+`src/types.rs` are active parts of this path, not leftover parallel
+implementations.
+
+The next sequence is fixed: configured live read-only attachment and
+workspace/provider/event correlation; governed P2/P3 authorization,
+exactly-once execution, validation, receipt/evidence, and completion; MCP
+registration/order/continuation proof; installed PTY/ConPTY acceptance; then
+durable sessions/memory and advanced workspace features. Mock results must not
+be substituted for live proof, and the active gate remains open until each
+claim has matching evidence.

@@ -10,7 +10,7 @@ Update this file only when a module changes.
 | `03_checkpoints_restore.md` | IMPLEMENTED / LOCAL |CORE |- |Rust request/projection is implemented; LBE checkpoint/recovery owners exist; live Rust projection remains unproven. |
 | `04_sessions.md` | IMPLEMENTED / LBE OWNER PASS; RUST ADAPTER PARTIAL |CORE |- |LBE session/application lifecycle is PASS; Rust contracts/projection exist but live service/event integration remains pending. |
 | `05_background_processes.md` | PARTIAL — LBE OWNER EXISTS; RUST PROJECTION LOCALLY TESTED |CORE |- |LBE process/runtime owners exist; Rust process projection now identifies connected authoritative LBE state, while installed live event acceptance remains open. |
-| `06_provider_configuration.md` | PARTIAL — LBE PROVIDER LIFECYCLE PASS; RUST IDENTITY/CATALOG ADAPTER RECONCILED |CORE |- |LBE provider registry/configuration/health/continuation are accepted; Rust accepts registered provider IDs and waits for authoritative catalog events, while richer editing and installed live binding remain pending. |
+| `06_provider_configuration.md` | PARTIAL — LBE PROVIDER-ADAPTER LIFECYCLE PASS; RUST IDENTITY/CATALOG ADAPTER RECONCILED |CORE |- |LBE-owned provider-adapter registry/configuration/health/continuation are accepted; the actual model providers remain external Cline/OpenCode/first-party endpoints. Rust accepts registered provider IDs and waits for authoritative catalog events, while richer editing and installed live binding remain pending. |
 | `07_tools_registry.md` | PARTIAL — LBE R6E PASS; RUST PROJECTION LOCALLY TESTED |CORE |- |LBE ToolRegistry/orchestration/authorization/receipt/continuation are PASS; Rust connected tool projection is locally tested and installed live registry acceptance remains open. |
 | `08_evidence_browser.md` | IMPLEMENTED / LOCAL TESTED — LIVE EVIDENCE ACCEPTANCE OPEN |CORE |07 |LBE EvidenceService is PASS; Rust typed evidence projection and connected-state UI labeling are implemented and tested; installed live evidence acceptance remains open. |
 | `09_receipts_browser.md` | IMPLEMENTED / LOCAL TESTED — LIVE RECEIPT ACCEPTANCE OPEN |CORE |08 |LBE receipt lifecycle is PASS; Rust structured receipt projection, connected-state labeling, and empty-state rendering are implemented and tested; installed live receipt acceptance remains open. |
@@ -45,9 +45,28 @@ Update this file only when a module changes.
 | `documentation_companion_plugin/` | VENDORED ISOLATED PROTOTYPE — NOT WIRED INTO RUNTIME | DOCUMENTATION SUPPORT | 00, 36 |Optional Python companion consumes LBE-owned identifiers/events and renders derived Markdown only when explicitly invoked; it has no runtime, authorization, execution, evidence, receipt, validation, completion, or persistence authority. |
 
 
-## Current LBE workspace reconciliation (2026-08-31)
+## Current LBE workspace reconciliation (2026-09-02)
 
 The LBE workspace is the authority for implemented runtime capabilities. Its current accepted slices include complete runtime/session/application ownership, R6E governed tool orchestration, external capability registration, Cline provider continuation, and interface control/evidence surfaces. Official Cline and pinned OpenCode sources are reuse inputs, not replacement authorities. TUI module status must distinguish LBE OWNER PASS from RUST TUI INTEGRATION PENDING; a local mock or projection does not replace the LBE owner, and an equivalent generic feature must not be recreated without a documented incompatibility or LBE-specific requirement.
+
+## Current end-to-end continuation checkpoint (2026-09-02)
+
+```text
+TUI HEAD = c7af01abcc68390454fa72b0bc5e16801731b7c6
+BRANCH = main
+ORIGIN/MAIN = aligned
+WORKTREES = one primary checkout
+LOCAL BRANCHES = main only
+UNTRACKED PRODUCT FILES = none
+RUST VALIDATION = 203 passed; cargo check PASS
+ACTIVE GATE = TUI_P2_P3_GOVERNED_EXECUTION_INTEGRATION / OPEN
+```
+
+The next minimal action is configured live read-only `RealLbeWrapper` acceptance:
+prove workspace/session identity, provider/model catalog, workspace read/list/
+glob/search, and correlated event projections against the current LBE runtime.
+If the configured fixture is unavailable, classify the slice as `BLOCKED / runtime
+fixture`; do not substitute mock evidence.
 
 ## MCP/BirdEye sequencing checkpoint (2026-09-02)
 
@@ -69,4 +88,4 @@ Backend/integration proof obligations:
 
 The Rust adapter no longer invokes `C:\MCP Local\Letterblack_BirdEye\mcp_server.py` directly for BirdEye queries. It now invokes the existing LBE product command `tool mcp.birdeye.<tool>` with session, workspace, and operation identity. The LBE runtime registers bounded BirdEye capabilities behind its existing `ToolRegistry` and `GovernedToolOrchestrator`, preserving authorization-before-handler execution, receipt generation, evidence projection, and operation-id idempotency ownership in LBE.
 
-Validation: LBE focused external-capability/product/orchestration tests `75 passed`; Rust full suite `205 passed`; Rust `cargo check` passed; Python compilation passed. `cargo fmt -- --check` remains failed because of existing formatting differences in unrelated working-tree changes. The installed live MCP proof gate remains open: the configured live registry/runtime fixture was unavailable, so BirdEye registration in the installed registry, DENY-zero, ALLOW-exactly-one, persisted event ordering, provider continuation, and installed Rust/TUI acceptance are not claimed complete.
+Validation: LBE focused external-capability/product/orchestration tests `75 passed`; Rust full suite `203 passed`; Rust `cargo check` passed; Python compilation passed. `cargo fmt -- --check` remains failed because of existing formatting differences in unrelated working-tree changes. The installed live MCP proof gate remains open: the configured live registry/runtime fixture was unavailable, so BirdEye registration in the installed registry, DENY-zero, ALLOW-exactly-one, persisted event ordering, provider continuation, and installed Rust/TUI acceptance are not claimed complete.

@@ -714,3 +714,80 @@ Remaining limitation:
   installed provider/model acceptance, and full installed P2/P3 acceptance
   remain unproven;
 - the active machine gate remains OPEN.
+
+## Current End-to-End Continuation Contract — 2026-09-02
+
+```text
+REPOSITORY: Letterblack0306/LBE_Agents_wall_Intigration
+WORKSPACE: C:\LBE-TUI-Lab
+BRANCH: main
+HEAD: c7af01abcc68390454fa72b0bc5e16801731b7c6
+ORIGIN/MAIN: c7af01abcc68390454fa72b0bc5e16801731b7c6
+WORKTREES: one primary checkout only
+LOCAL BRANCHES: main only
+UNTRACKED PRODUCT FILES: none
+GENERATED BUILD OUTPUT: removed / do not commit
+```
+
+### Active runtime path
+
+```text
+src/main.rs
+  -> WrapperClient / LbeWrapper
+  -> MockLbeWrapper or RealLbeWrapper
+  -> authoritative LBE runtime / Agent Wall
+  -> typed LbeEvent and LbeSnapshot
+  -> App state reduction
+  -> src/ui.rs Ratatui projection
+```
+
+`src/app.rs`, `src/events.rs`, `src/requests.rs`, and `src/types.rs` are active
+parts of this path. They are not leftovers or parallel runtimes.
+
+### Current evidence classification
+
+- `PROVEN`: deterministic wrapper lifecycle/state-machine behavior; local typed
+  request/event/snapshot contracts; provider identity decoding; provider
+  catalog-before-selection ordering; workspace read/list/glob/search decoding;
+  connected-state UI projection; terminal compatibility helpers; compact and
+  minimum-size rendering; headless routing contract.
+- `IMPLEMENTED / LOCALLY PROVEN`: Rust provider, MCP, tools, processes,
+  evidence, receipts, authorization, patch-review, and workspace projections.
+- `NOT PROVEN`: installed PTY/ConPTY lifecycle; complete live provider/model
+  acceptance; approval-enabled writable mutation; full MCP DENY-zero/
+  ALLOW-exactly-one and persisted ordering; provider continuation through the
+  installed client; durable Rust session/memory integration.
+
+### Single dependency-ordered continuation sequence
+
+1. **Repository baseline** — keep only the primary `main` checkout; run
+   identity/worktree/status checks before each slice.
+2. **Rust static/regression gate** — run `cargo check`, `cargo test`, and
+   affected-file `git diff --check`; do not advance on failure.
+3. **Configured live read-only gate** — attach `RealLbeWrapper` and prove
+   workspace identity, session identity, provider/model catalog, workspace
+   read/list/glob/search, and correlated event projection against the current
+   LBE runtime.
+4. **Governed P2/P3 gate** — prove authorization-before-execution, denied
+   zero-execution, allowed exactly-once execution, validation ordering,
+   receipt/evidence correlation, patch review, and completion through the
+   LBE-owned path. Do not implement policy in Rust.
+5. **MCP gate** — prove registered capability discovery, unregistered rejection,
+   authorization ordering, DENY-zero, ALLOW-exactly-one, persisted event order,
+   and provider continuation. The TUI only consumes LBE projections.
+6. **Installed interactive gate** — run PTY/ConPTY acceptance for startup,
+   resize, panels, approval/rejection, reconnect, clean quit, terminal restore,
+   and `/mcp`; record environment blockers precisely.
+7. **Durability gate** — integrate live session resume, memory/context,
+   checkpoints, evidence/receipt history, and recovery only after the governed
+   single-agent path passes.
+8. **Advanced product slices** — activate artifacts, subagents, teams,
+   connectors, schedules, and advanced UX only after steps 3–7 pass.
+
+### Next minimal action
+
+The next action is step 3: run the configured live read-only `RealLbeWrapper`
+acceptance with the current LBE runtime and record the exact session/workspace,
+provider catalog, workspace-operation, and event-correlation evidence. If the
+fixture is unavailable, record `BLOCKED / runtime fixture` and do not substitute
+mock evidence for live proof.

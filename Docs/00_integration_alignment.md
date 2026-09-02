@@ -205,7 +205,7 @@ The approved reuse direction is:
 ```text
 Cline / OpenCode provider and agent-loop mechanics
         -> LBE-owned provider adapter
-        -> LBE provider registry and runtime contracts
+        -> LBE-owned provider-adapter registry and runtime contracts
         -> LBE authorization / session / receipt / evidence / completion authority
         -> C:\LBE-TUI-Lab real bridge
         -> provider picker and visible runtime projection

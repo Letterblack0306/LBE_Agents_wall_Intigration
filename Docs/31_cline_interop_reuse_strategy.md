@@ -88,7 +88,7 @@ canonical LBE authorities.
 | Capability | Existing source to reuse/adapt | LBE owner that must remain authoritative | TUI work allowed |
 |---|---|---|---|
 | Agent loop, streaming, continuation, abort | Cline `AgentRuntime`; OpenCode agent/session mechanics | LBE provider-turn, session, completion, and cancellation owners | Adapter/event projection only |
-| Providers and models | Cline provider/SDK gateway; OpenCode multi-provider surface | LBE provider registry, capability, health, and credential policy | Configuration/projection adapter only |
+| Providers and models | Cline provider/SDK gateway; OpenCode multi-provider surface | LBE-owned provider-adapter registry, capability, health, and credential policy | Configuration/projection adapter only |
 | Sessions and history | Cline session/history flows; OpenCode multi-session | LBE `LbeSessionService`, memory, and persistence owners | Client navigation/projection only |
 | Tools, approvals, permissions | Cline tool policies/approval UX; OpenCode plan/build permission patterns | LBE R6C/R6E authorization and governed dispatcher | Approval presentation/request mapping only |
 | MCP, plugins, external capabilities | Cline MCP/plugin surfaces; OpenCode extension patterns | LBE external-capability registration and `ToolRegistry` | Registry/projection adapter only |
@@ -102,7 +102,9 @@ canonical LBE authorities.
 - [x] Decide reuse/adapt/wrap/native classification per capability family against pinned revision `dc4449d`.
 - [x] Define the interoperability boundary between Cline/OpenCode mechanics and LBE runtime authority.
 - [x] Implement and validate the LBE contract adapter that prevents direct execution bypass.
-- [ ] Record implementation evidence for every capability intentionally rebuilt instead of reused.
+- [x] Record implementation evidence for the bounded provider/tool/continuation
+      adapter in the canonical LBE reuse-boundary audit and focused bridge
+      regression. No native Cline/OpenCode authority was copied.
 
 ## Acceptance
 - [x] Each Module 17-30 has a reuse/native classification before implementation.
