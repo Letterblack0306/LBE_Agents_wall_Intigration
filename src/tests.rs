@@ -3743,10 +3743,11 @@ fn real_wrapper_workspace_patch_projects_approval_then_receipt_and_evidence() {
             _ => None,
         })
         .expect("workspace.patch must require exact Agent Wall approval");
-    assert!(!proposal_events.iter().any(|event| matches!(
-        event,
-        LbeEvent::ToolCompleted { .. }
-    )));
+    assert!(
+        !proposal_events
+            .iter()
+            .any(|event| matches!(event, LbeEvent::ToolCompleted { .. }))
+    );
 
     wrapper
         .submit(
