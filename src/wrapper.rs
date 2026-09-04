@@ -2892,10 +2892,10 @@ impl RealLbeWrapper {
             .clone()
             .ok_or_else(|| LbeError::new("authoritative workspace identity is unavailable"))?;
         let session_id = format!("tui-{}", next_real_operation_ordinal());
-        let mode = match self.snapshot.active_mode {
-            AgentMode::Regular => "coding",
-            AgentMode::Audit => "audit",
-            AgentMode::Plan => "investigation",
+        let (mode, permission, runtime_policy) = match self.snapshot.active_mode {
+            AgentMode::Regular => ("coding", "write_allowed", "development"),
+            AgentMode::Audit => ("audit", "audit_only", "audit"),
+            AgentMode::Plan => ("investigation", "read_only", "audit"),
         };
         let python = std::env::var_os("LBE_WALL_PYTHON")
             .map(PathBuf::from)
@@ -2922,9 +2922,9 @@ impl RealLbeWrapper {
                 "--mode",
                 mode,
                 "--permission",
-                "read_only",
+                permission,
                 "--runtime-policy",
-                "audit",
+                runtime_policy,
             ])
             .output()
             .map_err(|error| LbeError::new(format!("session creation failed: {error}")))?;
