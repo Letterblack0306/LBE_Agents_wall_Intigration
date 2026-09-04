@@ -18,7 +18,10 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthChar;
 
-use crate::{app::{App, command_palette_commands}, types::*};
+use crate::{
+    app::{App, command_palette_commands},
+    types::*,
+};
 
 pub(crate) type AppTerminal = Terminal<TerminaBackend<PlatformTerminal>>;
 
@@ -45,7 +48,7 @@ pub(crate) fn init_terminal() -> io::Result<(AppTerminal, EventReader)> {
             output,
             "{}{}",
             alternate_screen(false),
-            cursor_visible(true)
+            terminal_cursor_visible(true)
         );
         let _ = output.flush();
     });
@@ -54,7 +57,7 @@ pub(crate) fn init_terminal() -> io::Result<(AppTerminal, EventReader)> {
         output,
         "{}{}",
         alternate_screen(true),
-        cursor_visible(false)
+        terminal_cursor_visible(false)
     )?;
     output.flush()?;
     let events = output.event_reader();
@@ -68,7 +71,11 @@ pub(crate) fn restore_terminal(terminal: &mut AppTerminal) -> io::Result<()> {
 }
 
 pub(crate) fn terminal_restore_sequence() -> String {
-    format!("{}{}", alternate_screen(false), cursor_visible(true))
+    format!(
+        "{}{}",
+        alternate_screen(false),
+        terminal_cursor_visible(true)
+    )
 }
 
 fn alternate_screen(enabled: bool) -> Csi {
@@ -80,7 +87,7 @@ fn alternate_screen(enabled: bool) -> Csi {
     }
 }
 
-fn cursor_visible(visible: bool) -> Csi {
+fn terminal_cursor_visible(visible: bool) -> Csi {
     let mode = DecPrivateMode::Code(DecPrivateModeCode::ShowCursor);
     if visible {
         Csi::Mode(Mode::SetDecPrivateMode(mode))
@@ -90,6 +97,10 @@ fn cursor_visible(visible: bool) -> Csi {
 }
 
 pub(crate) fn draw(frame: &mut Frame, app: &App) {
+    draw_at(frame, app, Duration::from_secs(2));
+}
+
+pub(crate) fn draw_at(frame: &mut Frame, app: &App, elapsed: Duration) {
     let area = frame.area();
     frame.render_widget(
         Block::default().style(Style::default().bg(PALETTE.bg)),
@@ -117,7 +128,8 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
     // Below the comfortable desktop breakpoint, remove decorative chrome and
     // give the transcript the space. The declared 60-column floor is useful
     // only if it has a compact, single-pane presentation.
-    let compact = area.width < 72 || area.height < 20;
+    let safe_area = area.inner(Margin::new(if area.width < 72 { 1 } else { 2 }, 1));
+    let compact = safe_area.width < 72 || safe_area.height < 20;
     if compact {
         let sections = Layout::vertical([
             Constraint::Length(2),
@@ -126,11 +138,11 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
             Constraint::Length(2),
             Constraint::Length(1),
         ])
-        .split(area);
+        .split(safe_area);
         draw_chrome(frame, sections[0]);
         draw_header(frame, sections[1], app);
         draw_body(frame, sections[2], app);
-        draw_composer(frame, sections[3], app);
+        draw_composer(frame, sections[3], app, elapsed);
         draw_footer(frame, sections[4], app);
     } else {
         let sections = Layout::vertical([
@@ -140,11 +152,11 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
             Constraint::Length(3),
             Constraint::Length(2),
         ])
-        .split(area);
+        .split(safe_area);
         draw_chrome(frame, sections[0]);
         draw_header(frame, sections[1], app);
         draw_body(frame, sections[2], app);
-        draw_composer(frame, sections[3], app);
+        draw_composer(frame, sections[3], app, elapsed);
         draw_footer(frame, sections[4], app);
     }
     if no_color_enabled() {
@@ -155,31 +167,27 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
 }
 
 pub(crate) fn draw_chrome(frame: &mut Frame, area: Rect) {
-    let logo = Text::from(vec![
-        Line::from(Span::styled(
-            display_token("  ╭─╮ ╭─╮ ╭─╮", "  +-+ +-+ +-+", ascii_mode_enabled()),
-            Style::default()
-                .fg(PALETTE.red)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            display_token(
-                "  │L│ │B│ │E│  ·  terminal",
-                "  |L| |B| |E|  -  terminal",
-                ascii_mode_enabled(),
-            ),
-            Style::default().fg(PALETTE.faint),
-        )),
-    ]);
     frame.render_widget(
-        Paragraph::new(logo).style(Style::default().bg(Color::Rgb(10, 12, 15))),
+        Block::default().style(Style::default().bg(Color::Rgb(10, 12, 15))),
         area,
     );
 }
 
 pub(crate) fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
     let connection = app.snapshot.connection;
-    let line = Line::from(vec![
+    let connection_label = if connection == RuntimeConnection::Connected {
+        " LIVE "
+    } else {
+        " PREVIEW "
+    };
+    let connection_style = Style::default()
+        .fg(PALETTE.bg)
+        .bg(connection.color())
+        .add_modifier(Modifier::BOLD);
+    let inner = area.inner(Margin::new(if area.width < 72 { 1 } else { 2 }, 0));
+    let header_columns =
+        Layout::horizontal([Constraint::Length(18), Constraint::Min(1)]).split(inner);
+    let brand = Line::from(vec![
         Span::styled(
             "LETTER",
             Style::default()
@@ -198,38 +206,114 @@ pub(crate) fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
                 .fg(PALETTE.ink)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            truncate_text(
-                &format!(
-                    " · {} {} · {}",
-                    connection.marker(),
-                    connection.label(),
-                    if connection == RuntimeConnection::Connected {
-                        "AGENT WALL"
-                    } else {
-                        "UI CONTRACT PREVIEW"
-                    }
-                ),
-                area.width.saturating_sub(16) as usize,
-            ),
-            Style::default().fg(connection.color()),
-        ),
     ]);
     frame.render_widget(
-        Paragraph::new(line).style(Style::default().bg(PALETTE.bg)),
-        area,
+        Paragraph::new(brand).style(Style::default().bg(PALETTE.bg)),
+        header_columns[0],
+    );
+    let status = format!(
+        "{} {} · {} · {}{}",
+        connection.marker(),
+        connection.label(),
+        if connection == RuntimeConnection::Connected {
+            "AGENT WALL"
+        } else {
+            "UI CONTRACT PREVIEW"
+        },
+        app.agent_mode.label(),
+        connection_label,
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                truncate_text(
+                    &status,
+                    header_columns[1]
+                        .width
+                        .saturating_sub(connection_label.len() as u16) as usize,
+                ),
+                Style::default().fg(connection.color()),
+            ),
+            Span::styled(connection_label, connection_style),
+        ]))
+        .style(Style::default().bg(PALETTE.bg))
+        .alignment(Alignment::Right),
+        header_columns[1],
     );
 }
 
 pub(crate) fn draw_body(frame: &mut Frame, area: Rect, app: &App) {
-    if app.workspace_listing.is_some() && area.width >= 80 {
+    if area.width >= 112 {
         let columns = Layout::horizontal([Constraint::Length(28), Constraint::Min(1)]).split(area);
-        draw_workspace_sidebar(frame, columns[0], app);
+        draw_navigation_sidebar(frame, columns[0], app);
         draw_main_body(frame, columns[1], app, true);
         return;
     }
 
     draw_main_body(frame, area, app, false);
+}
+
+fn draw_navigation_sidebar(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::RIGHT)
+        .border_style(Style::default().fg(PALETTE.line))
+        .style(Style::default().bg(PALETTE.bg));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let session = app.snapshot.session_id.as_deref().unwrap_or("not attached");
+    let workspace = if app.snapshot.workspace_label.is_empty() {
+        "not attached"
+    } else {
+        app.snapshot.workspace_label.as_str()
+    };
+    let mut lines = vec![
+        Line::from(Span::styled(
+            "WORKSPACE",
+            Style::default()
+                .fg(PALETTE.amber)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled(
+            truncate_text(workspace, inner.width as usize),
+            Style::default().fg(PALETTE.faint),
+        )),
+        Line::default(),
+        Line::from(Span::styled(
+            "CURRENT SESSION",
+            Style::default().fg(PALETTE.muted),
+        )),
+        Line::from(Span::styled(
+            truncate_text(session, inner.width as usize),
+            Style::default().fg(PALETTE.ink),
+        )),
+        Line::from(Span::styled(
+            truncate_text(
+                &format!(
+                    "{} · {}",
+                    app.snapshot.session_state.label(),
+                    app.agent_mode.label()
+                ),
+                inner.width as usize,
+            ),
+            Style::default().fg(app.snapshot.connection.color()),
+        )),
+        Line::default(),
+    ];
+    let runtime_status = if app.snapshot.connection == RuntimeConnection::Connected {
+        "LIVE · authoritative runtime attached"
+    } else {
+        "PREVIEW · no runtime attached"
+    };
+    lines.push(Line::from(Span::styled(
+        truncate_text(runtime_status, inner.width as usize),
+        Style::default().fg(app.snapshot.connection.color()),
+    )));
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        truncate_text("Tab mode · F2 provider · F3 model", inner.width as usize),
+        Style::default().fg(PALETTE.faint),
+    )));
+    frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
 
 fn draw_workspace_sidebar(frame: &mut Frame, area: Rect, app: &App) {
@@ -313,6 +397,14 @@ fn draw_workspace_sidebar(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_main_body(frame: &mut Frame, area: Rect, app: &App, split_layout: bool) {
+    let welcome = app.transcript.is_empty()
+        && app.panel.is_none()
+        && app.workspace_patch.is_none()
+        && app.workspace_file.is_none()
+        && app.workspace_listing.is_none()
+        && !app.show_shortcuts
+        && !app.show_command_palette
+        && app.agent_mode != AgentMode::Audit;
     let content = if split_layout
         && app.panel.is_none()
         && app.workspace_patch.is_none()
@@ -351,12 +443,25 @@ fn draw_main_body(frame: &mut Frame, area: Rect, app: &App, split_layout: bool) 
         app.audit_scroll.min(u16::MAX as usize) as u16
     } else if app.workspace_file.is_some() || app.workspace_listing.is_some() {
         0
+    } else if app.transcript.is_empty()
+        && app.panel.is_none()
+        && app.workspace_patch.is_none()
+        && app.workspace_file.is_none()
+        && app.workspace_listing.is_none()
+        && !app.show_shortcuts
+        && !app.show_command_palette
+    {
+        0
     } else {
         transcript_scroll_offset(&content, app.transcript_scroll, area.height)
     };
     frame.render_widget(
         Paragraph::new(content)
-            .alignment(Alignment::Left)
+            .alignment(if welcome {
+                Alignment::Center
+            } else {
+                Alignment::Left
+            })
             .style(Style::default().fg(PALETTE.ink).bg(PALETTE.bg))
             .wrap(Wrap { trim: true })
             .scroll((scroll, 0)),
@@ -542,15 +647,20 @@ fn workspace_listing_text(listing: &WorkspaceListing) -> Text<'static> {
     Text::from(lines)
 }
 
-pub(crate) fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
+pub(crate) fn draw_composer(frame: &mut Frame, area: Rect, app: &App, elapsed: Duration) {
+    let cursor = if input_cursor_visible(elapsed) {
+        "|"
+    } else {
+        " "
+    };
     let composer_text = match &app.phase {
         Phase::AwaitingApproval { proposal, .. } => {
             format!("> {proposal} · Enter approve · Esc reject")
         }
-        Phase::Running => "> Execution in progress…".to_owned(),
-        Phase::Interrupted => "> Execution interrupted; runtime truth unresolved…".to_owned(),
-        _ if app.input.is_empty() => format!("> {}", mode_placeholder(app.agent_mode)),
-        _ => format!("> {}", app.input),
+        Phase::Running => format!("> Execution in progress {cursor}"),
+        Phase::Interrupted => format!("> Execution interrupted; runtime truth unresolved {cursor}"),
+        _ if app.input.is_empty() => format!("> {} {cursor}", mode_placeholder(app.agent_mode)),
+        _ => format!("> {}{cursor}", app.input),
     };
 
     let composer_style = if matches!(app.phase, Phase::Running | Phase::Interrupted) {
@@ -614,27 +724,39 @@ pub(crate) fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
     };
 
     let top = Layout::horizontal([
-        Constraint::Percentage(20),
-        Constraint::Percentage(60),
-        Constraint::Percentage(20),
+        Constraint::Length(16),
+        Constraint::Min(1),
+        Constraint::Length(16),
     ])
     .split(rows[0]);
 
     frame.render_widget(
-        Paragraph::new(shortcut_label)
+        Paragraph::new(truncate_text(shortcut_label, top[0].width as usize))
             .style(Style::default().fg(PALETTE.faint).bg(PALETTE.bg))
             .alignment(Alignment::Left),
         top[0],
     );
 
-    let mode_line = Line::from(vec![
-        mode_indicator("Lbe Audit", app.agent_mode == AgentMode::Audit),
-        Span::styled("/", Style::default().fg(PALETTE.faint)),
-        mode_indicator("Runtime", app.agent_mode == AgentMode::Regular),
-        Span::styled("/", Style::default().fg(PALETTE.faint)),
-        mode_indicator("Plan", app.agent_mode == AgentMode::Plan),
-        Span::styled(" (Tab)", Style::default().fg(PALETTE.faint)),
-    ]);
+    let mode_line = if top[1].width < 40 {
+        Line::from(Span::styled(
+            truncate_text(
+                &format!("Mode: {} (Tab)", app.agent_mode.label()),
+                top[1].width as usize,
+            ),
+            Style::default()
+                .fg(PALETTE.ink)
+                .add_modifier(Modifier::BOLD),
+        ))
+    } else {
+        Line::from(vec![
+            mode_indicator("Lbe Audit", app.agent_mode == AgentMode::Audit),
+            Span::styled("/", Style::default().fg(PALETTE.faint)),
+            mode_indicator("Runtime", app.agent_mode == AgentMode::Regular),
+            Span::styled("/", Style::default().fg(PALETTE.faint)),
+            mode_indicator("Plan", app.agent_mode == AgentMode::Plan),
+            Span::styled(" (Tab)", Style::default().fg(PALETTE.faint)),
+        ])
+    };
     frame.render_widget(
         Paragraph::new(mode_line)
             .style(Style::default().bg(PALETTE.bg))
@@ -791,7 +913,10 @@ fn command_palette_text(app: &App) -> Text<'static> {
                 Style::default().fg(PALETTE.ink)
             };
             Line::from(Span::styled(
-                format!("{} {command:<12} · {description}", if selected { "▸" } else { " " }),
+                format!(
+                    "{} {command:<12} · {description}",
+                    if selected { "▸" } else { " " }
+                ),
                 style,
             ))
         },
@@ -821,7 +946,10 @@ fn audit_text(app: &App) -> Text<'static> {
     );
     lines.push(Line::from(vec![
         Span::styled("Runtime   ", Style::default().fg(PALETTE.faint)),
-        Span::styled(runtime, Style::default().fg(app.snapshot.connection.color())),
+        Span::styled(
+            runtime,
+            Style::default().fg(app.snapshot.connection.color()),
+        ),
     ]));
     lines.push(Line::from(vec![
         Span::styled("Workspace  ", Style::default().fg(PALETTE.faint)),
@@ -829,7 +957,10 @@ fn audit_text(app: &App) -> Text<'static> {
             format!(
                 "{} · {}",
                 app.snapshot.workspace_label,
-                app.snapshot.workspace_id.as_deref().unwrap_or("not attached")
+                app.snapshot
+                    .workspace_id
+                    .as_deref()
+                    .unwrap_or("not attached")
             ),
             Style::default().fg(PALETTE.ink),
         ),
@@ -870,9 +1001,7 @@ fn audit_text(app: &App) -> Text<'static> {
         .filter(|check| check.status == DiagnosticStatus::Fail)
         .count();
     lines.push(Line::from(Span::styled(
-        format!(
-            "CHECKS    pass {pass_count} · warning {warning_count} · fail {fail_count}",
-        ),
+        format!("CHECKS    pass {pass_count} · warning {warning_count} · fail {fail_count}",),
         Style::default().fg(if fail_count > 0 {
             PALETTE.red
         } else if warning_count > 0 {
@@ -1465,26 +1594,36 @@ pub(crate) fn mock_panel_text_for_app(panel: MockPanel, app: &App) -> Text<'stat
                 Style::default().fg(PALETTE.amber),
             )));
             lines.push(Line::default());
-            lines.extend(app.snapshot.sessions.iter().enumerate().map(|(index, session)| {
-                let marker = if index == app.session_picker_index { "[>]" } else { "[ ]" };
-                let style = if index == app.session_picker_index {
-                    Style::default()
-                        .fg(PALETTE.bg)
-                        .bg(PALETTE.amber)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(PALETTE.ink)
-                };
-                Line::from(Span::styled(
-                    format!(
-                        "{marker} {} · {} · parent {}",
-                        session.session_id,
-                        session.status.label(),
-                        session.parent_session_id.as_deref().unwrap_or("none")
-                    ),
-                    style,
-                ))
-            }));
+            lines.extend(
+                app.snapshot
+                    .sessions
+                    .iter()
+                    .enumerate()
+                    .map(|(index, session)| {
+                        let marker = if index == app.session_picker_index {
+                            "[>]"
+                        } else {
+                            "[ ]"
+                        };
+                        let style = if index == app.session_picker_index {
+                            Style::default()
+                                .fg(PALETTE.bg)
+                                .bg(PALETTE.amber)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(PALETTE.ink)
+                        };
+                        Line::from(Span::styled(
+                            format!(
+                                "{marker} {} · {} · parent {}",
+                                session.session_id,
+                                session.status.label(),
+                                session.parent_session_id.as_deref().unwrap_or("none")
+                            ),
+                            style,
+                        ))
+                    }),
+            );
             Text::from(lines)
         }
         MockPanel::Account => {
@@ -1869,28 +2008,38 @@ fn provider_panel_text(app: &App) -> Text<'static> {
             Style::default().fg(PALETTE.muted),
         )));
     } else {
-        lines.extend(app.snapshot.providers.iter().enumerate().map(|(index, provider)| {
-            let local = if provider.is_local { " · LOCAL" } else { "" };
-            let marker = if index == app.provider_picker_index { "[>]" } else { "[ ]" };
-            let style = if index == app.provider_picker_index {
-                Style::default()
-                    .fg(PALETTE.bg)
-                    .bg(PALETTE.amber)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(PALETTE.ink)
-            };
-            Line::from(Span::styled(
-                format!(
-                    "{marker} {}  {} · {}{}",
-                    provider.provider_id.label(),
-                    provider.auth_state.label(),
-                    provider.health.label(),
-                    local
-                ),
-                style,
-            ))
-        }));
+        lines.extend(
+            app.snapshot
+                .providers
+                .iter()
+                .enumerate()
+                .map(|(index, provider)| {
+                    let local = if provider.is_local { " · LOCAL" } else { "" };
+                    let marker = if index == app.provider_picker_index {
+                        "[>]"
+                    } else {
+                        "[ ]"
+                    };
+                    let style = if index == app.provider_picker_index {
+                        Style::default()
+                            .fg(PALETTE.bg)
+                            .bg(PALETTE.amber)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(PALETTE.ink)
+                    };
+                    Line::from(Span::styled(
+                        format!(
+                            "{marker} {}  {} · {}{}",
+                            provider.provider_id.label(),
+                            provider.auth_state.label(),
+                            provider.health.label(),
+                            local
+                        ),
+                        style,
+                    ))
+                }),
+        );
     }
     Text::from(lines)
 }
@@ -2019,8 +2168,11 @@ fn capability_marker(enabled: bool) -> &'static str {
 }
 
 fn welcome_text(available_height: u16, app: &App) -> Text<'static> {
-    let mut lines = logo_lines(BAR_REVEAL);
-    lines.push(Line::default());
+    let mut lines = if available_height >= 22 {
+        logo_lines(Duration::from_secs(2))
+    } else {
+        minimal_logo_lines()
+    };
     lines.push(Line::from(Span::styled(
         "What can I do for you?",
         Style::default()
@@ -2036,7 +2188,6 @@ fn welcome_text(available_height: u16, app: &App) -> Text<'static> {
                 .add_modifier(Modifier::BOLD),
         ),
     ]));
-    lines.push(Line::default());
     let provider = app
         .snapshot
         .selected_model
@@ -2103,12 +2254,14 @@ fn welcome_text(available_height: u16, app: &App) -> Text<'static> {
             ),
         ]));
     } else {
-        lines.push(Line::from(Span::styled(
-            "Activity  idle · waiting for your request",
-            Style::default().fg(PALETTE.faint),
-        )));
+        lines.push(Line::from(vec![
+            Span::styled("Activity  ", Style::default().fg(PALETTE.faint)),
+            Span::styled(
+                "idle · waiting for your request",
+                Style::default().fg(PALETTE.faint),
+            ),
+        ]));
     }
-    lines.push(Line::default());
     lines.push(Line::from(Span::styled(
         "/provider select provider   /model select model   /help shortcuts",
         Style::default().fg(PALETTE.muted),
@@ -2140,19 +2293,25 @@ fn logo_lines(elapsed: Duration) -> Vec<Line<'static>> {
         .map(|(row, line)| {
             let mut spans = Vec::new();
             let mut segment = String::new();
-            let mut active_style = Style::default().fg(PALETTE.logo_outer);
-
+            let mut active_style = Style::default().fg(PALETTE.bg);
             for (column, character) in line.chars().enumerate() {
-                let style = if logo_cell_visible(row, column, elapsed) {
-                    logo_cell_style(row, column)
+                let visible = elapsed >= OUTER_REVEAL;
+                let center_bar =
+                    (5..=11).contains(&row) && column == 19 && center_bar_visible(elapsed);
+                let (display, style) = if !visible || (character == ' ' && !center_bar) {
+                    (' ', Style::default().fg(PALETTE.bg))
+                } else if character == '#' {
+                    ('█', Style::default().fg(PALETTE.red))
+                } else if character == '*' {
+                    ('█', logo_cell_style(row, column))
                 } else {
-                    Style::default().fg(PALETTE.bg)
+                    ('█', Style::default().fg(PALETTE.logo_outer))
                 };
                 if style != active_style && !segment.is_empty() {
                     spans.push(Span::styled(std::mem::take(&mut segment), active_style));
                     active_style = style;
                 }
-                segment.push(character);
+                segment.push(display);
             }
             if !segment.is_empty() {
                 spans.push(Span::styled(segment, active_style));
@@ -2162,9 +2321,27 @@ fn logo_lines(elapsed: Duration) -> Vec<Line<'static>> {
         .collect()
 }
 
+pub(crate) fn input_cursor_visible(elapsed: Duration) -> bool {
+    (elapsed.as_millis() / TYPE_CURSOR_HALF_PERIOD.as_millis()) % 2 == 0
+}
+
+fn minimal_logo_lines() -> Vec<Line<'static>> {
+    MINIMAL_LOGO
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                (*line).to_owned(),
+                Style::default()
+                    .fg(PALETTE.red)
+                    .add_modifier(Modifier::BOLD),
+            ))
+        })
+        .collect()
+}
+
 pub(crate) fn logo_cell_visible(row: usize, column: usize, elapsed: Duration) -> bool {
     let outer =
-        row == 0 || row == 16 || ((1..=15).contains(&row) && matches!(column, 0 | 1 | 37 | 38));
+        row == 0 || row == 16 || ((1..=15).contains(&row) && matches!(column, 0 | 1 | 39 | 40));
     let inner_frame = (matches!(row, 2 | 14) && (5..=33).contains(&column))
         || ((3..=13).contains(&row) && matches!(column, 5 | 33));
     let brackets = (matches!(row, 4 | 12)
