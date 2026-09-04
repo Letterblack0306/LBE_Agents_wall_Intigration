@@ -1707,6 +1707,7 @@ fn allowed_patch_submits_the_retained_payload_exactly_once() {
     ));
     assert!(app.pending_patch.is_none());
     assert_eq!(app.phase, Phase::Running);
+    assert_eq!(app.active_execution_id.as_deref(), Some("exec_op-patch"));
 }
 
 #[test]
