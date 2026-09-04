@@ -2921,11 +2921,12 @@ fn welcome_frame_renders_the_supplied_logo_at_80_by_24() {
     assert!(rendered.contains("○ MOCK / NOT CONNECTED"));
     assert!(rendered.contains("UI CONTRACT PREVIEW"));
     assert!(!rendered.contains("runtime connected"));
-    assert!(rendered.contains("███████████████████████████████████████"));
+    assert!(rendered.contains("_____________"));
+    assert!(rendered.contains("|  __   __  |"));
     assert!(rendered.contains("? for shortcuts"));
     assert!(rendered.contains("Runtime"));
     assert!(rendered.contains("C:\\Users\\"));
-    assert!(rendered.contains("Workspace C:\\Users\\"));
+    assert!(rendered.contains("Workspace"));
     assert!(rendered.contains("Session   sess_mock_7f31"));
     assert!(rendered.contains("Policy    MOCK / NOT CONNECTED · read-only UI contract"));
     assert!(rendered.contains("Model ID· low"));
@@ -2956,9 +2957,17 @@ fn audit_mode_renders_a_real_read_only_projection_screen() {
     assert!(rendered.contains("authorization required for mutation"));
     assert!(rendered.contains("Grouped findings"));
     assert!(rendered.contains("VERDICT   not yet projected by LBE"));
-    app.handle_key(KeyCode::PageDown.into(), &mut RecordingWrapper::new(), Instant::now());
+    app.handle_key(
+        KeyCode::PageDown.into(),
+        &mut RecordingWrapper::new(),
+        Instant::now(),
+    );
     assert_eq!(app.audit_scroll, 10);
-    app.handle_key(KeyCode::Home.into(), &mut RecordingWrapper::new(), Instant::now());
+    app.handle_key(
+        KeyCode::Home.into(),
+        &mut RecordingWrapper::new(),
+        Instant::now(),
+    );
     assert_eq!(app.audit_scroll, 0);
 }
 
@@ -3150,7 +3159,6 @@ fn command_palette_runs_existing_lbe_commands() {
     assert!(app.show_command_palette);
     app.handle_key(KeyCode::Down.into(), &mut wrapper, now);
     app.handle_key(KeyCode::Enter.into(), &mut wrapper, now);
-
     assert_eq!(app.panel, Some(MockPanel::Model));
     assert_eq!(wrapper.requests, vec![UserRequest::RefreshProviderCatalog]);
 }
@@ -3160,7 +3168,15 @@ fn supplied_logo_keeps_its_fixed_geometry() {
     assert_eq!(LOGO.len(), 17);
     assert!(LOGO.iter().all(|line| line.chars().count() == 39));
     assert_eq!(LOGO[0], "███████████████████████████████████████");
-    assert_eq!(LOGO[4], "██   █   ████████     ████████   █   ██");
+    assert_eq!(LOGO[2], "██   #############################   ██");
+    assert_eq!(LOGO[4], "██   #   ********     ********   #   ██");
+}
+
+#[test]
+fn composer_cursor_blinks_at_the_reference_interval() {
+    assert!(input_cursor_visible(Duration::ZERO));
+    assert!(!input_cursor_visible(TYPE_CURSOR_HALF_PERIOD));
+    assert!(input_cursor_visible(TYPE_CURSOR_HALF_PERIOD * 2));
 }
 
 #[test]
