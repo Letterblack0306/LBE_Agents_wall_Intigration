@@ -10,6 +10,32 @@ use crate::{
     wrapper::LbeWrapper,
 };
 
+fn submit_trace(message: String) {
+    if std::env::var_os("LBE_SUBMIT_TRACE").is_some() {
+        eprintln!("[LBE_SUBMIT_TRACE] {message}");
+    }
+}
+
+fn input_trace(message: impl AsRef<str>) {
+    if std::env::var_os("LBE_INPUT_TRACE").is_none()
+        && std::env::var_os("LBE_INPUT_TRACE_FILE").is_none()
+    {
+        return;
+    }
+    let line = format!("[LBE_INPUT_TRACE] {}", message.as_ref());
+    if std::env::var_os("LBE_INPUT_TRACE").is_some()
+        && std::env::var_os("LBE_INPUT_TRACE_FILE").is_none()
+    {
+        eprintln!("{line}");
+    }
+    if let Some(path) = std::env::var_os("LBE_INPUT_TRACE_FILE") {
+        use std::{fs::OpenOptions, io::Write};
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(file, "{line}");
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // App — the central UI state machine
 // ---------------------------------------------------------------------------
@@ -199,10 +225,22 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return;
         }
+        input_trace(format!(
+            "key={:?} modifiers={:?} phase={:?} panel={:?} input_len={} shortcuts={} palette={}",
+            key.code,
+            key.modifiers,
+            self.phase,
+            self.panel,
+            self.input.len(),
+            self.show_shortcuts,
+            self.show_command_palette
+        ));
         if matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(Modifiers::CONTROL) {
             if matches!(self.phase, Phase::Running) {
+                input_trace("action=abort_running_task");
                 self.apply_wrapper_result(wrapper.submit(UserRequest::Abort, Instant::now()));
             } else {
+                input_trace("action=quit_ctrl_c_idle");
                 self.should_quit = true;
             }
             return;
@@ -214,25 +252,55 @@ impl App {
             self.show_command_palette = !self.show_command_palette;
             self.show_shortcuts = false;
             self.panel = None;
+            input_trace(format!(
+                "action=toggle_command_palette visible={}",
+                self.show_command_palette
+            ));
             return;
         }
         if self.show_command_palette {
             match key.code {
-                KeyCode::Escape => self.show_command_palette = false,
-                KeyCode::Up => self.move_command_palette(-1),
-                KeyCode::Down => self.move_command_palette(1),
-                KeyCode::Enter => self.execute_command_palette(wrapper),
-                _ => {}
+                KeyCode::Escape => {
+                    self.show_command_palette = false;
+                    input_trace("action=close_command_palette");
+                }
+                KeyCode::Up => {
+                    self.move_command_palette(-1);
+                    input_trace("action=command_palette_up");
+                }
+                KeyCode::Down => {
+                    self.move_command_palette(1);
+                    input_trace("action=command_palette_down");
+                }
+                KeyCode::Enter => {
+                    input_trace("action=command_palette_execute");
+                    self.execute_command_palette(wrapper);
+                }
+                _ => input_trace("action=command_palette_ignored_key"),
             }
             return;
         }
         match key.code {
-            KeyCode::Char('q') if self.input.is_empty() => self.should_quit = true,
-            KeyCode::Char('?') if self.input.is_empty() => {
-                self.show_shortcuts = !self.show_shortcuts
+            KeyCode::Char('q') if self.input.is_empty() => {
+                input_trace("action=quit_q_idle");
+                self.should_quit = true
             }
-            KeyCode::Tab => self.set_mode(wrapper, self.agent_mode.next()),
-            KeyCode::Escape => self.dismiss_or_reject(wrapper),
+            KeyCode::Char('?') if self.input.is_empty() => {
+                self.show_shortcuts = !self.show_shortcuts;
+                input_trace(format!(
+                    "action=toggle_shortcuts visible={}",
+                    self.show_shortcuts
+                ));
+            }
+            KeyCode::Tab => {
+                let mode = self.agent_mode.next();
+                input_trace(format!("action=set_mode requested={mode:?}"));
+                self.set_mode(wrapper, mode)
+            }
+            KeyCode::Escape => {
+                input_trace("action=escape_dismiss_or_reject");
+                self.dismiss_or_reject(wrapper)
+            }
             KeyCode::Enter
                 if key
                     .modifiers
@@ -242,11 +310,30 @@ impl App {
                     self.input.push('\n');
                 }
             }
-            KeyCode::Enter => self.submit_or_approve(wrapper, now),
+            KeyCode::Enter => {
+                input_trace("action=enter_submit_or_approve");
+                self.submit_or_approve(wrapper, now)
+            }
+            // Match the Cline composer affordance: `@` opens the existing
+            // authoritative workspace browser rather than creating a second
+            // file index or client-side file authority.
+            KeyCode::Char('@') if self.input.is_empty() && self.panel.is_none() => {
+                input_trace("action=workspace_browser_shortcut");
+                self.apply_wrapper_result(wrapper.submit(
+                    UserRequest::ListWorkspace {
+                        path: ".".to_owned(),
+                    },
+                    now,
+                ));
+            }
             KeyCode::Function(2) if self.input.is_empty() => {
+                input_trace("action=open_provider_panel");
                 self.handle_command("/provider", wrapper)
             }
-            KeyCode::Function(3) if self.input.is_empty() => self.handle_command("/model", wrapper),
+            KeyCode::Function(3) if self.input.is_empty() => {
+                input_trace("action=open_model_panel");
+                self.handle_command("/model", wrapper)
+            }
             KeyCode::Char('c')
                 if matches!(self.panel, Some(MockPanel::Undo | MockPanel::Changes)) =>
             {
@@ -257,18 +344,12 @@ impl App {
             }
             KeyCode::Up if self.panel == Some(MockPanel::Model) => self.move_model_picker(-1),
             KeyCode::Down if self.panel == Some(MockPanel::Model) => self.move_model_picker(1),
-            KeyCode::Up if self.panel == Some(MockPanel::Provider) => {
-                self.move_provider_picker(-1)
-            }
+            KeyCode::Up if self.panel == Some(MockPanel::Provider) => self.move_provider_picker(-1),
             KeyCode::Down if self.panel == Some(MockPanel::Provider) => {
                 self.move_provider_picker(1)
             }
-            KeyCode::Up if self.panel == Some(MockPanel::Session) => {
-                self.move_session_picker(-1)
-            }
-            KeyCode::Down if self.panel == Some(MockPanel::Session) => {
-                self.move_session_picker(1)
-            }
+            KeyCode::Up if self.panel == Some(MockPanel::Session) => self.move_session_picker(-1),
+            KeyCode::Down if self.panel == Some(MockPanel::Session) => self.move_session_picker(1),
             KeyCode::Up
                 if self.input.is_empty()
                     && self.panel.is_none()
@@ -313,10 +394,15 @@ impl App {
             KeyCode::Down => self.recall_history(false),
             KeyCode::Backspace => {
                 self.input.pop();
+                input_trace(format!("action=backspace input_len={}", self.input.len()));
             }
             KeyCode::Char(character) if !key.modifiers.contains(Modifiers::CONTROL) => {
                 if !matches!(self.phase, Phase::Running { .. }) {
                     self.input.push(character);
+                    input_trace(format!(
+                        "action=insert_char char={character:?} input_len={}",
+                        self.input.len()
+                    ));
                 }
             }
             KeyCode::Char('d')
@@ -328,8 +414,9 @@ impl App {
                 self.transcript.clear();
                 self.panel = None;
                 self.show_shortcuts = false;
+                input_trace("action=clear_transcript");
             }
-            _ => {}
+            _ => input_trace("action=unhandled_key"),
         }
     }
 
@@ -338,6 +425,12 @@ impl App {
         wrapper: &mut (impl LbeWrapper + ?Sized),
         now: Instant,
     ) {
+        submit_trace(format!(
+            "app.submit_or_approve entered phase={:?} input_len={} session={}",
+            self.phase,
+            self.input.len(),
+            self.snapshot.session_id.as_deref().unwrap_or("none")
+        ));
         if self.panel == Some(MockPanel::Model) {
             self.select_model(wrapper, now);
             return;
@@ -404,6 +497,11 @@ impl App {
                 self.input_history.push(task.clone());
                 self.history_index = None;
                 self.input.clear();
+                submit_trace(format!(
+                    "app sending UserRequest::SubmitTask intent_len={} mode={:?}",
+                    task.len(),
+                    self.agent_mode
+                ));
                 self.apply_wrapper_result(wrapper.submit(
                     UserRequest::SubmitTask {
                         intent: task,
@@ -439,11 +537,17 @@ impl App {
     }
 
     pub(crate) fn set_mode(&mut self, wrapper: &mut (impl LbeWrapper + ?Sized), mode: AgentMode) {
+        input_trace(format!("wrapper_request=SetMode mode={mode:?}"));
         self.apply_wrapper_result(wrapper.submit(UserRequest::SetMode { mode }, Instant::now()));
     }
 
     pub(crate) fn apply_wrapper_result(&mut self, result: Result<(), LbeError>) {
         if let Err(error) = result {
+            input_trace(format!("wrapper_result=error message={}", error.message));
+            submit_trace(format!(
+                "app received synchronous wrapper error: {}",
+                error.message
+            ));
             self.transcript
                 .push(format!("LBE WRAPPER ERROR  {}", error.message));
         }
@@ -876,6 +980,12 @@ impl App {
         self.record_activity(&event);
         match event {
             LbeEvent::WrapperError { message } => {
+                submit_trace(format!(
+                    "app projected WrapperError session={} turn={} message={}",
+                    self.snapshot.session_id.as_deref().unwrap_or("none"),
+                    self.snapshot.turn_id.as_deref().unwrap_or("none"),
+                    message
+                ));
                 self.record_audit_finding("Runtime", message.clone());
                 self.transcript
                     .push(format!("LBE WRAPPER ERROR  {message}"));
@@ -955,9 +1065,7 @@ impl App {
                     evidence_ref: evidence_ref.clone(),
                     receipt_id: receipt_id.clone(),
                 });
-                self.workspace_cursor = self
-                    .workspace_cursor
-                    .min(entries.len().saturating_sub(1));
+                self.workspace_cursor = self.workspace_cursor.min(entries.len().saturating_sub(1));
                 if let Some(reference) = evidence_ref.clone() {
                     self.record_evidence(EvidenceProjection {
                         reference,
@@ -1432,7 +1540,10 @@ impl App {
                 execution_id,
                 timeout_seconds,
             } if self.owns_execution(&execution_id) => {
-                self.record_audit_finding("Timeout", format!("execution timed out after {timeout_seconds}s"));
+                self.record_audit_finding(
+                    "Timeout",
+                    format!("execution timed out after {timeout_seconds}s"),
+                );
                 self.snapshot.elapsed_seconds = timeout_seconds;
                 self.snapshot.timeout_seconds = timeout_seconds;
                 self.transcript
@@ -1452,6 +1563,10 @@ impl App {
                 event_id,
                 text,
             } => {
+                submit_trace(format!(
+                    "app projected model response session={} turn={} event={}",
+                    session_id, turn_id, event_id
+                ));
                 if self.snapshot.session_id.as_deref() != Some(session_id.as_str()) {
                     return;
                 }
@@ -1515,6 +1630,25 @@ impl App {
                 self.transcript
                     .push(format!("TURN  completed ? {event_id}"));
             }
+            LbeEvent::ConversationalTurnError {
+                session_id,
+                turn_id,
+                event_id,
+                message,
+            } => {
+                submit_trace(format!(
+                    "app projected model.error session={} turn={} event={}",
+                    session_id, turn_id, event_id
+                ));
+                if self.snapshot.session_id.as_deref() != Some(session_id.as_str()) {
+                    return;
+                }
+                self.snapshot.turn_id = Some(turn_id.clone());
+                self.record_audit_finding("Runtime", message.clone());
+                self.transcript.push(format!(
+                    "LBE MODEL ERROR  {message} · turn {turn_id} · {event_id}"
+                ));
+            }
             LbeEvent::ProposalCreated {
                 approval_id,
                 proposal,
@@ -1531,7 +1665,10 @@ impl App {
                 capability,
                 rationale,
             } => {
-                self.record_audit_finding("Authorization", format!("approval required for {capability}: {rationale}"));
+                self.record_audit_finding(
+                    "Authorization",
+                    format!("approval required for {capability}: {rationale}"),
+                );
                 if let Some(pending_patch) = self.pending_patch.as_mut() {
                     pending_patch.operation_id = Some(operation_id.clone());
                     pending_patch.approval_id = Some(approval_id.clone());
@@ -1554,10 +1691,7 @@ impl App {
                 rationale,
             } => {
                 if verdict != "ALLOW" {
-                    self.record_audit_finding(
-                        "Authorization",
-                        format!("{verdict}: {rationale}"),
-                    );
+                    self.record_audit_finding("Authorization", format!("{verdict}: {rationale}"));
                 }
                 if let Some(pending_patch) = &self.pending_patch {
                     if pending_patch.operation_id.as_deref() != Some(operation_id.as_str())
@@ -1709,6 +1843,14 @@ impl App {
                 self.transcript.push(format!(
                     "EXECUTION  completed · {execution_id} · receipt {receipt}"
                 ));
+                // The startup workspace projection is a complete read-only
+                // operation, not an active agent turn. Release the composer
+                // once its authoritative receipt has arrived so the first
+                // user prompt can enter the real LBE turn path.
+                if self.last_tool_name.as_deref() == Some("workspace.list") {
+                    self.active_execution_id = None;
+                    self.phase = Phase::Welcome;
+                }
             }
             LbeEvent::ValidationStarted { execution_id } if self.owns_execution(&execution_id) => {
                 self.transcript
@@ -1925,7 +2067,10 @@ impl App {
     fn record_audit_tool(&mut self, detail: String) {
         const AUDIT_TRACE_LIMIT: usize = 64;
         self.audit_tool_trace.push(detail);
-        let excess = self.audit_tool_trace.len().saturating_sub(AUDIT_TRACE_LIMIT);
+        let excess = self
+            .audit_tool_trace
+            .len()
+            .saturating_sub(AUDIT_TRACE_LIMIT);
         if excess > 0 {
             self.audit_tool_trace.drain(..excess);
         }
@@ -2082,11 +2227,7 @@ impl App {
         ));
     }
 
-    fn resume_selected_session(
-        &mut self,
-        wrapper: &mut (impl LbeWrapper + ?Sized),
-        now: Instant,
-    ) {
+    fn resume_selected_session(&mut self, wrapper: &mut (impl LbeWrapper + ?Sized), now: Instant) {
         let Some(session) = self.snapshot.sessions.get(self.session_picker_index) else {
             return;
         };

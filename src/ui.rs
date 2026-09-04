@@ -18,7 +18,10 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthChar;
 
-use crate::{app::{App, command_palette_commands}, types::*};
+use crate::{
+    app::{App, command_palette_commands},
+    types::*,
+};
 
 pub(crate) type AppTerminal = Terminal<TerminaBackend<PlatformTerminal>>;
 
@@ -45,7 +48,7 @@ pub(crate) fn init_terminal() -> io::Result<(AppTerminal, EventReader)> {
             output,
             "{}{}",
             alternate_screen(false),
-            cursor_visible(true)
+            terminal_cursor_visible(true)
         );
         let _ = output.flush();
     });
@@ -54,7 +57,7 @@ pub(crate) fn init_terminal() -> io::Result<(AppTerminal, EventReader)> {
         output,
         "{}{}",
         alternate_screen(true),
-        cursor_visible(false)
+        terminal_cursor_visible(false)
     )?;
     output.flush()?;
     let events = output.event_reader();
@@ -68,7 +71,11 @@ pub(crate) fn restore_terminal(terminal: &mut AppTerminal) -> io::Result<()> {
 }
 
 pub(crate) fn terminal_restore_sequence() -> String {
-    format!("{}{}", alternate_screen(false), cursor_visible(true))
+    format!(
+        "{}{}",
+        alternate_screen(false),
+        terminal_cursor_visible(true)
+    )
 }
 
 fn alternate_screen(enabled: bool) -> Csi {
@@ -80,7 +87,7 @@ fn alternate_screen(enabled: bool) -> Csi {
     }
 }
 
-fn cursor_visible(visible: bool) -> Csi {
+fn terminal_cursor_visible(visible: bool) -> Csi {
     let mode = DecPrivateMode::Code(DecPrivateModeCode::ShowCursor);
     if visible {
         Csi::Mode(Mode::SetDecPrivateMode(mode))
@@ -90,6 +97,10 @@ fn cursor_visible(visible: bool) -> Csi {
 }
 
 pub(crate) fn draw(frame: &mut Frame, app: &App) {
+    draw_at(frame, app, Duration::from_secs(2));
+}
+
+pub(crate) fn draw_at(frame: &mut Frame, app: &App, elapsed: Duration) {
     let area = frame.area();
     frame.render_widget(
         Block::default().style(Style::default().bg(PALETTE.bg)),
@@ -117,20 +128,21 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
     // Below the comfortable desktop breakpoint, remove decorative chrome and
     // give the transcript the space. The declared 60-column floor is useful
     // only if it has a compact, single-pane presentation.
-    let compact = area.width < 72 || area.height < 20;
+    let safe_area = area.inner(Margin::new(if area.width < 72 { 1 } else { 2 }, 1));
+    let compact = safe_area.width < 72 || safe_area.height < 20;
     if compact {
         let sections = Layout::vertical([
             Constraint::Length(2),
             Constraint::Length(1),
             Constraint::Min(2),
             Constraint::Length(2),
-            Constraint::Length(1),
+            Constraint::Length(3),
         ])
-        .split(area);
+        .split(safe_area);
         draw_chrome(frame, sections[0]);
         draw_header(frame, sections[1], app);
         draw_body(frame, sections[2], app);
-        draw_composer(frame, sections[3], app);
+        draw_composer(frame, sections[3], app, elapsed);
         draw_footer(frame, sections[4], app);
     } else {
         let sections = Layout::vertical([
@@ -138,13 +150,13 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
             Constraint::Length(1),
             Constraint::Min(10),
             Constraint::Length(3),
-            Constraint::Length(2),
+            Constraint::Length(3),
         ])
-        .split(area);
+        .split(safe_area);
         draw_chrome(frame, sections[0]);
         draw_header(frame, sections[1], app);
         draw_body(frame, sections[2], app);
-        draw_composer(frame, sections[3], app);
+        draw_composer(frame, sections[3], app, elapsed);
         draw_footer(frame, sections[4], app);
     }
     if no_color_enabled() {
@@ -155,31 +167,27 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
 }
 
 pub(crate) fn draw_chrome(frame: &mut Frame, area: Rect) {
-    let logo = Text::from(vec![
-        Line::from(Span::styled(
-            display_token("  ╭─╮ ╭─╮ ╭─╮", "  +-+ +-+ +-+", ascii_mode_enabled()),
-            Style::default()
-                .fg(PALETTE.red)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(Span::styled(
-            display_token(
-                "  │L│ │B│ │E│  ·  terminal",
-                "  |L| |B| |E|  -  terminal",
-                ascii_mode_enabled(),
-            ),
-            Style::default().fg(PALETTE.faint),
-        )),
-    ]);
     frame.render_widget(
-        Paragraph::new(logo).style(Style::default().bg(Color::Rgb(10, 12, 15))),
+        Block::default().style(Style::default().bg(Color::Rgb(10, 12, 15))),
         area,
     );
 }
 
 pub(crate) fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
     let connection = app.snapshot.connection;
-    let line = Line::from(vec![
+    let connection_label = if connection == RuntimeConnection::Connected {
+        " LIVE "
+    } else {
+        " PREVIEW "
+    };
+    let connection_style = Style::default()
+        .fg(PALETTE.bg)
+        .bg(connection.color())
+        .add_modifier(Modifier::BOLD);
+    let inner = area.inner(Margin::new(if area.width < 72 { 1 } else { 2 }, 0));
+    let header_columns =
+        Layout::horizontal([Constraint::Length(18), Constraint::Min(1)]).split(inner);
+    let brand = Line::from(vec![
         Span::styled(
             "LETTER",
             Style::default()
@@ -198,38 +206,118 @@ pub(crate) fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
                 .fg(PALETTE.ink)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            truncate_text(
-                &format!(
-                    " · {} {} · {}",
-                    connection.marker(),
-                    connection.label(),
-                    if connection == RuntimeConnection::Connected {
-                        "AGENT WALL"
-                    } else {
-                        "UI CONTRACT PREVIEW"
-                    }
-                ),
-                area.width.saturating_sub(16) as usize,
-            ),
-            Style::default().fg(connection.color()),
-        ),
     ]);
     frame.render_widget(
-        Paragraph::new(line).style(Style::default().bg(PALETTE.bg)),
-        area,
+        Paragraph::new(brand).style(Style::default().bg(PALETTE.bg)),
+        header_columns[0],
+    );
+    let status = format!(
+        "{} {} · {} · {}{}",
+        connection.marker(),
+        connection.label(),
+        if connection == RuntimeConnection::Connected {
+            "AGENT WALL"
+        } else {
+            "UI CONTRACT PREVIEW"
+        },
+        app.agent_mode.label(),
+        connection_label,
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                truncate_text(
+                    &status,
+                    header_columns[1]
+                        .width
+                        .saturating_sub(connection_label.len() as u16) as usize,
+                ),
+                Style::default().fg(connection.color()),
+            ),
+            Span::styled(connection_label, connection_style),
+        ]))
+        .style(Style::default().bg(PALETTE.bg))
+        .alignment(Alignment::Right),
+        header_columns[1],
     );
 }
 
 pub(crate) fn draw_body(frame: &mut Frame, area: Rect, app: &App) {
-    if app.workspace_listing.is_some() && area.width >= 80 {
-        let columns = Layout::horizontal([Constraint::Length(28), Constraint::Min(1)]).split(area);
-        draw_workspace_sidebar(frame, columns[0], app);
+    // Keep the first-load experience single-pane until both the sidebar and a
+    // useful transcript column can fit without clipping. This mirrors the
+    // compact behavior of terminal clients while preserving the navigation
+    // rail on genuinely wide displays.
+    if area.width >= 136 && area.height >= 24 {
+        let columns = Layout::horizontal([Constraint::Length(24), Constraint::Min(1)]).split(area);
+        draw_navigation_sidebar(frame, columns[0], app);
         draw_main_body(frame, columns[1], app, true);
         return;
     }
 
     draw_main_body(frame, area, app, false);
+}
+
+fn draw_navigation_sidebar(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::RIGHT)
+        .border_style(Style::default().fg(PALETTE.line))
+        .style(Style::default().bg(PALETTE.bg));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let session = app.snapshot.session_id.as_deref().unwrap_or("not attached");
+    let workspace = if app.snapshot.workspace_label.is_empty() {
+        "not attached"
+    } else {
+        app.snapshot.workspace_label.as_str()
+    };
+    let mut lines = vec![
+        Line::from(Span::styled(
+            "WORKSPACE",
+            Style::default()
+                .fg(PALETTE.amber)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled(
+            truncate_text(workspace, inner.width as usize),
+            Style::default().fg(PALETTE.faint),
+        )),
+        Line::default(),
+        Line::from(Span::styled(
+            "CURRENT SESSION",
+            Style::default().fg(PALETTE.muted),
+        )),
+        Line::from(Span::styled(
+            truncate_text(session, inner.width as usize),
+            Style::default().fg(PALETTE.ink),
+        )),
+        Line::from(Span::styled(
+            truncate_text(
+                &format!(
+                    "{} · {}",
+                    app.snapshot.session_state.label(),
+                    app.agent_mode.label()
+                ),
+                inner.width as usize,
+            ),
+            Style::default().fg(app.snapshot.connection.color()),
+        )),
+        Line::default(),
+    ];
+    let runtime_status = if app.snapshot.connection == RuntimeConnection::Connected {
+        "LIVE · authoritative runtime attached"
+    } else {
+        "PREVIEW · no runtime attached"
+    };
+    lines.push(Line::from(Span::styled(
+        truncate_text(runtime_status, inner.width as usize),
+        Style::default().fg(app.snapshot.connection.color()),
+    )));
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        truncate_text("Tab mode · F2 provider · F3 model", inner.width as usize),
+        Style::default().fg(PALETTE.faint),
+    )));
+    frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
 
 fn draw_workspace_sidebar(frame: &mut Frame, area: Rect, app: &App) {
@@ -313,6 +401,14 @@ fn draw_workspace_sidebar(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_main_body(frame: &mut Frame, area: Rect, app: &App, split_layout: bool) {
+    let welcome = app.transcript.is_empty()
+        && app.panel.is_none()
+        && app.workspace_patch.is_none()
+        && app.workspace_file.is_none()
+        && app.workspace_listing.is_none()
+        && !app.show_shortcuts
+        && !app.show_command_palette
+        && app.agent_mode != AgentMode::Audit;
     let content = if split_layout
         && app.panel.is_none()
         && app.workspace_patch.is_none()
@@ -349,14 +445,28 @@ fn draw_main_body(frame: &mut Frame, area: Rect, app: &App, split_layout: bool) 
     };
     let scroll = if app.agent_mode == AgentMode::Audit {
         app.audit_scroll.min(u16::MAX as usize) as u16
-    } else if app.workspace_file.is_some() || app.workspace_listing.is_some() {
+    } else if app.panel.is_some() || app.workspace_file.is_some() || app.workspace_listing.is_some()
+    {
+        0
+    } else if app.transcript.is_empty()
+        && app.panel.is_none()
+        && app.workspace_patch.is_none()
+        && app.workspace_file.is_none()
+        && app.workspace_listing.is_none()
+        && !app.show_shortcuts
+        && !app.show_command_palette
+    {
         0
     } else {
         transcript_scroll_offset(&content, app.transcript_scroll, area.height)
     };
     frame.render_widget(
         Paragraph::new(content)
-            .alignment(Alignment::Left)
+            .alignment(if welcome {
+                Alignment::Center
+            } else {
+                Alignment::Left
+            })
             .style(Style::default().fg(PALETTE.ink).bg(PALETTE.bg))
             .wrap(Wrap { trim: true })
             .scroll((scroll, 0)),
@@ -542,21 +652,40 @@ fn workspace_listing_text(listing: &WorkspaceListing) -> Text<'static> {
     Text::from(lines)
 }
 
-pub(crate) fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
-    let composer_text = match &app.phase {
-        Phase::AwaitingApproval { proposal, .. } => {
-            format!("> {proposal} · Enter approve · Esc reject")
-        }
-        Phase::Running => "> Execution in progress…".to_owned(),
-        Phase::Interrupted => "> Execution interrupted; runtime truth unresolved…".to_owned(),
-        _ if app.input.is_empty() => format!("> {}", mode_placeholder(app.agent_mode)),
-        _ => format!("> {}", app.input),
-    };
-
-    let composer_style = if matches!(app.phase, Phase::Running | Phase::Interrupted) {
-        Style::default().fg(PALETTE.muted)
+pub(crate) fn draw_composer(frame: &mut Frame, area: Rect, app: &App, elapsed: Duration) {
+    let cursor = if input_cursor_visible(elapsed) {
+        "|"
     } else {
-        Style::default().fg(PALETTE.ink)
+        " "
+    };
+    let composer_line = match &app.phase {
+        Phase::AwaitingApproval { proposal, .. } => Line::from(Span::styled(
+            format!("> {proposal} · Enter approve · Esc reject"),
+            Style::default().fg(PALETTE.amber),
+        )),
+        Phase::Running => Line::from(Span::styled(
+            format!("> Execution in progress {cursor}"),
+            Style::default().fg(PALETTE.muted),
+        )),
+        Phase::Interrupted => Line::from(Span::styled(
+            format!("> Execution interrupted; runtime truth unresolved {cursor}"),
+            Style::default().fg(PALETTE.muted),
+        )),
+        _ if app.input.is_empty() => Line::from(vec![
+            Span::styled("> ", Style::default().fg(PALETTE.ink)),
+            Span::styled(cursor, Style::default().fg(PALETTE.red)),
+            Span::styled(
+                format!(" {}", mode_placeholder(app.agent_mode)),
+                Style::default().fg(PALETTE.muted),
+            ),
+        ]),
+        _ => Line::from(vec![
+            Span::styled("> ", Style::default().fg(PALETTE.ink)),
+            Span::styled(
+                format!("{}{}", app.input, cursor),
+                Style::default().fg(PALETTE.ink),
+            ),
+        ]),
     };
 
     let rule = "─".repeat(area.width as usize);
@@ -572,7 +701,7 @@ pub(crate) fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
             rows[0],
         );
         frame.render_widget(
-            Paragraph::new(composer_text).style(composer_style.bg(PALETTE.bg)),
+            Paragraph::new(composer_line).style(Style::default().bg(PALETTE.bg)),
             rows[1],
         );
         frame.render_widget(
@@ -581,14 +710,14 @@ pub(crate) fn draw_composer(frame: &mut Frame, area: Rect, app: &App) {
         );
     } else {
         frame.render_widget(
-            Paragraph::new(composer_text).style(composer_style.bg(PALETTE.bg)),
+            Paragraph::new(composer_line).style(Style::default().bg(PALETTE.bg)),
             area,
         );
     }
 }
 
 pub(crate) fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
-    if area.width < 72 || area.height < 2 {
+    if area.width < 72 || area.height < 3 {
         let hint = if matches!(app.phase, Phase::AwaitingApproval { .. }) {
             "Enter approve · Esc reject · ? help"
         } else if matches!(app.phase, Phase::Running) {
@@ -605,7 +734,12 @@ pub(crate) fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
         );
         return;
     }
-    let rows = Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).split(area);
+    let rows = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(area);
 
     let shortcut_label = if app.show_shortcuts {
         "? close shortcuts"
@@ -613,72 +747,100 @@ pub(crate) fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
         "? for shortcuts · Ctrl+P commands · F2 provider · F3 model"
     };
 
-    let top = Layout::horizontal([
-        Constraint::Percentage(20),
-        Constraint::Percentage(60),
-        Constraint::Percentage(20),
-    ])
-    .split(rows[0]);
-
-    frame.render_widget(
-        Paragraph::new(shortcut_label)
-            .style(Style::default().fg(PALETTE.faint).bg(PALETTE.bg))
-            .alignment(Alignment::Left),
-        top[0],
-    );
-
-    let mode_line = Line::from(vec![
-        mode_indicator("Lbe Audit", app.agent_mode == AgentMode::Audit),
-        Span::styled("/", Style::default().fg(PALETTE.faint)),
-        mode_indicator("Runtime", app.agent_mode == AgentMode::Regular),
-        Span::styled("/", Style::default().fg(PALETTE.faint)),
-        mode_indicator("Plan", app.agent_mode == AgentMode::Plan),
-        Span::styled(" (Tab)", Style::default().fg(PALETTE.faint)),
-    ]);
-    frame.render_widget(
-        Paragraph::new(mode_line)
-            .style(Style::default().bg(PALETTE.bg))
-            .alignment(Alignment::Center),
-        top[1],
-    );
-
-    let model_status = match &app.snapshot.effort_label {
-        Some(effort) if !effort.is_empty() => format!("{}· {}", app.snapshot.model_id, effort),
-        _ => app.snapshot.model_id.clone(),
+    let line_one = Layout::horizontal([Constraint::Min(1), Constraint::Length(24)]).split(rows[0]);
+    let provider_model = app
+        .snapshot
+        .selected_model
+        .as_ref()
+        .map(|model| format!("{} / {}", model.provider_id.label(), model.model_id))
+        .unwrap_or_else(|| app.snapshot.model_id.clone());
+    let context_percent = if app.snapshot.context_capacity == 0 {
+        0
+    } else {
+        app.snapshot.context_used.saturating_mul(100) / app.snapshot.context_capacity
     };
+    let line_one_text = format!(
+        "{} · {} · context {}%",
+        match app.agent_mode {
+            AgentMode::Regular => "Runtime",
+            AgentMode::Plan => "Plan",
+            AgentMode::Audit => "Audit",
+        },
+        provider_model,
+        context_percent
+    );
     frame.render_widget(
-        Paragraph::new(truncate_text(&model_status, top[2].width as usize))
+        Paragraph::new(truncate_text(&line_one_text, line_one[0].width as usize))
+            .style(Style::default().fg(PALETTE.faint).bg(PALETTE.bg)),
+        line_one[0],
+    );
+    frame.render_widget(
+        Paragraph::new(truncate_text(shortcut_label, line_one[1].width as usize))
             .style(Style::default().fg(PALETTE.faint).bg(PALETTE.bg))
             .alignment(Alignment::Right),
-        top[2],
+        line_one[1],
     );
 
-    let bottom =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[1]);
-
+    let (branch, changed_files) = app
+        .snapshot
+        .session_context
+        .as_ref()
+        .map(|context| {
+            (
+                context.data.workspace.branch.clone(),
+                context.data.workspace.status_short.len(),
+            )
+        })
+        .unwrap_or_else(|| ("branch unavailable".to_owned(), 0));
+    let line_two = format!(
+        "branch ({branch}) · {} changed file(s) · {}",
+        changed_files,
+        if app.snapshot.connection == RuntimeConnection::Connected {
+            "LBE boundary active"
+        } else {
+            "LBE boundary unavailable"
+        }
+    );
     frame.render_widget(
-        Paragraph::new(truncate_text(
-            &app.snapshot.workspace_label,
-            bottom[0].width as usize,
-        ))
-        .style(Style::default().fg(PALETTE.muted).bg(PALETTE.bg))
-        .alignment(Alignment::Left),
-        bottom[0],
+        Paragraph::new(truncate_text(&line_two, rows[1].width as usize))
+            .style(Style::default().fg(PALETTE.red).bg(PALETTE.bg)),
+        rows[1],
     );
 
-    let meter = context_meter(app.snapshot.context_used, app.snapshot.context_capacity, 10);
-    let context_line = Line::from(vec![
-        Span::styled(
-            format!("{} (Context) ", app.snapshot.model_family),
-            Style::default().fg(PALETTE.faint),
-        ),
-        Span::styled(meter, Style::default().fg(PALETTE.red)),
-    ]);
+    let policy_line = app
+        .snapshot
+        .session_context
+        .as_ref()
+        .map(|context| {
+            format!(
+                "Enter submit · permission {} · runtime policy {} · evidence policy {}",
+                context
+                    .data
+                    .session
+                    .permission
+                    .as_deref()
+                    .unwrap_or("unknown"),
+                context
+                    .data
+                    .session
+                    .runtime_policy
+                    .as_deref()
+                    .unwrap_or("unknown"),
+                context
+                    .data
+                    .session
+                    .evidence_policy_id
+                    .as_deref()
+                    .unwrap_or("unknown")
+            )
+        })
+        .unwrap_or_else(|| {
+            "Enter submit · policy projection unavailable · approval remains LBE-owned".to_owned()
+        });
     frame.render_widget(
-        Paragraph::new(context_line)
-            .style(Style::default().bg(PALETTE.bg))
-            .alignment(Alignment::Right),
-        bottom[1],
+        Paragraph::new(truncate_text(&policy_line, rows[2].width as usize))
+            .style(Style::default().fg(PALETTE.muted).bg(PALETTE.bg)),
+        rows[2],
     );
 }
 
@@ -753,7 +915,7 @@ fn shortcut_text() -> Text<'static> {
         Line::from("F2/F3   open the live provider/model selectors"),
         Line::from("↑/↓     move files; scroll open files or transcript"),
         Line::from("Enter   open the selected file/directory in the workspace pane"),
-        Line::from("Ctrl+L  clear rendered mock transcript"),
+        Line::from("Ctrl+L  clear the rendered transcript"),
         Line::from("Ctrl+P  open command palette"),
         Line::from("chat    describe the task; the agent selects governed capabilities"),
         Line::from("/open   optional developer/agent workspace inspection"),
@@ -763,7 +925,7 @@ fn shortcut_text() -> Text<'static> {
         Line::from("Ctrl+D  exit when the composer is empty"),
         Line::from("?       close this shortcut reference"),
         Line::from("q       quit when the task input is empty"),
-        Line::from("Ctrl+C  quit cleanly"),
+        Line::from("Ctrl+C  abort a running task / quit when idle"),
     ])
 }
 
@@ -791,7 +953,10 @@ fn command_palette_text(app: &App) -> Text<'static> {
                 Style::default().fg(PALETTE.ink)
             };
             Line::from(Span::styled(
-                format!("{} {command:<12} · {description}", if selected { "▸" } else { " " }),
+                format!(
+                    "{} {command:<12} · {description}",
+                    if selected { "▸" } else { " " }
+                ),
                 style,
             ))
         },
@@ -821,7 +986,10 @@ fn audit_text(app: &App) -> Text<'static> {
     );
     lines.push(Line::from(vec![
         Span::styled("Runtime   ", Style::default().fg(PALETTE.faint)),
-        Span::styled(runtime, Style::default().fg(app.snapshot.connection.color())),
+        Span::styled(
+            runtime,
+            Style::default().fg(app.snapshot.connection.color()),
+        ),
     ]));
     lines.push(Line::from(vec![
         Span::styled("Workspace  ", Style::default().fg(PALETTE.faint)),
@@ -829,7 +997,10 @@ fn audit_text(app: &App) -> Text<'static> {
             format!(
                 "{} · {}",
                 app.snapshot.workspace_label,
-                app.snapshot.workspace_id.as_deref().unwrap_or("not attached")
+                app.snapshot
+                    .workspace_id
+                    .as_deref()
+                    .unwrap_or("not attached")
             ),
             Style::default().fg(PALETTE.ink),
         ),
@@ -851,6 +1022,29 @@ fn audit_text(app: &App) -> Text<'static> {
     ]));
     lines.push(Line::default());
 
+    lines.push(Line::from(Span::styled(
+        "Conversation",
+        Style::default()
+            .fg(PALETTE.ink)
+            .add_modifier(Modifier::BOLD),
+    )));
+    if app.transcript.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  Ask why a finding is blocked, what evidence is missing, or how it can be resolved safely.",
+            Style::default().fg(PALETTE.muted),
+        )));
+    } else {
+        lines.extend(app.transcript.iter().rev().take(8).rev().map(|entry| {
+            let style = if entry.starts_with("you") {
+                Style::default().fg(Color::Rgb(117, 185, 239))
+            } else {
+                Style::default().fg(PALETTE.ink)
+            };
+            Line::from(Span::styled(format!("  {entry}"), style))
+        }));
+    }
+    lines.push(Line::default());
+
     let pass_count = app
         .snapshot
         .diagnostics
@@ -870,9 +1064,7 @@ fn audit_text(app: &App) -> Text<'static> {
         .filter(|check| check.status == DiagnosticStatus::Fail)
         .count();
     lines.push(Line::from(Span::styled(
-        format!(
-            "CHECKS    pass {pass_count} · warning {warning_count} · fail {fail_count}",
-        ),
+        format!("CHECKS    pass {pass_count} · warning {warning_count} · fail {fail_count}",),
         Style::default().fg(if fail_count > 0 {
             PALETTE.red
         } else if warning_count > 0 {
@@ -1465,26 +1657,36 @@ pub(crate) fn mock_panel_text_for_app(panel: MockPanel, app: &App) -> Text<'stat
                 Style::default().fg(PALETTE.amber),
             )));
             lines.push(Line::default());
-            lines.extend(app.snapshot.sessions.iter().enumerate().map(|(index, session)| {
-                let marker = if index == app.session_picker_index { "[>]" } else { "[ ]" };
-                let style = if index == app.session_picker_index {
-                    Style::default()
-                        .fg(PALETTE.bg)
-                        .bg(PALETTE.amber)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(PALETTE.ink)
-                };
-                Line::from(Span::styled(
-                    format!(
-                        "{marker} {} · {} · parent {}",
-                        session.session_id,
-                        session.status.label(),
-                        session.parent_session_id.as_deref().unwrap_or("none")
-                    ),
-                    style,
-                ))
-            }));
+            lines.extend(
+                app.snapshot
+                    .sessions
+                    .iter()
+                    .enumerate()
+                    .map(|(index, session)| {
+                        let marker = if index == app.session_picker_index {
+                            "[>]"
+                        } else {
+                            "[ ]"
+                        };
+                        let style = if index == app.session_picker_index {
+                            Style::default()
+                                .fg(PALETTE.bg)
+                                .bg(PALETTE.amber)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(PALETTE.ink)
+                        };
+                        Line::from(Span::styled(
+                            format!(
+                                "{marker} {} · {} · parent {}",
+                                session.session_id,
+                                session.status.label(),
+                                session.parent_session_id.as_deref().unwrap_or("none")
+                            ),
+                            style,
+                        ))
+                    }),
+            );
             Text::from(lines)
         }
         MockPanel::Account => {
@@ -1869,28 +2071,38 @@ fn provider_panel_text(app: &App) -> Text<'static> {
             Style::default().fg(PALETTE.muted),
         )));
     } else {
-        lines.extend(app.snapshot.providers.iter().enumerate().map(|(index, provider)| {
-            let local = if provider.is_local { " · LOCAL" } else { "" };
-            let marker = if index == app.provider_picker_index { "[>]" } else { "[ ]" };
-            let style = if index == app.provider_picker_index {
-                Style::default()
-                    .fg(PALETTE.bg)
-                    .bg(PALETTE.amber)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(PALETTE.ink)
-            };
-            Line::from(Span::styled(
-                format!(
-                    "{marker} {}  {} · {}{}",
-                    provider.provider_id.label(),
-                    provider.auth_state.label(),
-                    provider.health.label(),
-                    local
-                ),
-                style,
-            ))
-        }));
+        lines.extend(
+            app.snapshot
+                .providers
+                .iter()
+                .enumerate()
+                .map(|(index, provider)| {
+                    let local = if provider.is_local { " · LOCAL" } else { "" };
+                    let marker = if index == app.provider_picker_index {
+                        "[>]"
+                    } else {
+                        "[ ]"
+                    };
+                    let style = if index == app.provider_picker_index {
+                        Style::default()
+                            .fg(PALETTE.bg)
+                            .bg(PALETTE.amber)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(PALETTE.ink)
+                    };
+                    Line::from(Span::styled(
+                        format!(
+                            "{marker} {}  {} · {}{}",
+                            provider.provider_id.label(),
+                            provider.auth_state.label(),
+                            provider.health.label(),
+                            local
+                        ),
+                        style,
+                    ))
+                }),
+        );
     }
     Text::from(lines)
 }
@@ -2019,8 +2231,13 @@ fn capability_marker(enabled: bool) -> &'static str {
 }
 
 fn welcome_text(available_height: u16, app: &App) -> Text<'static> {
-    let mut lines = logo_lines(BAR_REVEAL);
-    lines.push(Line::default());
+    let mut lines = if available_height >= 22 {
+        logo_lines(Duration::from_secs(2))
+    } else if available_height >= 14 {
+        minimal_logo_lines()
+    } else {
+        Vec::new()
+    };
     lines.push(Line::from(Span::styled(
         "What can I do for you?",
         Style::default()
@@ -2036,7 +2253,6 @@ fn welcome_text(available_height: u16, app: &App) -> Text<'static> {
                 .add_modifier(Modifier::BOLD),
         ),
     ]));
-    lines.push(Line::default());
     let provider = app
         .snapshot
         .selected_model
@@ -2103,12 +2319,14 @@ fn welcome_text(available_height: u16, app: &App) -> Text<'static> {
             ),
         ]));
     } else {
-        lines.push(Line::from(Span::styled(
-            "Activity  idle · waiting for your request",
-            Style::default().fg(PALETTE.faint),
-        )));
+        lines.push(Line::from(vec![
+            Span::styled("Activity  ", Style::default().fg(PALETTE.faint)),
+            Span::styled(
+                "idle · waiting for your request",
+                Style::default().fg(PALETTE.faint),
+            ),
+        ]));
     }
-    lines.push(Line::default());
     lines.push(Line::from(Span::styled(
         "/provider select provider   /model select model   /help shortcuts",
         Style::default().fg(PALETTE.muted),
@@ -2140,19 +2358,25 @@ fn logo_lines(elapsed: Duration) -> Vec<Line<'static>> {
         .map(|(row, line)| {
             let mut spans = Vec::new();
             let mut segment = String::new();
-            let mut active_style = Style::default().fg(PALETTE.logo_outer);
-
+            let mut active_style = Style::default().fg(PALETTE.bg);
             for (column, character) in line.chars().enumerate() {
-                let style = if logo_cell_visible(row, column, elapsed) {
-                    logo_cell_style(row, column)
+                let visible = elapsed >= OUTER_REVEAL;
+                let center_bar =
+                    (5..=11).contains(&row) && column == 19 && center_bar_visible(elapsed);
+                let (display, style) = if !visible || (character == ' ' && !center_bar) {
+                    (' ', Style::default().fg(PALETTE.bg))
+                } else if character == '#' {
+                    ('█', Style::default().fg(PALETTE.red))
+                } else if character == '*' {
+                    ('█', logo_cell_style(row, column))
                 } else {
-                    Style::default().fg(PALETTE.bg)
+                    ('█', Style::default().fg(PALETTE.logo_outer))
                 };
                 if style != active_style && !segment.is_empty() {
                     spans.push(Span::styled(std::mem::take(&mut segment), active_style));
                     active_style = style;
                 }
-                segment.push(character);
+                segment.push(display);
             }
             if !segment.is_empty() {
                 spans.push(Span::styled(segment, active_style));
@@ -2162,9 +2386,27 @@ fn logo_lines(elapsed: Duration) -> Vec<Line<'static>> {
         .collect()
 }
 
+pub(crate) fn input_cursor_visible(elapsed: Duration) -> bool {
+    (elapsed.as_millis() / TYPE_CURSOR_HALF_PERIOD.as_millis()) % 2 == 0
+}
+
+fn minimal_logo_lines() -> Vec<Line<'static>> {
+    MINIMAL_LOGO
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                (*line).to_owned(),
+                Style::default()
+                    .fg(PALETTE.red)
+                    .add_modifier(Modifier::BOLD),
+            ))
+        })
+        .collect()
+}
+
 pub(crate) fn logo_cell_visible(row: usize, column: usize, elapsed: Duration) -> bool {
     let outer =
-        row == 0 || row == 16 || ((1..=15).contains(&row) && matches!(column, 0 | 1 | 37 | 38));
+        row == 0 || row == 16 || ((1..=15).contains(&row) && matches!(column, 0 | 1 | 39 | 40));
     let inner_frame = (matches!(row, 2 | 14) && (5..=33).contains(&column))
         || ((3..=13).contains(&row) && matches!(column, 5 | 33));
     let brackets = (matches!(row, 4 | 12)
