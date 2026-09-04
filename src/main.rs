@@ -36,11 +36,17 @@ struct CliOptions {
 
 fn main() -> io::Result<()> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    if arguments.iter().any(|argument| argument == "--help" || argument == "-h") {
+    if arguments
+        .iter()
+        .any(|argument| argument == "--help" || argument == "-h")
+    {
         print_help();
         return Ok(());
     }
-    if arguments.iter().any(|argument| argument == "--version" || argument == "-V") {
+    if arguments
+        .iter()
+        .any(|argument| argument == "--version" || argument == "-V")
+    {
         println!("lbe {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
@@ -83,9 +89,24 @@ fn parse_cli(arguments: &[String]) -> io::Result<(Option<&str>, CliOptions)> {
             "run" | "--no-tui" if command.is_none() => command = Some(argument),
             "--json" => options.json = true,
             "--continue" | "-c" => options.continue_session = true,
-            "--auto" => return Err(io::Error::new(io::ErrorKind::InvalidInput, "--auto is not supported: LBE authorization cannot be bypassed")),
-            "--port" => return Err(io::Error::new(io::ErrorKind::InvalidInput, "--port is not supported: lbe uses its local governed runtime transport")),
-            "--fork" => return Err(io::Error::new(io::ErrorKind::InvalidInput, "--fork is not supported by the current LBE session contract")),
+            "--auto" => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "--auto is not supported: LBE authorization cannot be bypassed",
+                ));
+            }
+            "--port" => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "--port is not supported: lbe uses its local governed runtime transport",
+                ));
+            }
+            "--fork" => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "--fork is not supported by the current LBE session contract",
+                ));
+            }
             "--prompt" => {
                 index += 1;
                 options.prompt = Some(required_value(arguments, index, "--prompt")?);
@@ -104,10 +125,22 @@ fn parse_cli(arguments: &[String]) -> io::Result<(Option<&str>, CliOptions)> {
                 index += 1;
                 options.session_id = Some(required_value(arguments, index, argument)?);
             }
-            value if value.starts_with('-') => return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("unknown option '{value}'; use --help for usage"))),
-            value if command == Some("run") || command == Some("--no-tui") => prompt_parts.push(value.to_owned()),
+            value if value.starts_with('-') => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("unknown option '{value}'; use --help for usage"),
+                ));
+            }
+            value if command == Some("run") || command == Some("--no-tui") => {
+                prompt_parts.push(value.to_owned())
+            }
             value if options.project.is_none() => options.project = Some(value.to_owned()),
-            value => return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("unexpected argument '{value}'; use --help for usage"))),
+            value => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("unexpected argument '{value}'; use --help for usage"),
+                ));
+            }
         }
         index += 1;
     }
@@ -118,7 +151,16 @@ fn parse_cli(arguments: &[String]) -> io::Result<(Option<&str>, CliOptions)> {
 }
 
 fn required_value(arguments: &[String], index: usize, flag: &str) -> io::Result<String> {
-    arguments.get(index).filter(|value| !value.starts_with('-')).cloned().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, format!("{flag} requires a value")))
+    arguments
+        .get(index)
+        .filter(|value| !value.starts_with('-'))
+        .cloned()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("{flag} requires a value"),
+            )
+        })
 }
 
 fn parse_agent(value: &str) -> io::Result<AgentMode> {
@@ -126,12 +168,20 @@ fn parse_agent(value: &str) -> io::Result<AgentMode> {
         "build" | "regular" | "runtime" => Ok(AgentMode::Regular),
         "plan" => Ok(AgentMode::Plan),
         "audit" => Ok(AgentMode::Audit),
-        _ => Err(io::Error::new(io::ErrorKind::InvalidInput, format!("unsupported agent '{value}'; use build, plan, or audit"))),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("unsupported agent '{value}'; use build, plan, or audit"),
+        )),
     }
 }
 
 fn parse_model(value: &str) -> io::Result<types::ModelRef> {
-    let (provider, model) = value.split_once('/').ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "--model must use provider/model format"))?;
+    let (provider, model) = value.split_once('/').ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--model must use provider/model format",
+        )
+    })?;
     let provider_id = match provider.to_ascii_lowercase().as_str() {
         "openai" => types::ProviderId::OpenAi,
         "openai-native" => types::ProviderId::OpenAiNative,
@@ -145,16 +195,29 @@ fn parse_model(value: &str) -> io::Result<types::ModelRef> {
         "ollama" => types::ProviderId::Ollama,
         "openrouter" => types::ProviderId::OpenRouter,
         "opencode" => types::ProviderId::OpenCode,
-        _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("unsupported provider '{provider}'"))),
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("unsupported provider '{provider}'"),
+            ));
+        }
     };
     if model.trim().is_empty() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "--model requires a model name"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--model requires a model name",
+        ));
     }
-    Ok(types::ModelRef { provider_id, model_id: model.to_owned() })
+    Ok(types::ModelRef {
+        provider_id,
+        model_id: model.to_owned(),
+    })
 }
 
 fn print_help() {
-    println!("LETTERBLACK ENGINE\n\nUsage:\n  lbe                         Start the TUI\n  lbe [project]               Start the TUI in a project\n  lbe run \"prompt\"           Run a governed task without the TUI\n\nOptions:\n  -m, --model PROVIDER/MODEL  Select a model\n      --agent build|plan|audit\n  -s, --session SESSION_ID    Resume a specific session\n  -c, --continue              Continue the current session\n      --prompt TEXT           Supply the task prompt\n      --json                  Emit headless events as JSON\n  -h, --help                  Show this help\n  -V, --version               Show the version\n\nThe current LBE runtime intentionally rejects --auto, --fork, and --port.\nAuthorization and execution remain governed by LBE.");
+    println!(
+        "LETTERBLACK ENGINE\n\nUsage:\n  lbe                         Start the TUI\n  lbe [project]               Start the TUI in a project\n  lbe run \"prompt\"           Run a governed task without the TUI\n\nOptions:\n  -m, --model PROVIDER/MODEL  Select a model\n      --agent build|plan|audit\n  -s, --session SESSION_ID    Resume a specific session\n  -c, --continue              Continue the current session\n      --prompt TEXT           Supply the task prompt\n      --json                  Emit headless events as JSON\n  -h, --help                  Show this help\n  -V, --version               Show the version\n\nThe current LBE runtime intentionally rejects --auto, --fork, and --port.\nAuthorization and execution remain governed by LBE."
+    );
 }
 
 fn run_headless(options: CliOptions) -> io::Result<i32> {
@@ -164,18 +227,21 @@ fn run_headless(options: CliOptions) -> io::Result<i32> {
     let mut app = App::with_snapshot(wrapper.snapshot());
     let mut submitted = false;
     let mut startup_initialized = false;
-    let mut startup_model_applied = options.model.is_none();
+    let mut startup_model_applied = options.model.is_some();
+    let mut model_catalog_ready = false;
     let mode = options.mode.unwrap_or(AgentMode::Regular);
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + Duration::from_secs(180);
 
     while Instant::now() < deadline {
         if let Some(event) = wrapper
             .poll_event(Instant::now())
             .map_err(|error| io::Error::other(error.message))?
         {
+            if matches!(&event, LbeEvent::ModelCatalogDiscovered { .. }) {
+                model_catalog_ready = true;
+            }
             let is_initial_snapshot =
                 !startup_initialized && matches!(event, LbeEvent::SnapshotUpdated { .. });
-            let is_model_catalog = matches!(event, LbeEvent::ModelCatalogDiscovered { .. });
             emit_headless_event(&event)?;
             let is_error = matches!(event, LbeEvent::WrapperError { .. });
             app.reduce_lbe_event(event);
@@ -186,45 +252,66 @@ fn run_headless(options: CliOptions) -> io::Result<i32> {
             }
             if is_initial_snapshot {
                 startup_initialized = true;
-                if let Some(mode) = options.mode {
-                    wrapper.submit(requests::UserRequest::SetMode { mode }, Instant::now()).map_err(|error| io::Error::other(error.message))?;
+                if let Some(mode) = options.mode.filter(|_| options.session_id.is_none()) {
+                    wrapper
+                        .submit(requests::UserRequest::SetMode { mode }, Instant::now())
+                        .map_err(|error| io::Error::other(error.message))?;
                 }
-                if let Some(session_id) = options.session_id.clone().or_else(|| options.continue_session.then(|| app.snapshot.session_id.clone()).flatten()) {
-                    wrapper.submit(requests::UserRequest::ResumeSession { session_id }, Instant::now()).map_err(|error| io::Error::other(error.message))?;
-                }
-                if use_real_runtime {
-                    wrapper.submit(requests::UserRequest::RefreshProviderCatalog, Instant::now()).map_err(|error| io::Error::other(error.message))?;
-                }
-                if options.model.is_none() {
+                if let Some(session_id) = options.session_id.clone().or_else(|| {
+                    options
+                        .continue_session
+                        .then(|| app.snapshot.session_id.clone())
+                        .flatten()
+                }) {
                     wrapper
                         .submit(
-                            requests::UserRequest::SubmitTask {
-                                intent: prompt.clone(),
-                                mode,
-                            },
+                            requests::UserRequest::ResumeSession { session_id },
                             Instant::now(),
                         )
                         .map_err(|error| io::Error::other(error.message))?;
-                    submitted = true;
+                }
+                if use_real_runtime && options.model.is_none() {
+                    wrapper
+                        .submit(
+                            requests::UserRequest::RefreshProviderCatalog,
+                            Instant::now(),
+                        )
+                        .map_err(|error| io::Error::other(error.message))?;
                 }
             }
-            if !submitted && !startup_model_applied && is_model_catalog {
+            if !submitted && !startup_model_applied {
                 if let Some(model) = options.model.clone() {
-                    wrapper
-                        .submit(requests::UserRequest::SelectModel { model }, Instant::now())
-                        .map_err(|error| io::Error::other(error.message))?;
-                    startup_model_applied = true;
-                    wrapper
-                        .submit(
-                            requests::UserRequest::SubmitTask {
-                                intent: prompt.clone(),
-                                mode,
-                            },
-                            Instant::now(),
-                        )
-                        .map_err(|error| io::Error::other(error.message))?;
-                    submitted = true;
+                    let model_discovered = model_catalog_ready
+                        && app.snapshot.models.iter().any(|candidate| {
+                            candidate.provider_id == model.provider_id
+                                && candidate.model_id == model.model_id
+                        });
+                    if model_discovered {
+                        wrapper
+                            .submit(requests::UserRequest::SelectModel { model }, Instant::now())
+                            .map_err(|error| io::Error::other(error.message))?;
+                        startup_model_applied = true;
+                    }
                 }
+            }
+            let session_ready =
+                app.snapshot.session_id.is_some() && app.snapshot.workspace_id.is_some();
+            let model_ready = if options.model.is_some() {
+                startup_model_applied
+            } else {
+                model_catalog_ready
+            };
+            if !submitted && session_ready && model_ready {
+                wrapper
+                    .submit(
+                        requests::UserRequest::SubmitTask {
+                            intent: prompt.clone(),
+                            mode,
+                        },
+                        Instant::now(),
+                    )
+                    .map_err(|error| io::Error::other(error.message))?;
+                submitted = true;
             }
             if submitted && matches!(app.phase, Phase::Completed) {
                 emit_headless_result(&app, "completed")?;
@@ -406,7 +493,11 @@ fn emit_headless_result(app: &App, status: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn run(terminal: &mut ui::AppTerminal, events: &EventReader, options: CliOptions) -> io::Result<()> {
+fn run(
+    terminal: &mut ui::AppTerminal,
+    events: &EventReader,
+    options: CliOptions,
+) -> io::Result<()> {
     let use_real_runtime = !matches!(std::env::var("LBE_RUNTIME").as_deref(), Ok("mock"));
     let mut wrapper = WrapperClient::spawn(use_real_runtime);
     let mut app = App::with_snapshot(wrapper.snapshot());
@@ -416,9 +507,10 @@ fn run(terminal: &mut ui::AppTerminal, events: &EventReader, options: CliOptions
     let mut workspace_list_requested = false;
     let mut startup_options_applied = false;
     let mut startup_model_applied = options.model.is_none();
+    let animation_started = Instant::now();
 
     while !app.should_quit() {
-        terminal.draw(|frame| ui::draw(frame, &app))?;
+        terminal.draw(|frame| ui::draw_at(frame, &app, animation_started.elapsed()))?;
 
         let now = Instant::now();
 
@@ -436,15 +528,28 @@ fn run(terminal: &mut ui::AppTerminal, events: &EventReader, options: CliOptions
             if use_real_runtime && !startup_options_applied && has_authoritative_workspace {
                 startup_options_applied = true;
                 if let Some(mode) = options.mode {
-                    app.apply_wrapper_result(wrapper.submit(requests::UserRequest::SetMode { mode }, Instant::now()));
+                    app.apply_wrapper_result(
+                        wrapper.submit(requests::UserRequest::SetMode { mode }, Instant::now()),
+                    );
                 }
-                if let Some(session_id) = options.session_id.clone().or_else(|| options.continue_session.then(|| app.snapshot.session_id.clone()).flatten()) {
-                    app.apply_wrapper_result(wrapper.submit(requests::UserRequest::ResumeSession { session_id }, Instant::now()));
+                if let Some(session_id) = options.session_id.clone().or_else(|| {
+                    options
+                        .continue_session
+                        .then(|| app.snapshot.session_id.clone())
+                        .flatten()
+                }) {
+                    app.apply_wrapper_result(wrapper.submit(
+                        requests::UserRequest::ResumeSession { session_id },
+                        Instant::now(),
+                    ));
                 }
             }
             if use_real_runtime && !startup_model_applied && has_model_catalog {
                 if let Some(model) = options.model.clone() {
-                    app.apply_wrapper_result(wrapper.submit(requests::UserRequest::SelectModel { model }, Instant::now()));
+                    app.apply_wrapper_result(
+                        wrapper
+                            .submit(requests::UserRequest::SelectModel { model }, Instant::now()),
+                    );
                     startup_model_applied = true;
                 }
             }
@@ -461,11 +566,14 @@ fn run(terminal: &mut ui::AppTerminal, events: &EventReader, options: CliOptions
             continue;
         }
 
-        let timeout = match (app.next_wake(now), wrapper.next_wake(now)) {
-            (Some(app_wake), Some(wrapper_wake)) => Some(app_wake.min(wrapper_wake)),
-            (Some(app_wake), None) => Some(app_wake),
-            (None, Some(wrapper_wake)) => Some(wrapper_wake),
-            (None, None) => None,
+        let animation_wake = Duration::from_millis(225);
+        let timeout = match (app.next_wake(now), wrapper.next_wake(now), animation_wake) {
+            (Some(app_wake), Some(wrapper_wake), animation_wake) => {
+                Some(app_wake.min(wrapper_wake).min(animation_wake))
+            }
+            (Some(app_wake), None, animation_wake) => Some(app_wake.min(animation_wake)),
+            (None, Some(wrapper_wake), animation_wake) => Some(wrapper_wake.min(animation_wake)),
+            (None, None, animation_wake) => Some(animation_wake),
         };
 
         if events.poll(timeout, |event| {
