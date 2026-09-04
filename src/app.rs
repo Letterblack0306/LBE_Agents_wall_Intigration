@@ -10,6 +10,12 @@ use crate::{
     wrapper::LbeWrapper,
 };
 
+fn submit_trace(message: String) {
+    if std::env::var_os("LBE_SUBMIT_TRACE").is_some() {
+        eprintln!("[LBE_SUBMIT_TRACE] {message}");
+    }
+}
+
 // ---------------------------------------------------------------------------
 // App — the central UI state machine
 // ---------------------------------------------------------------------------
@@ -257,18 +263,12 @@ impl App {
             }
             KeyCode::Up if self.panel == Some(MockPanel::Model) => self.move_model_picker(-1),
             KeyCode::Down if self.panel == Some(MockPanel::Model) => self.move_model_picker(1),
-            KeyCode::Up if self.panel == Some(MockPanel::Provider) => {
-                self.move_provider_picker(-1)
-            }
+            KeyCode::Up if self.panel == Some(MockPanel::Provider) => self.move_provider_picker(-1),
             KeyCode::Down if self.panel == Some(MockPanel::Provider) => {
                 self.move_provider_picker(1)
             }
-            KeyCode::Up if self.panel == Some(MockPanel::Session) => {
-                self.move_session_picker(-1)
-            }
-            KeyCode::Down if self.panel == Some(MockPanel::Session) => {
-                self.move_session_picker(1)
-            }
+            KeyCode::Up if self.panel == Some(MockPanel::Session) => self.move_session_picker(-1),
+            KeyCode::Down if self.panel == Some(MockPanel::Session) => self.move_session_picker(1),
             KeyCode::Up
                 if self.input.is_empty()
                     && self.panel.is_none()
@@ -338,6 +338,12 @@ impl App {
         wrapper: &mut (impl LbeWrapper + ?Sized),
         now: Instant,
     ) {
+        submit_trace(format!(
+            "app.submit_or_approve entered phase={:?} input_len={} session={}",
+            self.phase,
+            self.input.len(),
+            self.snapshot.session_id.as_deref().unwrap_or("none")
+        ));
         if self.panel == Some(MockPanel::Model) {
             self.select_model(wrapper, now);
             return;
@@ -404,6 +410,11 @@ impl App {
                 self.input_history.push(task.clone());
                 self.history_index = None;
                 self.input.clear();
+                submit_trace(format!(
+                    "app sending UserRequest::SubmitTask intent_len={} mode={:?}",
+                    task.len(),
+                    self.agent_mode
+                ));
                 self.apply_wrapper_result(wrapper.submit(
                     UserRequest::SubmitTask {
                         intent: task,
@@ -444,6 +455,10 @@ impl App {
 
     pub(crate) fn apply_wrapper_result(&mut self, result: Result<(), LbeError>) {
         if let Err(error) = result {
+            submit_trace(format!(
+                "app received synchronous wrapper error: {}",
+                error.message
+            ));
             self.transcript
                 .push(format!("LBE WRAPPER ERROR  {}", error.message));
         }
@@ -876,6 +891,12 @@ impl App {
         self.record_activity(&event);
         match event {
             LbeEvent::WrapperError { message } => {
+                submit_trace(format!(
+                    "app projected WrapperError session={} turn={} message={}",
+                    self.snapshot.session_id.as_deref().unwrap_or("none"),
+                    self.snapshot.turn_id.as_deref().unwrap_or("none"),
+                    message
+                ));
                 self.record_audit_finding("Runtime", message.clone());
                 self.transcript
                     .push(format!("LBE WRAPPER ERROR  {message}"));
@@ -955,9 +976,7 @@ impl App {
                     evidence_ref: evidence_ref.clone(),
                     receipt_id: receipt_id.clone(),
                 });
-                self.workspace_cursor = self
-                    .workspace_cursor
-                    .min(entries.len().saturating_sub(1));
+                self.workspace_cursor = self.workspace_cursor.min(entries.len().saturating_sub(1));
                 if let Some(reference) = evidence_ref.clone() {
                     self.record_evidence(EvidenceProjection {
                         reference,
@@ -1432,7 +1451,10 @@ impl App {
                 execution_id,
                 timeout_seconds,
             } if self.owns_execution(&execution_id) => {
-                self.record_audit_finding("Timeout", format!("execution timed out after {timeout_seconds}s"));
+                self.record_audit_finding(
+                    "Timeout",
+                    format!("execution timed out after {timeout_seconds}s"),
+                );
                 self.snapshot.elapsed_seconds = timeout_seconds;
                 self.snapshot.timeout_seconds = timeout_seconds;
                 self.transcript
@@ -1452,6 +1474,10 @@ impl App {
                 event_id,
                 text,
             } => {
+                submit_trace(format!(
+                    "app projected model response session={} turn={} event={}",
+                    session_id, turn_id, event_id
+                ));
                 if self.snapshot.session_id.as_deref() != Some(session_id.as_str()) {
                     return;
                 }
@@ -1515,6 +1541,25 @@ impl App {
                 self.transcript
                     .push(format!("TURN  completed ? {event_id}"));
             }
+            LbeEvent::ConversationalTurnError {
+                session_id,
+                turn_id,
+                event_id,
+                message,
+            } => {
+                submit_trace(format!(
+                    "app projected model.error session={} turn={} event={}",
+                    session_id, turn_id, event_id
+                ));
+                if self.snapshot.session_id.as_deref() != Some(session_id.as_str()) {
+                    return;
+                }
+                self.snapshot.turn_id = Some(turn_id.clone());
+                self.record_audit_finding("Runtime", message.clone());
+                self.transcript.push(format!(
+                    "LBE MODEL ERROR  {message} · turn {turn_id} · {event_id}"
+                ));
+            }
             LbeEvent::ProposalCreated {
                 approval_id,
                 proposal,
@@ -1531,7 +1576,10 @@ impl App {
                 capability,
                 rationale,
             } => {
-                self.record_audit_finding("Authorization", format!("approval required for {capability}: {rationale}"));
+                self.record_audit_finding(
+                    "Authorization",
+                    format!("approval required for {capability}: {rationale}"),
+                );
                 if let Some(pending_patch) = self.pending_patch.as_mut() {
                     pending_patch.operation_id = Some(operation_id.clone());
                     pending_patch.approval_id = Some(approval_id.clone());
@@ -1554,10 +1602,7 @@ impl App {
                 rationale,
             } => {
                 if verdict != "ALLOW" {
-                    self.record_audit_finding(
-                        "Authorization",
-                        format!("{verdict}: {rationale}"),
-                    );
+                    self.record_audit_finding("Authorization", format!("{verdict}: {rationale}"));
                 }
                 if let Some(pending_patch) = &self.pending_patch {
                     if pending_patch.operation_id.as_deref() != Some(operation_id.as_str())
@@ -1709,6 +1754,14 @@ impl App {
                 self.transcript.push(format!(
                     "EXECUTION  completed · {execution_id} · receipt {receipt}"
                 ));
+                // The startup workspace projection is a complete read-only
+                // operation, not an active agent turn. Release the composer
+                // once its authoritative receipt has arrived so the first
+                // user prompt can enter the real LBE turn path.
+                if self.last_tool_name.as_deref() == Some("workspace.list") {
+                    self.active_execution_id = None;
+                    self.phase = Phase::Welcome;
+                }
             }
             LbeEvent::ValidationStarted { execution_id } if self.owns_execution(&execution_id) => {
                 self.transcript
@@ -1925,7 +1978,10 @@ impl App {
     fn record_audit_tool(&mut self, detail: String) {
         const AUDIT_TRACE_LIMIT: usize = 64;
         self.audit_tool_trace.push(detail);
-        let excess = self.audit_tool_trace.len().saturating_sub(AUDIT_TRACE_LIMIT);
+        let excess = self
+            .audit_tool_trace
+            .len()
+            .saturating_sub(AUDIT_TRACE_LIMIT);
         if excess > 0 {
             self.audit_tool_trace.drain(..excess);
         }
@@ -2082,11 +2138,7 @@ impl App {
         ));
     }
 
-    fn resume_selected_session(
-        &mut self,
-        wrapper: &mut (impl LbeWrapper + ?Sized),
-        now: Instant,
-    ) {
+    fn resume_selected_session(&mut self, wrapper: &mut (impl LbeWrapper + ?Sized), now: Instant) {
         let Some(session) = self.snapshot.sessions.get(self.session_picker_index) else {
             return;
         };
