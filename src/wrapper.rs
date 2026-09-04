@@ -15,6 +15,12 @@ use crate::{
     types::*,
 };
 
+fn submit_trace(message: String) {
+    if std::env::var_os("LBE_SUBMIT_TRACE").is_some() {
+        eprintln!("[LBE_SUBMIT_TRACE] {message}");
+    }
+}
+
 fn configured_lbe_command(python: &Path, wall_root: &Path) -> Command {
     let mut command = Command::new(python);
     if std::env::var_os("LBE_GUARD_INSPECTOR_CONFIG_PATH").is_none() {
@@ -90,6 +96,12 @@ impl WrapperClient {
                 while let Ok(command) = request_rx.try_recv() {
                     match command {
                         WorkerCommand::Request(request) => {
+                            if matches!(&request, UserRequest::SubmitTask { .. }) {
+                                submit_trace(
+                                    "WrapperClient worker received UserRequest::SubmitTask"
+                                        .to_owned(),
+                                );
+                            }
                             if let Err(error) = wrapper.submit(request, Instant::now()) {
                                 let _ = message_tx.send(WorkerMessage::Error(error));
                             }
@@ -119,6 +131,11 @@ impl WrapperClient {
                     .min(Duration::from_millis(25));
                 match request_rx.recv_timeout(wait) {
                     Ok(WorkerCommand::Request(request)) => {
+                        if matches!(&request, UserRequest::SubmitTask { .. }) {
+                            submit_trace(
+                                "WrapperClient worker received UserRequest::SubmitTask".to_owned(),
+                            );
+                        }
                         if let Err(error) = wrapper.submit(request, Instant::now()) {
                             let _ = message_tx.send(WorkerMessage::Error(error));
                         }
@@ -161,6 +178,9 @@ impl LbeWrapper for WrapperClient {
     }
 
     fn submit(&mut self, request: UserRequest, _now: Instant) -> Result<(), LbeError> {
+        if matches!(&request, UserRequest::SubmitTask { .. }) {
+            submit_trace("WrapperClient::submit received UserRequest::SubmitTask".to_owned());
+        }
         self.requests
             .send(WorkerCommand::Request(request))
             .map_err(|_| LbeError::new("LBE worker stopped"))
@@ -1805,6 +1825,13 @@ impl Default for RealLbeWrapper {
 }
 
 impl RealLbeWrapper {
+    fn unsupported_real_request(&self, capability: &str) -> Result<(), LbeError> {
+        self.require_connected()?;
+        Err(LbeError::new(format!(
+            "real LBE adapter does not expose {capability} yet; request was not executed"
+        )))
+    }
+
     /// Construct a real wrapper using explicit Agent Wall and target-workspace
     /// configuration. Construction never launches a process or fabricates state.
     ///
@@ -2219,6 +2246,16 @@ impl RealLbeWrapper {
         self.snapshot.provenance = provenance;
         self.snapshot.validation = validation;
         self.snapshot.session_id = Some(session_context.session_id.clone());
+        self.snapshot.active_mode = match session_context.data.session.mode.as_str() {
+            "coding" => AgentMode::Regular,
+            "investigation" => AgentMode::Plan,
+            "audit" => AgentMode::Audit,
+            other => {
+                return Err(LbeError::new(format!(
+                    "session_context returned unsupported mode: {other}"
+                )));
+            }
+        };
         self.snapshot.workspace_id = Some(authoritative_workspace_id);
         self.snapshot.workspace_label =
             normalize_workspace_path(&session_context.data.workspace.canonical_root);
@@ -2341,6 +2378,102 @@ impl RealLbeWrapper {
         }
     }
 
+    fn run_real_diagnostics(&mut self) -> Result<(), LbeError> {
+        self.require_connected()?;
+
+        let mut checks = Vec::new();
+        checks.push(DiagnosticCheck {
+            id: "runtime.connection".to_owned(),
+            category: "runtime".to_owned(),
+            status: DiagnosticStatus::Pass,
+            message: "Connected to the authoritative LBE runtime.".to_owned(),
+            remediation_available: false,
+        });
+
+        let workspace_ok = self.snapshot.workspace_id.is_some()
+            && !self.snapshot.workspace_label.trim().is_empty();
+        checks.push(DiagnosticCheck {
+            id: "workspace.identity".to_owned(),
+            category: "workspace".to_owned(),
+            status: if workspace_ok {
+                DiagnosticStatus::Pass
+            } else {
+                DiagnosticStatus::Fail
+            },
+            message: if workspace_ok {
+                format!(
+                    "Workspace identity resolved: {}.",
+                    self.snapshot.workspace_label
+                )
+            } else {
+                "Authoritative workspace identity is unavailable.".to_owned()
+            },
+            remediation_available: false,
+        });
+
+        let session_ok = self.snapshot.session_id.is_some();
+        checks.push(DiagnosticCheck {
+            id: "session.identity".to_owned(),
+            category: "session".to_owned(),
+            status: if session_ok {
+                DiagnosticStatus::Pass
+            } else {
+                DiagnosticStatus::Fail
+            },
+            message: if session_ok {
+                format!(
+                    "Active LBE session: {}.",
+                    self.snapshot.session_id.as_deref().unwrap_or_default()
+                )
+            } else {
+                "No authoritative LBE session is attached.".to_owned()
+            },
+            remediation_available: false,
+        });
+
+        let model_ok = self.snapshot.selected_model.is_some();
+        checks.push(DiagnosticCheck {
+            id: "provider.selection".to_owned(),
+            category: "provider".to_owned(),
+            status: if model_ok {
+                DiagnosticStatus::Pass
+            } else {
+                DiagnosticStatus::Warning
+            },
+            message: if let Some(model) = self.snapshot.selected_model.as_ref() {
+                format!(
+                    "Selected provider/model: {}/{}.",
+                    model.provider_id.cli_name(),
+                    model.model_id
+                )
+            } else {
+                "No provider/model selection is persisted for this session.".to_owned()
+            },
+            remediation_available: false,
+        });
+
+        let validation_ok = self.snapshot.validation.is_some();
+        checks.push(DiagnosticCheck {
+            id: "validation.projection".to_owned(),
+            category: "validation".to_owned(),
+            status: if validation_ok {
+                DiagnosticStatus::Pass
+            } else {
+                DiagnosticStatus::Warning
+            },
+            message: if validation_ok {
+                "Authoritative validation projection is attached.".to_owned()
+            } else {
+                "No validation projection is available for the active task.".to_owned()
+            },
+            remediation_available: false,
+        });
+
+        self.pending_events
+            .push_back(LbeEvent::DiagnosticsUpdated { checks });
+        Ok(())
+    }
+
     fn refresh_mcp_registry(&mut self) -> Result<(), LbeError> {
         let wall_root = self
             .wall_root
@@ -2422,8 +2555,9 @@ impl RealLbeWrapper {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("python"));
         let tool_id = format!("mcp.birdeye.{tool}");
-        let arguments_json = serde_json::to_string(&arguments)
-            .map_err(|error| LbeError::new(format!("BirdEye arguments encoding failed: {error}")))?;
+        let arguments_json = serde_json::to_string(&arguments).map_err(|error| {
+            LbeError::new(format!("BirdEye arguments encoding failed: {error}"))
+        })?;
         self.pending_events.push_back(LbeEvent::ExecutionStarted {
             execution_id: execution_id.clone(),
         });
@@ -2463,7 +2597,9 @@ impl RealLbeWrapper {
                 "json",
             ])
             .output()
-            .map_err(|error| LbeError::new(format!("BirdEye governed tool launch failed: {error}")))?;
+            .map_err(|error| {
+                LbeError::new(format!("BirdEye governed tool launch failed: {error}"))
+            })?;
         let stdout = String::from_utf8(output.stdout)
             .map_err(|_| LbeError::new("BirdEye governed tool stdout was not UTF-8"))?;
         let payload: serde_json::Value = serde_json::from_str(&stdout)
@@ -2502,20 +2638,21 @@ impl RealLbeWrapper {
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned);
         let authorization = payload.get("authorization");
-        self.pending_events.push_back(LbeEvent::AuthorizationResolved {
-            operation_id: operation_id.clone(),
-            approval_id: String::new(),
-            verdict: authorization
-                .and_then(|value| value.get("verdict"))
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("DENY")
-                .to_owned(),
-            rationale: authorization
-                .and_then(|value| value.get("rationale"))
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("governed BirdEye authorization did not provide a rationale")
-                .to_owned(),
-        });
+        self.pending_events
+            .push_back(LbeEvent::AuthorizationResolved {
+                operation_id: operation_id.clone(),
+                approval_id: String::new(),
+                verdict: authorization
+                    .and_then(|value| value.get("verdict"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("DENY")
+                    .to_owned(),
+                rationale: authorization
+                    .and_then(|value| value.get("rationale"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("governed BirdEye authorization did not provide a rationale")
+                    .to_owned(),
+            });
         if status == "EXECUTED" {
             self.pending_events.push_back(LbeEvent::ToolStarted {
                 execution_id: execution_id.clone(),
@@ -2656,6 +2793,83 @@ impl RealLbeWrapper {
         Ok(())
     }
 
+    fn validate_real_provider(&mut self, provider_id: ProviderId) -> Result<(), LbeError> {
+        self.require_connected()?;
+        if !self
+            .snapshot
+            .providers
+            .iter()
+            .any(|provider| provider.provider_id == provider_id)
+        {
+            return Err(LbeError::new(format!(
+                "provider {} is not in the discovered LBE catalog",
+                provider_id.label()
+            )));
+        }
+        let wall_root = self
+            .wall_root
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_ROOT is not configured"))?;
+        let provider_config = self
+            .provider_config
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_PROVIDER_CONFIG is not configured"))?;
+        let python = std::env::var_os("LBE_WALL_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("python"));
+        self.pending_events
+            .push_back(LbeEvent::ProviderValidationStarted { provider_id });
+        let output = configured_lbe_command(&python, &wall_root)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "--format",
+                "json",
+                "provider",
+                "check",
+                "--provider",
+                provider_id.cli_name(),
+                "--provider-config",
+            ])
+            .arg(provider_config)
+            .output()
+            .map_err(|error| LbeError::new(format!("provider validation failed: {error}")))?;
+        let payload: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|error| LbeError::new(format!("invalid provider.check JSON: {error}")))?;
+        let status = parse_provider_check_status(&payload)?;
+        let auth_state = if status == "READY" {
+            AuthState::Ready
+        } else {
+            AuthState::Error
+        };
+        let health = if status == "READY" {
+            ProviderHealth::Ready
+        } else {
+            ProviderHealth::Error
+        };
+        self.pending_events
+            .push_back(LbeEvent::ProviderAuthStateUpdated {
+                provider_id,
+                auth_state,
+            });
+        self.pending_events
+            .push_back(LbeEvent::ProviderHealthUpdated {
+                provider_id,
+                health,
+            });
+        self.pending_events
+            .push_back(LbeEvent::ProviderValidationCompleted { provider_id });
+        if !output.status.success() || status != "READY" {
+            let message = payload
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("provider validation was rejected by LBE");
+            return Err(LbeError::new(message));
+        }
+        Ok(())
+    }
+
     fn create_real_session(&mut self) -> Result<(), LbeError> {
         self.require_connected()?;
         let wall_root = self
@@ -2757,6 +2971,53 @@ impl RealLbeWrapper {
             .push_back(LbeEvent::SessionRestored { session_id });
         Ok(())
     }
+
+    fn list_real_sessions(&mut self) -> Result<(), LbeError> {
+        self.require_connected()?;
+        let wall_root = self
+            .wall_root
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_ROOT is not configured"))?;
+        let database = self
+            .wall_database
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_DATABASE is not configured"))?;
+        let workspace_id = self
+            .snapshot
+            .workspace_id
+            .clone()
+            .ok_or_else(|| LbeError::new("authoritative workspace identity is unavailable"))?;
+        let python = std::env::var_os("LBE_WALL_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("python"));
+        let output = configured_lbe_command(&python, &wall_root)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "session",
+                "list",
+                "--database",
+            ])
+            .arg(database)
+            .args(["--project-workspace-id", &workspace_id, "--limit", "500"])
+            .args(["--format", "json"])
+            .output()
+            .map_err(|error| LbeError::new(format!("session listing failed: {error}")))?;
+        let payload = parse_workspace_payload(&output.stdout, "session.list")?;
+        if !output.status.success() || payload.get("ok") != Some(&serde_json::Value::Bool(true)) {
+            let message = payload
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("session listing was rejected by LBE");
+            return Err(LbeError::new(message));
+        }
+        let sessions = parse_session_list_payload(&payload, &workspace_id)?;
+        self.snapshot.sessions = sessions.clone();
+        self.pending_events
+            .push_back(LbeEvent::SessionListUpdated { sessions });
+        Ok(())
+    }
     fn select_model(&mut self, model: ModelRef) -> Result<(), LbeError> {
         self.require_connected()?;
         if !self.snapshot.models.iter().any(|candidate| {
@@ -2843,6 +3104,11 @@ impl RealLbeWrapper {
         intent: &str,
         mode: AgentMode,
     ) -> Result<(), LbeError> {
+        submit_trace(format!(
+            "RealLbeWrapper::submit_conversational_turn invoked intent_len={} mode={:?}",
+            intent.len(),
+            mode
+        ));
         self.require_connected()?;
         let wall_root = self
             .wall_root
@@ -2885,7 +3151,26 @@ impl RealLbeWrapper {
             .output()
             .map_err(|error| LbeError::new(format!("turn bridge launch failed: {error}")))?;
         let payload = parse_workspace_payload(&output.stdout, "turn")?;
-        if !output.status.success() || payload.get("ok") != Some(&serde_json::Value::Bool(true)) {
+        let has_turn_response = payload
+            .get("turn_id")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty())
+            && payload
+                .get("events")
+                .and_then(serde_json::Value::as_array)
+                .is_some();
+        submit_trace(format!(
+            "product_entry turn process_success={} ok={} has_turn_response={}",
+            output.status.success(),
+            payload
+                .get("ok")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            has_turn_response
+        ));
+        if (!output.status.success() || payload.get("ok") != Some(&serde_json::Value::Bool(true)))
+            && !has_turn_response
+        {
             let message = payload
                 .get("message")
                 .and_then(serde_json::Value::as_str)
@@ -2923,10 +3208,95 @@ impl RealLbeWrapper {
             .get("events")
             .and_then(serde_json::Value::as_array)
             .ok_or_else(|| LbeError::new("turn bridge response omitted events"))?;
+        submit_trace(format!(
+            "product_entry turn returned canonical turn_id={} events={}",
+            turn_id,
+            events.len()
+        ));
         self.snapshot.turn_id = Some(turn_id.to_owned());
         for event in events {
             self.project_conversational_event(event, mode, turn_id)?;
         }
+        Ok(())
+    }
+
+    fn abort_real_turn(&mut self) -> Result<(), LbeError> {
+        self.require_connected()?;
+        let wall_root = self
+            .wall_root
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_ROOT is not configured"))?;
+        let database = self
+            .wall_database
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_DATABASE is not configured"))?;
+        let session_id = self
+            .session_id
+            .clone()
+            .or_else(|| self.snapshot.session_id.clone())
+            .ok_or_else(|| LbeError::new("LBE_SESSION_ID is not configured"))?;
+        let turn_id = self
+            .snapshot
+            .turn_id
+            .clone()
+            .ok_or_else(|| LbeError::new("no active LBE turn is available to abort"))?;
+        let execution_id = self
+            .snapshot
+            .active_execution_id
+            .clone()
+            .ok_or_else(|| LbeError::new("no active LBE execution is available to abort"))?;
+        let python = std::env::var_os("LBE_WALL_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("python"));
+        let output = configured_lbe_command(&python, &wall_root)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "control",
+                "cancel",
+                "--database",
+            ])
+            .arg(database)
+            .args([
+                "--session-id",
+                &session_id,
+                "--turn-id",
+                &turn_id,
+                "--format",
+                "json",
+            ])
+            .output()
+            .map_err(|error| LbeError::new(format!("turn cancellation failed: {error}")))?;
+        let payload = parse_workspace_payload(&output.stdout, "turn.cancel")?;
+        if !output.status.success() || payload.get("ok") != Some(&serde_json::Value::Bool(true)) {
+            let message = payload
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .or_else(|| payload.get("reason").and_then(serde_json::Value::as_str))
+                .unwrap_or("turn cancellation was rejected by LBE");
+            return Err(LbeError::new(message));
+        }
+        if payload.get("action").and_then(serde_json::Value::as_str) != Some("turn.cancel")
+            || payload
+                .get("session_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(session_id.as_str())
+            || payload.get("turn_id").and_then(serde_json::Value::as_str) != Some(turn_id.as_str())
+            || payload.get("state").and_then(serde_json::Value::as_str) != Some("cancelled")
+        {
+            return Err(LbeError::new(
+                "turn.cancel response identity or state mismatch",
+            ));
+        }
+        self.snapshot.session_state = SessionStatus::Aborted;
+        self.snapshot.execution_status = Some(ExecutionStatus::Aborted);
+        self.snapshot.active_execution_id = None;
+        self.pending_events
+            .push_back(LbeEvent::ExecutionInterrupted {
+                execution_id,
+                reason: "user requested turn cancellation".to_owned(),
+            });
         Ok(())
     }
 
@@ -2936,6 +3306,18 @@ impl RealLbeWrapper {
         mode: AgentMode,
         turn_id: &str,
     ) -> Result<(), LbeError> {
+        submit_trace(format!(
+            "RealLbeWrapper received turn event raw_session={} raw_turn={} expected_turn={}",
+            event
+                .get("session_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("none"),
+            event
+                .get("turn_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("none"),
+            turn_id
+        ));
         if event.get("session_id").and_then(serde_json::Value::as_str)
             != self.snapshot.session_id.as_deref()
             || event.get("turn_id").and_then(serde_json::Value::as_str) != Some(turn_id)
@@ -2952,6 +3334,12 @@ impl RealLbeWrapper {
             .get("event_type")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| LbeError::new("turn bridge event omitted event_type"))?;
+        submit_trace(format!(
+            "RealLbeWrapper projecting event type={} session={} turn={}",
+            event_type,
+            self.snapshot.session_id.as_deref().unwrap_or("none"),
+            turn_id
+        ));
         let payload = event.get("payload").unwrap_or(&serde_json::Value::Null);
         match event_type {
             "model.message.completed" => {
@@ -3021,7 +3409,12 @@ impl RealLbeWrapper {
                     .unwrap_or("LBE conversational turn failed")
                     .to_owned();
                 self.pending_events
-                    .push_back(LbeEvent::WrapperError { message });
+                    .push_back(LbeEvent::ConversationalTurnError {
+                        session_id: self.snapshot.session_id.clone().unwrap_or_default(),
+                        turn_id: turn_id.to_owned(),
+                        event_id,
+                        message,
+                    });
             }
             "user.message"
             | "runtime.guidance.loaded"
@@ -4144,6 +4537,84 @@ fn parse_provider_check_status(payload: &serde_json::Value) -> Result<&str, LbeE
         .ok_or_else(|| LbeError::new("provider.check response omitted status"))
 }
 
+fn parse_session_list_payload(
+    payload: &serde_json::Value,
+    workspace_id: &str,
+) -> Result<Vec<SessionSummary>, LbeError> {
+    if payload.get("action").and_then(serde_json::Value::as_str) != Some("session.list") {
+        return Err(LbeError::new("session.list response action mismatch"));
+    }
+    let items = payload
+        .get("sessions")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| LbeError::new("session.list response omitted sessions"))?;
+    items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let session_id = item
+                .get("session_id")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| {
+                    LbeError::new(format!("session.list session {index} omitted session_id"))
+                })?;
+            if item
+                .get("project_workspace_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(workspace_id)
+            {
+                return Err(LbeError::new("session.list workspace identity mismatch"));
+            }
+            let status = match item
+                .get("status")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("idle")
+            {
+                "idle" => SessionStatus::Idle,
+                "running" => SessionStatus::Running,
+                "waiting_for_approval" => SessionStatus::WaitingForApproval,
+                "waiting_for_input" => SessionStatus::WaitingForInput,
+                "interrupted" => SessionStatus::Interrupted,
+                "completed" => SessionStatus::Completed,
+                "failed" => SessionStatus::Failed,
+                "timed_out" => SessionStatus::TimedOut,
+                "aborted" => SessionStatus::Aborted,
+                "rejected" => SessionStatus::Rejected,
+                value => {
+                    return Err(LbeError::new(format!(
+                        "session.list returned unsupported status: {value}"
+                    )));
+                }
+            };
+            let origin = match item
+                .get("origin")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("user")
+            {
+                "user" => SessionOrigin::User,
+                "automation" => SessionOrigin::Automation,
+                "subagent" => SessionOrigin::Subagent,
+                "team" => SessionOrigin::Team,
+                value => {
+                    return Err(LbeError::new(format!(
+                        "session.list returned unsupported origin: {value}"
+                    )));
+                }
+            };
+            Ok(SessionSummary {
+                session_id: session_id.to_owned(),
+                status,
+                origin,
+                parent_session_id: item
+                    .get("parent_session_id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+            })
+        })
+        .collect()
+}
+
 pub(crate) fn parse_provider_check_payload(
     payload: &serde_json::Value,
     provider_id: ProviderId,
@@ -4269,14 +4740,21 @@ impl LbeWrapper for RealLbeWrapper {
     }
 
     fn submit(&mut self, request: UserRequest, _now: Instant) -> Result<(), LbeError> {
+        if matches!(&request, UserRequest::SubmitTask { .. }) {
+            submit_trace("RealLbeWrapper::submit dispatching UserRequest::SubmitTask".to_owned());
+        }
         match request {
             UserRequest::StartSession => self.create_real_session(),
-            UserRequest::ListSessions => self.require_connected(),
+            UserRequest::ListSessions => self.list_real_sessions(),
             UserRequest::ResumeSession { session_id } => self.resume_real_session(session_id),
-            UserRequest::CloseSession { .. } => self.require_connected(),
-            UserRequest::ConfigureProvider { .. } => self.require_connected(),
-            UserRequest::ValidateProvider { .. } => self.require_connected(),
-            UserRequest::RemoveProvider { .. } => self.require_connected(),
+            UserRequest::CloseSession { .. } => self.unsupported_real_request("session closing"),
+            UserRequest::ConfigureProvider { .. } => {
+                self.unsupported_real_request("provider configuration")
+            }
+            UserRequest::ValidateProvider { provider_id } => {
+                self.validate_real_provider(provider_id)
+            }
+            UserRequest::RemoveProvider { .. } => self.unsupported_real_request("provider removal"),
             UserRequest::RefreshRuntimeSnapshot => {
                 self.require_connected()?;
                 self.attach()
@@ -4333,7 +4811,28 @@ impl LbeWrapper for RealLbeWrapper {
             UserRequest::Reject { approval_id } => {
                 self.resolve_authorization(&approval_id, "reject")
             }
-            _ => self.require_connected(),
+            UserRequest::SetMode { .. } => self.unsupported_real_request("mode changes"),
+            UserRequest::CompareCheckpoint { .. } => {
+                self.unsupported_real_request("checkpoint comparison")
+            }
+            UserRequest::RestoreCheckpoint { .. } => {
+                self.unsupported_real_request("checkpoint restore")
+            }
+            UserRequest::CompactContext => self.unsupported_real_request("context compaction"),
+            UserRequest::RunDiagnostics => self.run_real_diagnostics(),
+            UserRequest::RecallSessionMemory { .. }
+            | UserRequest::RecallSession { .. }
+            | UserRequest::CreateMemoryCheckpoint
+            | UserRequest::ForgetSessionMemory { .. } => {
+                self.unsupported_real_request("session memory operations")
+            }
+            UserRequest::AttachBrowserChat { .. }
+            | UserRequest::DetachBrowserChat
+            | UserRequest::SendBrowserMessage { .. }
+            | UserRequest::ContinueBrowserSession { .. } => {
+                self.unsupported_real_request("browser chat")
+            }
+            UserRequest::Abort => self.abort_real_turn(),
         }
     }
 
