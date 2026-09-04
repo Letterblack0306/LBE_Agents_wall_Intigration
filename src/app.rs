@@ -383,8 +383,10 @@ impl App {
                     content: replacement_content.clone(),
                 });
                 self.apply_wrapper_result(wrapper.submit(
-                    UserRequest::RequestAuthorization {
-                        capability: "modify".to_owned(),
+                    UserRequest::PatchWorkspace {
+                        path: path.clone(),
+                        content: replacement_content.clone(),
+                        expected_sha256: expected_sha256.clone(),
                     },
                     now,
                 ));
