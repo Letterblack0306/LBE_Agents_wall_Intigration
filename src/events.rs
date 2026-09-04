@@ -217,6 +217,12 @@ pub(crate) enum LbeEvent {
         turn_id: String,
         event_id: String,
     },
+    ConversationalTurnError {
+        session_id: String,
+        turn_id: String,
+        event_id: String,
+        message: String,
+    },
     ProposalCreated {
         approval_id: String,
         proposal: String,
