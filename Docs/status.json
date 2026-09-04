@@ -1,319 +1,387 @@
 {
-    "schema_version": 3,
-    "project": "LBE TUI governed coding frontend roadmap",
-    "integration_phase": "LBE_RUNTIME_IMPLEMENTED_BIRDEYE_AUTHORITY_CONFIRMED_TUI_CLIENT_PROJECTIONS_LOCALLY_PROVEN_LIVE_ACCEPTANCE_SEQUENCED",
-    "product_scope": [
-        "Governance / audit frontend",
-        "Coding-agent frontend",
-        "Runtime/session frontend",
-        "Tool/process frontend",
-        "Evidence/receipt frontend",
-        "External interaction frontend"
-    ],
-    "tracks": {
-        "existing_slices_integration": "01-16",
-        "coding_frontend_implementation_roadmap": "17-30",
-        "reuse_interop_strategy": "31",
-        "real_cli_ide_implementation_plan": "33"
+  "schema_version": 4,
+  "project": "LBE governed agent product surface and integration roadmap",
+  "integration_phase": "CLINE_CLI_USER_SURFACE_ACTIVE_LBE_RUNTIME_AUTHORITY_RUST_REFERENCE_CLIENT_LIVE_ACCEPTANCE_SEQUENCED",
+  "product_scope": [
+    "Cline CLI/TUI user-facing product surface",
+    "Integrated Cline + LBE launcher",
+    "LBE-governed agent/runtime integration",
+    "Governance / audit projection",
+    "Tool/process/MCP projection",
+    "Evidence/receipt/session projection",
+    "Rust/Ratatui reference/integration client"
+  ],
+  "tracks": {
+    "existing_slices_integration": "01-16",
+    "coding_frontend_implementation_roadmap": "17-30",
+    "cline_interop_and_user_surface": "31 + cline/apps/cli + run-cline-lbe.ps1",
+    "rust_reference_integration": "32-36 where explicitly Rust-scoped",
+    "final_product_acceptance": "Cline CLI/TUI -> LBE runtime authority -> installed acceptance"
+  },
+  "modules": {
+    "01_transcript_viewport.md": {
+      "notes": "Rust projection is implemented; LBE persisted conversation/event owner is PASS; live Rust event binding and PTY acceptance remain open.",
+      "status": "IMPLEMENTED / LOCAL",
+      "relevance": "CORE",
+      "depends_on": []
     },
-    "modules": {
-        "01_transcript_viewport.md": {
-            "notes": "Rust projection is implemented; LBE persisted conversation/event owner is PASS; live Rust event binding and PTY acceptance remain open.",
-            "status": "IMPLEMENTED / LOCAL",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "02_model_picker.md": {
-            "notes": "Rust picker and catalog-before-selection ordering are implemented; LBE provider/model owner and first-run pairing are PASS; installed live catalog acceptance remains open.",
-            "status": "IMPLEMENTED / LOCAL — CATALOG ORDERING RECONCILED",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "03_checkpoints_restore.md": {
-            "notes": "Rust request/projection is implemented; LBE checkpoint/recovery owners exist; live Rust projection remains unproven.",
-            "status": "IMPLEMENTED / LOCAL",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "04_sessions.md": {
-            "notes": "LBE session/application lifecycle is PASS; Rust contracts/projection exist but live service/event integration remains pending.",
-            "status": "IMPLEMENTED / LBE OWNER PASS; RUST ADAPTER PARTIAL",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "05_background_processes.md": {
-            "notes": "LBE process/runtime owners exist; Rust detached-process projection and connected-state labeling are locally implemented, while installed live event binding remains pending.",
-            "status": "PARTIAL — LBE OWNER EXISTS; RUST PROJECTION LOCALLY TESTED",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "06_provider_configuration.md": {
-            "notes": "LBE-owned provider-adapter registry/configuration/health/continuation are accepted; Rust accepts registered provider IDs and waits for authoritative catalog events, while richer editing and installed live binding remain pending.",
-            "status": "PARTIAL — LBE PROVIDER-ADAPTER LIFECYCLE PASS; RUST IDENTITY/CATALOG ADAPTER RECONCILED",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "07_tools_registry.md": {
-            "notes": "LBE ToolRegistry/orchestration/authorization/receipt/continuation are PASS; Rust typed request/risk/authorization projection and connected-state labeling are implemented and locally tested; installed live acceptance remains open.",
-            "status": "IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "documentation_companion_plugin": {
-            "notes": "Vendored optional Python documentation companion; consumes LBE-owned identifiers/events and renders derived Markdown only when explicitly invoked; not imported by the active Rust/LBE runtime.",
-            "status": "VENDORED ISOLATED PROTOTYPE — NOT WIRED INTO RUNTIME",
-            "relevance": "DOCUMENTATION SUPPORT",
-            "depends_on": [
-                "00_integration_alignment.md",
-                "36_p2_p3_client_contract.md"
-            ]
-        },
-        "08_evidence_browser.md": {
-            "notes": "LBE EvidenceService is PASS; Rust typed evidence projection, local rendering, and connected-state labeling are implemented and tested; installed live evidence acceptance remains open.",
-            "status": "IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE EVIDENCE ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": [
-                "07_tools_registry.md"
-            ]
-        },
-        "09_receipts_browser.md": {
-            "notes": "LBE receipt lifecycle is PASS; Rust structured receipt projection, connected-state labeling, and empty-state handling are implemented and tested; installed live receipt acceptance remains open.",
-            "status": "IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE RECEIPT ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": [
-                "08_evidence_browser.md"
-            ]
-        },
-        "10_mcp_surface.md": {
-            "notes": "Rust BirdEye requests cross the existing LBE ToolRegistry/R6C/R6E boundary; MCP metadata and connected-state UI projection are locally tested. Installed registry execution, DENY-zero, ALLOW-exactly-one, persisted MCP ordering, provider continuation, and installed UI acceptance remain open.",
-            "status": "GOVERNED BIRDEYE ROUTING IMPLEMENTED — METADATA/CONNECTED PROJECTION; LIVE MCP PROOF OPEN",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "11_terminal_compatibility.md": {
-            "notes": "Rust NO_COLOR handling, ASCII fallbacks, Unicode-width truncation, and local compatibility tests are implemented; external PTY/ConPTY lifecycle acceptance remains open.",
-            "status": "IMPLEMENTED / LOCAL TESTED — LIVE TERMINAL ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "12_plain_cli_mode.md": {
-            "notes": "Rust --no-tui/headless routing, structured stdout events/results, stderr diagnostics, and exit-code contract are implemented; live governed completion remains runtime-dependent.",
-            "status": "IMPLEMENTED / LOCAL TESTED — LIVE GOVERNED COMPLETION ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "13_lifecycle_acceptance.md": {
-            "notes": "LBE live lifecycle/interface is accepted; Rust external PTY/ConPTY cleanup smoke remains unproven.",
-            "status": "PARTIAL — LBE RUNTIME PASS; RUST PTY NOT PROVEN",
-            "relevance": "CORE",
-            "depends_on": [
-                "14_responsive_acceptance.md"
-            ]
-        },
-        "14_responsive_acceptance.md": {
-            "notes": "Rust compact 60x18/80x18 layouts, populated panel rendering, long-name truncation, and minimum-size fallback are locally tested; external terminal acceptance remains open.",
-            "status": "IMPLEMENTED / LOCAL TESTED — LIVE TERMINAL ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "15_session_memory_recall.md": {
-            "notes": "LBE memory/promotion/recovery owners are accepted; Rust durable recall/context integration remains pending.",
-            "status": "PARTIAL — LBE MEMORY OWNER IMPLEMENTED; RUST INTEGRATION PENDING",
-            "relevance": "CORE",
-            "depends_on": [
-                "04_sessions.md"
-            ]
-        },
-        "16_browser_chat_bridge.md": {
-            "notes": "Pre-integration browser contract is closed; LBE external capability boundary is PASS; live browser automation remains unproven.",
-            "status": "CLOSED_PRE_INTEGRATION — LBE EXTERNAL CAPABILITY BOUNDARY PASS",
-            "relevance": "EXTERNAL INTERACTION",
-            "depends_on": [
-                "15_session_memory_recall.md"
-            ]
-        },
-        "17_policy_hooks_permissions.md": {
-            "notes": "LBE authorization/policy is PASS; Rust approval-required/allow/deny projection and fail-closed continuation are implemented and tested; dedicated permissions/sandbox projection and installed live approval remain open.",
-            "status": "IMPLEMENTED / LOCAL TESTED — LIVE AUTHORIZATION ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": [
-                "07_tools_registry.md"
-            ]
-        },
-        "18_schedules.md": {
-            "notes": "No current LBE schedule product contract is proven; Rust schedules remain unimplemented.",
-            "status": "MISSING — NO CURRENT LBE SCHEDULE OWNER EVIDENCE",
-            "relevance": "SUPPORTING",
-            "depends_on": [
-                "04_sessions.md"
-            ]
-        },
-        "19_connectors.md": {
-            "notes": "LBE external registration exists; connector lifecycle/product is not proven; Rust UI remains unimplemented.",
-            "status": "PARTIAL — LBE EXTERNAL REGISTRATION ONLY; CONNECTOR PRODUCT NOT PROVEN",
-            "relevance": "SUPPORTING",
-            "depends_on": [
-                "04_sessions.md",
-                "16_browser_chat_bridge.md"
-            ]
-        },
-        "20_agent_teams.md": {
-            "notes": "LBE registration is governed; coordinated team/task-board product is not proven; Rust UI remains unimplemented.",
-            "status": "PARTIAL — LBE EXTERNAL/SUBAGENT REGISTRATION ONLY; TEAM PRODUCT NOT PROVEN",
-            "relevance": "ADVANCED CORE",
-            "depends_on": [
-                "04_sessions.md",
-                "23_subagents.md"
-            ]
-        },
-        "21_conversation_handoff.md": {
-            "notes": "LBE persistence/resume is PASS; cross-client handoff package/product is not proven; Rust UI remains unimplemented.",
-            "status": "PARTIAL — LBE SESSION PERSISTENCE PASS; HANDOFF PRODUCT NOT PROVEN",
-            "relevance": "CORE FOR MULTI-CLIENT USE",
-            "depends_on": [
-                "04_sessions.md",
-                "15_session_memory_recall.md"
-            ]
-        },
-        "22_artifacts_review.md": {
-            "notes": "LBE evidence/receipt/diff surfaces are PASS; complete artifact review UI remains unproven.",
-            "status": "PARTIAL — LBE EVIDENCE/DIFF SURFACES PASS; ARTIFACT REVIEW UI NOT PROVEN",
-            "relevance": "CORE",
-            "depends_on": [
-                "03_checkpoints_restore.md",
-                "08_evidence_browser.md",
-                "09_receipts_browser.md",
-                "29_workspace_changes_diff.md"
-            ]
-        },
-        "23_subagents.md": {
-            "notes": "LBE subagent registration is governed; complete subagent lifecycle/UI remains unproven.",
-            "status": "PARTIAL — LBE EXTERNAL CAPABILITY REGISTRATION PASS; SUBAGENT UI/RUNTIME NOT PROVEN",
-            "relevance": "CORE FOR AGENTIC CODING",
-            "depends_on": [
-                "05_background_processes.md",
-                "07_tools_registry.md",
-                "17_policy_hooks_permissions.md"
-            ]
-        },
-        "24_projects_settings.md": {
-            "notes": "LBE project/provider/session owners and interface contracts are PASS; Rust project/settings UI remains missing.",
-            "status": "PARTIAL — LBE HOME/PROVIDER/SESSION OWNERS PASS; RUST UI MISSING",
-            "relevance": "CORE",
-            "depends_on": [
-                "06_provider_configuration.md",
-                "17_policy_hooks_permissions.md"
-            ]
-        },
-        "25_composer_prompt_editor.md": {
-            "notes": "LBE provider/continuation mechanics are PASS; Rust multiline editor and reference UX remain missing.",
-            "status": "PARTIAL — LBE PROVIDER/CONTINUATION MECHANICS PASS; RUST EDITOR MISSING",
-            "relevance": "CORE",
-            "depends_on": []
-        },
-        "26_statusline_title.md": {
-            "notes": "LBE interface projections are PASS; Rust statusline/title configuration remains missing.",
-            "status": "PARTIAL — LBE INTERFACE SURFACE PASS; RUST CONFIGURATION MISSING",
-            "relevance": "UX SUPPORT",
-            "depends_on": [
-                "24_projects_settings.md"
-            ]
-        },
-        "27_code_search.md": {
-            "notes": "LBE workspace/evidence owners exist; complete governed search product and Rust UI remain missing.",
-            "status": "PARTIAL — LBE EVIDENCE/WORKSPACE READ OWNERS EXIST; SEARCH UI MISSING",
-            "relevance": "CORE",
-            "depends_on": [
-                "07_tools_registry.md",
-                "24_projects_settings.md"
-            ]
-        },
-        "28_usage_quotas.md": {
-            "notes": "LBE provider health/capability owners exist; verified quota/billing projection is not proven; Rust UI remains missing.",
-            "status": "PARTIAL — LBE PROVIDER HEALTH/CAPABILITY OWNERS EXIST; QUOTA PRODUCT NOT PROVEN",
-            "relevance": "SUPPORTING",
-            "depends_on": [
-                "06_provider_configuration.md"
-            ]
-        },
-        "29_workspace_changes_diff.md": {
-            "notes": "LBE governed mutation/evidence/diff owners are PASS; Rust changes/diff projection and local rendering are implemented and tested; live writable mutation and installed acceptance remain open.",
-            "status": "IMPLEMENTED / LOCAL TESTED — LIVE WRITABLE ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": [
-                "03_checkpoints_restore.md",
-                "08_evidence_browser.md"
-            ]
-        },
-        "30_file_editor_patch_review.md": {
-            "notes": "LBE mutation is authorization/receipt/evidence-bound; Rust patch review, accept/reject routing, identity checks, and diff/receipt/evidence projection are implemented and tested; live writable execution remains open.",
-            "status": "IMPLEMENTED / LOCAL TESTED — LIVE PATCH ACCEPTANCE OPEN",
-            "relevance": "CORE",
-            "depends_on": [
-                "17_policy_hooks_permissions.md",
-                "22_artifacts_review.md",
-                "29_workspace_changes_diff.md"
-            ]
-        },
-        "31_cline_interop_reuse_strategy.md": {
-            "status": "PASS — CLINE/OPENCODE AUDIT COMPLETE; LBE ADAPTER COMPOSITION PROVEN; LIVE ACCEPTANCE OPEN",
-            "relevance": "STRATEGIC",
-            "depends_on": [
-                "17_policy_hooks_permissions.md",
-                "18_schedules.md",
-                "19_connectors.md",
-                "20_agent_teams.md",
-                "21_conversation_handoff.md",
-                "22_artifacts_review.md",
-                "23_subagents.md",
-                "24_projects_settings.md",
-                "25_composer_prompt_editor.md",
-                "26_statusline_title.md",
-                "27_code_search.md",
-                "28_usage_quotas.md",
-                "29_workspace_changes_diff.md",
-                "30_file_editor_patch_review.md"
-            ],
-            "notes": "Cline and pinned OpenCode revision dc4449d are reuse inputs behind the LBE-owned adapter. Provider/tool/continuation adapter composition and Rust projection compatibility are locally reconciled; live authenticated provider execution and installed TUI proof remain open."
-        },
-        "32_deterministic_runtime_state_machine.md": {
-            "status": "CLOSED — LOCAL PRE-INTEGRATION FOUNDATION; LBE RUNTIME AUTHORITY PASS",
-            "relevance": "CORE / BLOCKING",
-            "depends_on": [
-                "04_sessions.md",
-                "05_background_processes.md",
-                "07_tools_registry.md",
-                "13_lifecycle_acceptance.md"
-            ],
-            "notes": "Local deterministic mock foundation remains closed for test scope; LBE complete runtime is the production authority and Rust must integrate it rather than extend mock authority."
-        },
-        "33_real_cli_ide_implementation_plan.md": {
-            "status": "ACTIVE — RUST CLIENT INTEGRATION; LIVE ACCEPTANCE SEQUENCED",
-            "relevance": "CORE / SEQUENCING",
-            "depends_on": [
-                "31_cline_interop_reuse_strategy.md",
-                "32_deterministic_runtime_state_machine.md"
-            ],
-            "notes": "Rust/Ratatui is the active client/projection path over LBE; provider identity/catalog ordering, local governed projections, terminal compatibility, and headless contracts are reconciled. Configured live adapter proof and installed interactive acceptance remain pending."
-        },
-        "36_p2_p3_client_contract.md": {
-            "status": "LIVE READ-ONLY ADAPTER PROVEN — PROVIDER/CATALOG AND UI PROJECTIONS RECONCILED — FULL P2/P3 INCOMPLETE",
-            "relevance": "CONTRACT",
-            "depends_on": [
-                "33_real_cli_ide_implementation_plan.md",
-                "34_p1_live_readonly_acceptance.md",
-                "35_p1_live_acceptance_evidence_record.md"
-            ],
-            "notes": "Real Rust adapter and isolated live Agent Wall validation pass for workspace.read, workspace.list, workspace.glob, workspace.search, and read-only denial of modify with LBE receipt/evidence projection; provider/catalog ordering and connected UI projections are locally proven; approval routing, patch review, diff rendering, credentialed writable mutation, installed live validation/completion, and full installed P2/P3 acceptance remain pending."
-        },
-        "34_autonomous_developer_frontend.md": {
-            "status": "PARTIAL — LBE BACKEND CAPABILITIES PASS; RUST FEATURE SURFACES PARTIAL",
-            "relevance": "CORE",
-            "depends_on": [
-                "32_deterministic_runtime_state_machine.md",
-                "33_real_cli_ide_implementation_plan.md"
-            ],
-            "notes": "LBE backend owners are accepted; Rust frontend scaffolding remains partial until it consumes authoritative projections."
-        }
+    "02_model_picker.md": {
+      "notes": "Rust picker and catalog-before-selection ordering are implemented; LBE provider/model owner and first-run pairing are PASS; installed live catalog acceptance remains open.",
+      "status": "IMPLEMENTED / LOCAL — CATALOG ORDERING RECONCILED",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "03_checkpoints_restore.md": {
+      "notes": "Rust request/projection is implemented; LBE checkpoint/recovery owners exist; live Rust projection remains unproven.",
+      "status": "IMPLEMENTED / LOCAL",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "04_sessions.md": {
+      "notes": "LBE session/application lifecycle is PASS; Rust contracts/projection exist but live service/event integration remains pending.",
+      "status": "IMPLEMENTED / LBE OWNER PASS; RUST ADAPTER PARTIAL",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "05_background_processes.md": {
+      "notes": "LBE process/runtime owners exist; Rust detached-process projection and connected-state labeling are locally implemented, while installed live event binding remains pending.",
+      "status": "PARTIAL — LBE OWNER EXISTS; RUST PROJECTION LOCALLY TESTED",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "06_provider_configuration.md": {
+      "notes": "LBE-owned provider-adapter registry/configuration/health/continuation are accepted; Rust accepts registered provider IDs and waits for authoritative catalog events, while richer editing and installed live binding remain pending.",
+      "status": "PARTIAL — LBE PROVIDER-ADAPTER LIFECYCLE PASS; RUST IDENTITY/CATALOG ADAPTER RECONCILED",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "07_tools_registry.md": {
+      "notes": "LBE ToolRegistry/orchestration/authorization/receipt/continuation are PASS; Rust typed request/risk/authorization projection and connected-state labeling are implemented and locally tested; installed live acceptance remains open.",
+      "status": "IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "documentation_companion_plugin": {
+      "notes": "Vendored optional Python documentation companion; consumes LBE-owned identifiers/events and renders derived Markdown only when explicitly invoked; not imported by the active Rust/LBE runtime.",
+      "status": "VENDORED ISOLATED PROTOTYPE — NOT WIRED INTO RUNTIME",
+      "relevance": "DOCUMENTATION SUPPORT",
+      "depends_on": [
+        "00_integration_alignment.md",
+        "36_p2_p3_client_contract.md"
+      ]
+    },
+    "08_evidence_browser.md": {
+      "notes": "LBE EvidenceService is PASS; Rust typed evidence projection, local rendering, and connected-state labeling are implemented and tested; installed live evidence acceptance remains open.",
+      "status": "IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE EVIDENCE ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": [
+        "07_tools_registry.md"
+      ]
+    },
+    "09_receipts_browser.md": {
+      "notes": "LBE receipt lifecycle is PASS; Rust structured receipt projection, connected-state labeling, and empty-state handling are implemented and tested; installed live receipt acceptance remains open.",
+      "status": "IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE RECEIPT ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": [
+        "08_evidence_browser.md"
+      ]
+    },
+    "10_mcp_surface.md": {
+      "notes": "Final user-facing MCP management belongs to the Cline CLI/TUI path and must remain behind LBE ToolRegistry/R6C/R6E authority. Existing Rust BirdEye routing/metadata/connected-state tests remain useful reference/integration evidence only. Installed Cline MCP invocation, DENY-zero, ALLOW-exactly-one, persisted ordering, receipt/evidence correlation, and continuation remain open.",
+      "status": "CLINE PRODUCT MCP SURFACE ACTIVE — LBE-GOVERNED ROUTING; INSTALLED MCP ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "11_terminal_compatibility.md": {
+      "notes": "Installed PTY/ConPTY and terminal lifecycle acceptance for the final product must target the Cline CLI/TUI path. Existing Rust NO_COLOR, ASCII fallback, Unicode-width, cleanup, and compatibility tests remain bounded reference/integration evidence and are not proof of the Cline user experience.",
+      "status": "CLINE PRODUCT TERMINAL ACCEPTANCE OPEN — RUST TERMINAL TESTS REFERENCE ONLY",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "12_plain_cli_mode.md": {
+      "notes": "Headless/plain CLI and JSON-mode product acceptance must target the Cline CLI package. Existing Rust --no-tui structured-output contracts remain reference/integration evidence only. Final acceptance must prove Cline headless execution through LBE-governed runtime owners.",
+      "status": "CLINE HEADLESS/JSON PRODUCT PATH ACTIVE — INSTALLED GOVERNED ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "13_lifecycle_acceptance.md": {
+      "notes": "LBE runtime lifecycle is accepted as backend authority. Final user-facing lifecycle proof must cover the integrated Cline launch, session creation/reuse, governed execution, event projection, terminal cleanup, restart/resume, and installed end-to-end behavior. Rust lifecycle/PTY evidence remains reference-only for Rust-scoped claims.",
+      "status": "PARTIAL — LBE RUNTIME BASELINE PASS; CLINE INSTALLED LIFECYCLE ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": [
+        "14_responsive_acceptance.md"
+      ]
+    },
+    "14_responsive_acceptance.md": {
+      "notes": "Rust compact 60x18/80x18 layouts, populated panel rendering, long-name truncation, and minimum-size fallback are locally tested; external terminal acceptance remains open.",
+      "status": "IMPLEMENTED / LOCAL TESTED — LIVE TERMINAL ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "15_session_memory_recall.md": {
+      "notes": "LBE memory/promotion/recovery owners are accepted; Rust durable recall/context integration remains pending.",
+      "status": "PARTIAL — LBE MEMORY OWNER IMPLEMENTED; RUST INTEGRATION PENDING",
+      "relevance": "CORE",
+      "depends_on": [
+        "04_sessions.md"
+      ]
+    },
+    "16_browser_chat_bridge.md": {
+      "notes": "Pre-integration browser contract is closed; LBE external capability boundary is PASS; live browser automation remains unproven.",
+      "status": "CLOSED_PRE_INTEGRATION — LBE EXTERNAL CAPABILITY BOUNDARY PASS",
+      "relevance": "EXTERNAL INTERACTION",
+      "depends_on": [
+        "15_session_memory_recall.md"
+      ]
+    },
+    "17_policy_hooks_permissions.md": {
+      "notes": "LBE authorization/policy is PASS; Rust approval-required/allow/deny projection and fail-closed continuation are implemented and tested; dedicated permissions/sandbox projection and installed live approval remain open.",
+      "status": "IMPLEMENTED / LOCAL TESTED — LIVE AUTHORIZATION ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": [
+        "07_tools_registry.md"
+      ]
+    },
+    "18_schedules.md": {
+      "notes": "No current LBE schedule product contract is proven; Rust schedules remain unimplemented.",
+      "status": "MISSING — NO CURRENT LBE SCHEDULE OWNER EVIDENCE",
+      "relevance": "SUPPORTING",
+      "depends_on": [
+        "04_sessions.md"
+      ]
+    },
+    "19_connectors.md": {
+      "notes": "LBE external registration exists; connector lifecycle/product is not proven; Rust UI remains unimplemented.",
+      "status": "PARTIAL — LBE EXTERNAL REGISTRATION ONLY; CONNECTOR PRODUCT NOT PROVEN",
+      "relevance": "SUPPORTING",
+      "depends_on": [
+        "04_sessions.md",
+        "16_browser_chat_bridge.md"
+      ]
+    },
+    "20_agent_teams.md": {
+      "notes": "LBE registration is governed; coordinated team/task-board product is not proven; Rust UI remains unimplemented.",
+      "status": "PARTIAL — LBE EXTERNAL/SUBAGENT REGISTRATION ONLY; TEAM PRODUCT NOT PROVEN",
+      "relevance": "ADVANCED CORE",
+      "depends_on": [
+        "04_sessions.md",
+        "23_subagents.md"
+      ]
+    },
+    "21_conversation_handoff.md": {
+      "notes": "LBE persistence/resume is PASS; cross-client handoff package/product is not proven; Rust UI remains unimplemented.",
+      "status": "PARTIAL — LBE SESSION PERSISTENCE PASS; HANDOFF PRODUCT NOT PROVEN",
+      "relevance": "CORE FOR MULTI-CLIENT USE",
+      "depends_on": [
+        "04_sessions.md",
+        "15_session_memory_recall.md"
+      ]
+    },
+    "22_artifacts_review.md": {
+      "notes": "LBE evidence/receipt/diff surfaces are PASS; complete artifact review UI remains unproven.",
+      "status": "PARTIAL — LBE EVIDENCE/DIFF SURFACES PASS; ARTIFACT REVIEW UI NOT PROVEN",
+      "relevance": "CORE",
+      "depends_on": [
+        "03_checkpoints_restore.md",
+        "08_evidence_browser.md",
+        "09_receipts_browser.md",
+        "29_workspace_changes_diff.md"
+      ]
+    },
+    "23_subagents.md": {
+      "notes": "LBE subagent registration is governed; complete subagent lifecycle/UI remains unproven.",
+      "status": "PARTIAL — LBE EXTERNAL CAPABILITY REGISTRATION PASS; SUBAGENT UI/RUNTIME NOT PROVEN",
+      "relevance": "CORE FOR AGENTIC CODING",
+      "depends_on": [
+        "05_background_processes.md",
+        "07_tools_registry.md",
+        "17_policy_hooks_permissions.md"
+      ]
+    },
+    "24_projects_settings.md": {
+      "notes": "LBE project/provider/session owners and interface contracts are PASS; Rust project/settings UI remains missing.",
+      "status": "PARTIAL — LBE HOME/PROVIDER/SESSION OWNERS PASS; RUST UI MISSING",
+      "relevance": "CORE",
+      "depends_on": [
+        "06_provider_configuration.md",
+        "17_policy_hooks_permissions.md"
+      ]
+    },
+    "25_composer_prompt_editor.md": {
+      "notes": "LBE provider/continuation mechanics are PASS; Rust multiline editor and reference UX remain missing.",
+      "status": "PARTIAL — LBE PROVIDER/CONTINUATION MECHANICS PASS; RUST EDITOR MISSING",
+      "relevance": "CORE",
+      "depends_on": []
+    },
+    "26_statusline_title.md": {
+      "notes": "LBE interface projections are PASS; Rust statusline/title configuration remains missing.",
+      "status": "PARTIAL — LBE INTERFACE SURFACE PASS; RUST CONFIGURATION MISSING",
+      "relevance": "UX SUPPORT",
+      "depends_on": [
+        "24_projects_settings.md"
+      ]
+    },
+    "27_code_search.md": {
+      "notes": "LBE workspace/evidence owners exist; complete governed search product and Rust UI remain missing.",
+      "status": "PARTIAL — LBE EVIDENCE/WORKSPACE READ OWNERS EXIST; SEARCH UI MISSING",
+      "relevance": "CORE",
+      "depends_on": [
+        "07_tools_registry.md",
+        "24_projects_settings.md"
+      ]
+    },
+    "28_usage_quotas.md": {
+      "notes": "LBE provider health/capability owners exist; verified quota/billing projection is not proven; Rust UI remains missing.",
+      "status": "PARTIAL — LBE PROVIDER HEALTH/CAPABILITY OWNERS EXIST; QUOTA PRODUCT NOT PROVEN",
+      "relevance": "SUPPORTING",
+      "depends_on": [
+        "06_provider_configuration.md"
+      ]
+    },
+    "29_workspace_changes_diff.md": {
+      "notes": "LBE governed mutation/evidence/diff owners are PASS; Rust changes/diff projection and local rendering are implemented and tested; live writable mutation and installed acceptance remain open.",
+      "status": "IMPLEMENTED / LOCAL TESTED — LIVE WRITABLE ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": [
+        "03_checkpoints_restore.md",
+        "08_evidence_browser.md"
+      ]
+    },
+    "30_file_editor_patch_review.md": {
+      "notes": "LBE mutation is authorization/receipt/evidence-bound; Rust patch review, accept/reject routing, identity checks, and diff/receipt/evidence projection are implemented and tested; live writable execution remains open.",
+      "status": "IMPLEMENTED / LOCAL TESTED — LIVE PATCH ACCEPTANCE OPEN",
+      "relevance": "CORE",
+      "depends_on": [
+        "17_policy_hooks_permissions.md",
+        "22_artifacts_review.md",
+        "29_workspace_changes_diff.md"
+      ]
+    },
+    "31_cline_interop_reuse_strategy.md": {
+      "status": "ACTIVE PRODUCT SURFACE — CLINE CLI/TUI ACCEPTED; LBE AUTHORITY PRESERVED; LIVE ACCEPTANCE OPEN",
+      "relevance": "STRATEGIC",
+      "depends_on": [
+        "17_policy_hooks_permissions.md",
+        "18_schedules.md",
+        "19_connectors.md",
+        "20_agent_teams.md",
+        "21_conversation_handoff.md",
+        "22_artifacts_review.md",
+        "23_subagents.md",
+        "24_projects_settings.md",
+        "25_composer_prompt_editor.md",
+        "26_statusline_title.md",
+        "27_code_search.md",
+        "28_usage_quotas.md",
+        "29_workspace_changes_diff.md",
+        "30_file_editor_patch_review.md"
+      ],
+      "notes": "Cline CLI/TUI under cline/apps/cli is the accepted user-facing interface and run-cline-lbe.ps1 is the integrated launcher. Cline agent/runtime mechanics remain bounded by LBE-owned session, provider, authorization, execution, receipt/evidence, persistence, validation, and completion owners. Rust projection compatibility is reference/integration evidence only and must not substitute for Cline product-surface acceptance."
+    },
+    "32_deterministic_runtime_state_machine.md": {
+      "status": "CLOSED — LOCAL PRE-INTEGRATION FOUNDATION; LBE RUNTIME AUTHORITY PASS",
+      "relevance": "CORE / BLOCKING",
+      "depends_on": [
+        "04_sessions.md",
+        "05_background_processes.md",
+        "07_tools_registry.md",
+        "13_lifecycle_acceptance.md"
+      ],
+      "notes": "Local deterministic mock foundation remains closed for test scope; LBE complete runtime is the production authority and Rust must integrate it rather than extend mock authority."
+    },
+    "33_real_cli_ide_implementation_plan.md": {
+      "status": "ACTIVE — CLINE CLI/TUI PRODUCT INTEGRATION; RUST REFERENCE CLIENT; LIVE ACCEPTANCE SEQUENCED",
+      "relevance": "CORE / SEQUENCING",
+      "depends_on": [
+        "31_cline_interop_reuse_strategy.md",
+        "32_deterministic_runtime_state_machine.md"
+      ],
+      "notes": "Cline CLI/TUI is the active user-facing product path over LBE via run-cline-lbe.ps1. Rust/Ratatui remains a separate prototype/reference/integration client. Future keyboard, command palette, MCP, Skills/workflows, provider/model, session/history, checkpoint, headless, PTY/ConPTY, and installed CLI acceptance must target the Cline path unless a task is explicitly scoped to Rust reference-client work."
+    },
+    "36_p2_p3_client_contract.md": {
+      "status": "LIVE READ-ONLY ADAPTER PROVEN — PROVIDER/CATALOG AND UI PROJECTIONS RECONCILED — FULL P2/P3 INCOMPLETE",
+      "relevance": "CONTRACT",
+      "depends_on": [
+        "33_real_cli_ide_implementation_plan.md",
+        "34_p1_live_readonly_acceptance.md",
+        "35_p1_live_acceptance_evidence_record.md"
+      ],
+      "notes": "Real Rust adapter and isolated live Agent Wall validation pass for workspace.read, workspace.list, workspace.glob, workspace.search, and read-only denial of modify with LBE receipt/evidence projection; provider/catalog ordering and connected UI projections are locally proven; approval routing, patch review, diff rendering, credentialed writable mutation, installed live validation/completion, and full installed P2/P3 acceptance remain pending."
+    },
+    "34_autonomous_developer_frontend.md": {
+      "status": "PARTIAL — LBE BACKEND CAPABILITIES PASS; RUST FEATURE SURFACES PARTIAL",
+      "relevance": "CORE",
+      "depends_on": [
+        "32_deterministic_runtime_state_machine.md",
+        "33_real_cli_ide_implementation_plan.md"
+      ],
+      "notes": "LBE backend owners are accepted; Rust frontend scaffolding remains partial until it consumes authoritative projections."
     }
+  },
+  "product_structure": {
+    "classification": "CURRENT_CORRECTED_PRODUCT_STRUCTURE",
+    "updated": "2026-09-04",
+    "product": "LetterBlack / LBE",
+    "user_facing_cli_tui": {
+      "path": "C:/LBE-TUI-Lab/cline/apps/cli",
+      "entrypoint": "C:/LBE-TUI-Lab/cline/apps/cli/src/index.ts",
+      "role": "Actual accepted user-facing interactive/headless Cline CLI/TUI surface",
+      "acceptance_rule": "Keyboard, command palette, MCP management, Skills/workflows, provider/model selection, sessions/history, checkpoints, and installed CLI UX acceptance must be proven on this path."
+    },
+    "integrated_launcher": {
+      "path": "C:/LBE-TUI-Lab/run-cline-lbe.ps1",
+      "role": "Creates or reuses an LBE session, binds workspace/runtime environment, launches the Cline executable, and connects the client to the canonical LBE backend."
+    },
+    "runtime_authority": {
+      "path": "C:/Agents-Memory-Tool-v6-integration",
+      "role": "Canonical LBE runtime and governance authority",
+      "owns": [
+        "workspace/session identity",
+        "provider configuration and continuation",
+        "policy and modes",
+        "authorization",
+        "ToolRegistry",
+        "governed execution",
+        "MCP/external capability registration",
+        "ToolReceipt",
+        "evidence",
+        "persistence/recovery",
+        "validation",
+        "completion truth"
+      ]
+    },
+    "rust_reference_integration_client": {
+      "path": "C:/LBE-TUI-Lab/src/main.rs",
+      "binary": "lbe",
+      "launcher": "C:/LBE-TUI-Lab/run-lbe.bat",
+      "role": "Rust/Ratatui prototype/reference/integration client for bounded contracts, projections, and integration experiments; not the accepted user-facing Cline CLI."
+    },
+    "runtime_flow": [
+      "User",
+      "Cline CLI/TUI",
+      "Cline keyboard/action handlers",
+      "Cline runtime/session layer",
+      "bounded LBE adapter",
+      "LBE product entry/runtime",
+      "authorization -> governed execution -> ToolReceipt/evidence",
+      "Cline event/session projection",
+      "user-visible terminal output"
+    ],
+    "authority_invariant": "Cline and Rust are client/mechanics surfaces only. LBE remains sole owner of session truth, provider policy, authorization, execution, receipts, evidence, persistence, validation, and completion.",
+    "supersedes": "Older Rust/Ratatui-active-interface classification in this file."
+  },
+  "machine_map_reconciliation": {
+    "classification": "RECONCILED",
+    "date": "2026-09-04",
+    "previous_stale_claim": "Rust/Ratatui = active interface implementation and remaining product implementation path",
+    "corrected_claim": "Cline CLI/TUI = actual user-facing product surface; Rust/Ratatui = reference/integration client; LBE workspace = sole runtime/governance authority",
+    "evidence_basis": [
+      "C:/LBE-TUI-Lab/Agent.md current synchronized workspace state",
+      "C:/LBE-TUI-Lab/Docs/00_integration_alignment.md current synchronized workspace state",
+      "C:/LBE-TUI-Lab/run-cline-lbe.ps1 current synchronized workspace state",
+      "C:/Agents-Memory-Tool-v6-integration/docs/CURRENT_STATUS.md",
+      "C:/Agents-Memory-Tool-v6-integration/PROJECT_INDEX.md"
+    ],
+    "future_planning_rule": "Use Cline CLI/TUI for product-surface planning and installed UX acceptance. Use Rust only when a task explicitly targets the reference/integration client."
+  }
 }
