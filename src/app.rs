@@ -2007,6 +2007,9 @@ impl App {
             return;
         }
         self.phase = Phase::Running;
+        if let Some(operation_id) = pending_patch.operation_id.as_deref() {
+            self.active_execution_id = Some(format!("exec_{operation_id}"));
+        }
         self.transcript.push(format!(
             "PATCH  AUTHORIZED — SUBMITTING · {} through Agent Wall",
             pending_patch.path
