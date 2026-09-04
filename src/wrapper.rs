@@ -1605,6 +1605,7 @@ pub(crate) struct RealLbeWrapper {
     session_id: Option<String>,
     task_id: Option<String>,
     pending_authorization: Option<(String, String, String)>,
+    approved_authorization: Option<(String, String, String)>,
     pending_events: VecDeque<LbeEvent>,
 }
 
@@ -1883,6 +1884,7 @@ impl RealLbeWrapper {
             session_id,
             task_id,
             pending_authorization: None,
+            approved_authorization: None,
             pending_events: VecDeque::new(),
         }
     }
@@ -3479,11 +3481,6 @@ impl RealLbeWrapper {
             input_summary: path.to_owned(),
             risk: ToolRisk::ReadOnly,
         });
-        self.pending_events.push_back(LbeEvent::ToolStarted {
-            execution_id: execution_id.clone(),
-            tool_call_id: tool_call_id.clone(),
-        });
-
         let output = configured_lbe_command(&python, &wall_root)
             .current_dir(&wall_root)
             .args([
@@ -3977,11 +3974,18 @@ impl RealLbeWrapper {
             .target_workspace
             .clone()
             .ok_or_else(|| LbeError::new("LBE_TARGET_WORKSPACE is not configured"))?;
-        let operation_id = format!(
-            "tui.workspace.patch:{}:{}",
-            session_id,
-            next_real_operation_ordinal()
-        );
+        let operation_id = self
+            .approved_authorization
+            .as_ref()
+            .filter(|(_, _, capability)| capability == "modify")
+            .map(|(operation_id, _, _)| operation_id.clone())
+            .unwrap_or_else(|| {
+                format!(
+                    "tui.workspace.patch:{}:{}",
+                    session_id,
+                    next_real_operation_ordinal()
+                )
+            });
         let execution_id = format!("exec_{operation_id}");
         let tool_call_id = format!("tool_{operation_id}");
         let python = std::env::var_os("LBE_WALL_PYTHON")
@@ -4046,6 +4050,10 @@ impl RealLbeWrapper {
         }
         let status = governed_response_status(&payload, "workspace.patch")?;
         if output.status.success() && status == "EXECUTED" {
+            self.pending_events.push_back(LbeEvent::ToolStarted {
+                execution_id: execution_id.clone(),
+                tool_call_id: tool_call_id.clone(),
+            });
             let (patch_path, created, updated, bytes, before_sha256, sha256, patch) =
                 workspace_patch_result(&payload)?;
             let evidence_ref = payload
@@ -4056,6 +4064,7 @@ impl RealLbeWrapper {
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_owned);
             let receipt_id = executed_receipt_id(&payload, "workspace.patch")?;
+            self.approved_authorization = None;
             self.pending_events
                 .push_back(LbeEvent::WorkspacePatchReady {
                     patch: WorkspacePatch {
@@ -4079,6 +4088,35 @@ impl RealLbeWrapper {
                 execution_id,
                 receipt_id: Some(receipt_id),
             });
+        } else if status == "ESCALATED" {
+            let approval_id = payload
+                .get("approval_id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    LbeError::new("workspace.patch escalation omitted approval_id")
+                })?
+                .to_owned();
+            let rationale = payload
+                .get("authorization")
+                .and_then(|value| value.get("rationale"))
+                .and_then(serde_json::Value::as_str)
+                .or_else(|| payload.get("error_message").and_then(serde_json::Value::as_str))
+                .unwrap_or("workspace.patch requires Agent Wall approval")
+                .to_owned();
+            self.pending_authorization = Some((
+                operation_id.clone(),
+                approval_id.clone(),
+                "modify".to_owned(),
+            ));
+            self.pending_events
+                .push_back(LbeEvent::AuthorizationRequired {
+                    operation_id,
+                    approval_id,
+                    capability: "modify".to_owned(),
+                    rationale,
+                });
         } else {
             let message = payload
                 .get("error_message")
@@ -4086,6 +4124,7 @@ impl RealLbeWrapper {
                 .or_else(|| payload.get("message").and_then(serde_json::Value::as_str))
                 .unwrap_or("workspace.patch was not executed")
                 .to_owned();
+            self.approved_authorization = None;
             self.pending_events.push_back(LbeEvent::ToolFailed {
                 execution_id,
                 tool_call_id,
@@ -4442,6 +4481,15 @@ impl RealLbeWrapper {
             .unwrap_or("authorization resolution did not provide a rationale")
             .to_owned();
         self.pending_authorization = None;
+        if verdict == "ALLOW" {
+            self.approved_authorization = Some((
+                operation_id.clone(),
+                approval_id.clone(),
+                capability.clone(),
+            ));
+        } else {
+            self.approved_authorization = None;
+        }
         self.pending_events
             .push_back(LbeEvent::AuthorizationResolved {
                 operation_id,
