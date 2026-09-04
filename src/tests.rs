@@ -1657,7 +1657,7 @@ fn patch_review_escape_cancels_before_sending_a_mutation_request() {
 }
 
 #[test]
-fn patch_review_requests_authorization_before_submitting_patch() {
+fn patch_review_submits_exact_patch_for_agent_wall_authorization() {
     let mut app = App::default();
     let mut wrapper = RecordingWrapper::new();
     app.handle_command("/patch file.txt expected replacement", &mut wrapper);
@@ -1667,7 +1667,11 @@ fn patch_review_requests_authorization_before_submitting_patch() {
     assert_eq!(wrapper.requests.len(), 1);
     assert!(matches!(
         wrapper.requests.first(),
-        Some(UserRequest::RequestAuthorization { capability }) if capability == "modify"
+        Some(UserRequest::PatchWorkspace {
+            path,
+            content,
+            expected_sha256
+        }) if path == "file.txt" && content == "replacement" && expected_sha256 == "expected"
     ));
     assert!(app.pending_patch.is_some());
     assert!(matches!(app.phase, Phase::PatchReview { .. }));
@@ -3689,7 +3693,7 @@ fn real_wrapper_workspace_search_projects_agent_wall_receipt_and_evidence() {
 }
 
 #[test]
-fn real_wrapper_workspace_patch_projects_agent_wall_receipt_and_evidence() {
+fn real_wrapper_workspace_patch_projects_approval_then_receipt_and_evidence() {
     let required = [
         "LBE_WALL_ROOT",
         "LBE_TARGET_WORKSPACE",
@@ -3703,34 +3707,82 @@ fn real_wrapper_workspace_patch_projects_agent_wall_receipt_and_evidence() {
         return;
     }
 
+    let path = std::env::var("LBE_PATCH_TEST_PATH").unwrap();
+    let content = std::env::var("LBE_PATCH_TEST_CONTENT").unwrap();
+    let expected_sha256 = std::env::var("LBE_PATCH_TEST_EXPECTED_SHA256").unwrap();
     let mut wrapper = RealLbeWrapper::new();
     wrapper
         .attach()
         .expect("configured Agent Wall must attach before workspace.patch");
+    while wrapper.poll_event(Instant::now()).unwrap().is_some() {}
+
     wrapper
         .submit(
             UserRequest::PatchWorkspace {
-                path: std::env::var("LBE_PATCH_TEST_PATH").unwrap(),
-                content: std::env::var("LBE_PATCH_TEST_CONTENT").unwrap(),
-                expected_sha256: std::env::var("LBE_PATCH_TEST_EXPECTED_SHA256").unwrap(),
+                path: path.clone(),
+                content: content.clone(),
+                expected_sha256: expected_sha256.clone(),
             },
             Instant::now(),
         )
-        .expect("workspace.patch must cross the Agent Wall boundary");
+        .expect("workspace.patch proposal must cross the Agent Wall boundary");
+
+    let mut proposal_events = Vec::new();
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        proposal_events.push(event);
+    }
+    let approval_id = proposal_events
+        .iter()
+        .find_map(|event| match event {
+            LbeEvent::AuthorizationRequired {
+                approval_id,
+                capability,
+                ..
+            } if capability == "modify" => Some(approval_id.clone()),
+            _ => None,
+        })
+        .expect("workspace.patch must require exact Agent Wall approval");
+    assert!(!proposal_events.iter().any(|event| matches!(
+        event,
+        LbeEvent::ToolCompleted { .. }
+    )));
+
+    wrapper
+        .submit(
+            UserRequest::Approve {
+                approval_id: approval_id.clone(),
+            },
+            Instant::now(),
+        )
+        .expect("exact workspace.patch approval must resolve through Agent Wall");
+    let mut approval_events = Vec::new();
+    while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
+        approval_events.push(event);
+    }
+    assert!(approval_events.iter().any(|event| matches!(
+        event,
+        LbeEvent::AuthorizationResolved {
+            approval_id: resolved,
+            verdict,
+            ..
+        } if resolved == &approval_id && verdict == "ALLOW"
+    )));
+
+    wrapper
+        .submit(
+            UserRequest::PatchWorkspace {
+                path,
+                content,
+                expected_sha256,
+            },
+            Instant::now(),
+        )
+        .expect("approved workspace.patch must resume with the same operation identity");
 
     let mut events = Vec::new();
     while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
         events.push(event);
     }
-
-    assert!(events.iter().any(|event| matches!(
-        event,
-        LbeEvent::ToolRequested {
-            tool_name,
-            risk: ToolRisk::Governed,
-            ..
-        } if tool_name == "workspace.patch"
-    )));
     assert!(events.iter().any(|event| matches!(
         event,
         LbeEvent::ToolCompleted {
