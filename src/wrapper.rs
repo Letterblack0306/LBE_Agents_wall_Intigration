@@ -4094,15 +4094,17 @@ impl RealLbeWrapper {
                 .and_then(serde_json::Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    LbeError::new("workspace.patch escalation omitted approval_id")
-                })?
+                .ok_or_else(|| LbeError::new("workspace.patch escalation omitted approval_id"))?
                 .to_owned();
             let rationale = payload
                 .get("authorization")
                 .and_then(|value| value.get("rationale"))
                 .and_then(serde_json::Value::as_str)
-                .or_else(|| payload.get("error_message").and_then(serde_json::Value::as_str))
+                .or_else(|| {
+                    payload
+                        .get("error_message")
+                        .and_then(serde_json::Value::as_str)
+                })
                 .unwrap_or("workspace.patch requires Agent Wall approval")
                 .to_owned();
             self.pending_authorization = Some((
