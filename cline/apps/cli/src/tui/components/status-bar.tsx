@@ -4,7 +4,6 @@ import {
 	shouldShowCliUsageCost,
 	shouldShowCliUsageCoveredBySubscription,
 } from "../../utils/usage-cost-display";
-import { useTheme } from "../hooks/use-theme";
 
 export function createContextBar(
 	used: number,
