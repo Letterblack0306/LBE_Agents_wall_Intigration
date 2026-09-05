@@ -1,9 +1,10 @@
 {
   "schema_version": 4,
   "project": "LBE governed agent product surface and integration roadmap",
-  "integration_phase": "CLINE_CLI_USER_SURFACE_ACTIVE_LBE_RUNTIME_AUTHORITY_RUST_REFERENCE_CLIENT_LIVE_ACCEPTANCE_SEQUENCED",
+  "integration_phase": "LBE_CLI_MINIMAL_SURFACE_CONTRACT_ACTIVE_CLINE_MECHANICS_LBE_RUNTIME_AUTHORITY",
   "product_scope": [
-    "Cline CLI/TUI user-facing product surface",
+    "LBE CLI/TUI user-facing product surface",
+    "Bundled Cline provider/model/reasoning/delegated-agent mechanics under LBE branding",
     "Integrated Cline + LBE launcher",
     "LBE-governed agent/runtime integration",
     "Governance / audit projection",
@@ -16,7 +17,8 @@
     "coding_frontend_implementation_roadmap": "17-30",
     "cline_interop_and_user_surface": "31 + cline/apps/cli + run-cline-lbe.ps1",
     "rust_reference_integration": "32-36 where explicitly Rust-scoped",
-    "final_product_acceptance": "Cline CLI/TUI -> LBE runtime authority -> installed acceptance"
+    "final_product_acceptance": "Cline CLI/TUI -> LBE runtime authority -> installed acceptance",
+    "minimal_lbe_cli_ui_contract": "37_minimal_lbe_cli_ui_contract.md"
   },
   "modules": {
     "01_transcript_viewport.md": {
@@ -316,17 +318,29 @@
         "33_real_cli_ide_implementation_plan.md"
       ],
       "notes": "LBE backend owners are accepted; Rust frontend scaffolding remains partial until it consumes authoritative projections."
+    },
+    "37_minimal_lbe_cli_ui_contract.md": {
+      "status": "ACTIVE UI CONTRACT — IMPLEMENTATION / INSTALLED ACCEPTANCE OPEN",
+      "relevance": "CORE / PRODUCT UX",
+      "depends_on": [
+        "31_cline_interop_reuse_strategy.md",
+        "33_real_cli_ide_implementation_plan.md",
+        "23_subagents.md",
+        "25_composer_prompt_editor.md",
+        "26_statusline_title.md"
+      ],
+      "notes": "Current LBE CLI/TUI visual contract: four permanent regions only (compact header, ordered conversation/execution timeline, composer, compact footer). Tool rows, child agents, approvals, diffs, receipts/evidence, sessions, provider/model selection and settings are inline/transient. No permanent objective strip, duplicate header/footer state, dashboard side panels, emoji, Cline branding, or UI-local simulation of runtime facts."
     }
   },
   "product_structure": {
     "classification": "CURRENT_CORRECTED_PRODUCT_STRUCTURE",
-    "updated": "2026-09-04",
+    "updated": "2026-09-05",
     "product": "LetterBlack / LBE",
     "user_facing_cli_tui": {
       "path": "C:/LBE-TUI-Lab/cline/apps/cli",
       "entrypoint": "C:/LBE-TUI-Lab/cline/apps/cli/src/index.ts",
-      "role": "Actual accepted user-facing interactive/headless Cline CLI/TUI surface",
-      "acceptance_rule": "Keyboard, command palette, MCP management, Skills/workflows, provider/model selection, sessions/history, checkpoints, and installed CLI UX acceptance must be proven on this path."
+      "role": "Active LBE CLI/TUI product surface implemented with bundled Cline CLI mechanics under LBE branding",
+      "acceptance_rule": "Apply Docs/37_minimal_lbe_cli_ui_contract.md to the active Cline path; prove keyboard/runtime bindings, inline tool/child projection, truthful runtime facts, branding, and installed terminal UX on this path."
     },
     "integrated_launcher": {
       "path": "C:/LBE-TUI-Lab/run-cline-lbe.ps1",
@@ -358,23 +372,22 @@
     },
     "runtime_flow": [
       "User",
-      "Cline CLI/TUI",
-      "Cline keyboard/action handlers",
-      "Cline runtime/session layer",
+      "LBE CLI/TUI",
+      "bundled Cline keyboard/action/provider/model/delegated-agent mechanics",
       "bounded LBE adapter",
       "LBE product entry/runtime",
       "authorization -> governed execution -> ToolReceipt/evidence",
-      "Cline event/session projection",
-      "user-visible terminal output"
+      "LBE-backed event/session projection",
+      "minimal ordered terminal timeline"
     ],
-    "authority_invariant": "Cline and Rust are client/mechanics surfaces only. LBE remains sole owner of session truth, provider policy, authorization, execution, receipts, evidence, persistence, validation, and completion.",
+    "authority_invariant": "Cline and Rust are mechanics/client surfaces only. LBE remains sole owner of session truth, provider policy, authorization, execution, receipts, evidence, persistence, validation, and completion. Visible product identity is LBE.",
     "supersedes": "Older Rust/Ratatui-active-interface classification in this file."
   },
   "machine_map_reconciliation": {
     "classification": "RECONCILED",
-    "date": "2026-09-04",
+    "date": "2026-09-05",
     "previous_stale_claim": "Rust/Ratatui = active interface implementation and remaining product implementation path",
-    "corrected_claim": "Cline CLI/TUI = actual user-facing product surface; Rust/Ratatui = reference/integration client; LBE workspace = sole runtime/governance authority",
+    "corrected_claim": "LBE CLI/TUI = actual user-facing product surface using bundled Cline mechanics; Rust/Ratatui = reference/integration client; LBE workspace = sole runtime/governance authority",
     "evidence_basis": [
       "C:/LBE-TUI-Lab/Agent.md current synchronized workspace state",
       "C:/LBE-TUI-Lab/Docs/00_integration_alignment.md current synchronized workspace state",
@@ -382,6 +395,6 @@
       "C:/Agents-Memory-Tool-v6-integration/docs/CURRENT_STATUS.md",
       "C:/Agents-Memory-Tool-v6-integration/PROJECT_INDEX.md"
     ],
-    "future_planning_rule": "Use Cline CLI/TUI for product-surface planning and installed UX acceptance. Use Rust only when a task explicitly targets the reference/integration client."
+    "future_planning_rule": "Use Docs/37_minimal_lbe_cli_ui_contract.md for product-surface planning. Use the active Cline path for installed UX acceptance. Use Rust only when explicitly scoped to the reference/integration client."
   }
 }
