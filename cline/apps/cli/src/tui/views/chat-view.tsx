@@ -10,6 +10,7 @@ import { InlineToolResponse } from "../components/inline-tool-response";
 import { InputBar, type TextareaHandle } from "../components/input-bar";
 import { QueuedPrompts } from "../components/queued-prompts";
 import {
+	createContextBar,
 	resolveModelDisplayName,
 	resolveModelMaxInputTokens,
 	StatusBar,
@@ -86,27 +87,32 @@ export function ChatView(props: {
 	const modeLabel = session.uiMode === "plan" ? "PLAN" : "AUDIT";
 	const stateLabel = session.isRunning ? "RUNNING" : "IDLE";
 	const stateColor = session.isRunning ? accent : "gray";
+	const contextBar = createContextBar(session.lastTotalTokens, maxInputTokens, 12);
+	const gitText = [
+		repoStatus.branch ? `git ${repoStatus.branch}` : "",
+		repoStatus.diffStats && repoStatus.diffStats.files > 0
+			? `${repoStatus.diffStats.files}f +${repoStatus.diffStats.additions} -${repoStatus.diffStats.deletions}`
+			: "",
+	].filter(Boolean).join(" · ");
 
 	return (
 		<box flexDirection="column" width="100%" height="100%">
-			<box
-				flexDirection="row"
-				justifyContent="space-between"
-				paddingX={1}
-				flexShrink={0}
-			>
-				<text>
-					<strong>LBE</strong>
-					<span fg="gray">
+			<box flexDirection="column" paddingX={1} flexShrink={0}>
+				<box flexDirection="row" justifyContent="space-between">
+					<text>
+						<strong>LBE</strong>
 						{" · "}
-						{workspaceName || "workspace"}
-						{" · "}
-						{modelDisplayName}
-						{" · "}
-					</span>
-					<span fg={accent}>{modeLabel}</span>
-				</text>
-				<text fg={stateColor}>{stateLabel}</text>
+						<strong>{workspaceName || "workspace"}</strong>
+						<span fg="gray">
+							{" · "}{modelDisplayName}{" · "}{modeLabel}
+						</span>
+					</text>
+					<text fg="gray">{gitText}</text>
+				</box>
+				<box flexDirection="row" justifyContent="space-between">
+					<text fg={stateColor}>{stateLabel}</text>
+					<text fg="gray">ctx [{" "}{contextBar.filled}{contextBar.empty}{" "}]</text>
+				</box>
 			</box>
 
 			<ChatMessageList
@@ -160,6 +166,7 @@ export function ChatView(props: {
 							onLargeTextPaste={onLargeTextPaste}
 							onFocusRequest={props.onInputFocusRequest}
 							textareaRef={props.textareaRef}
+							isRunning={session.isRunning}
 						/>
 					</>
 				)}
