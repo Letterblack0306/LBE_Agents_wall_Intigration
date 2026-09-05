@@ -6,6 +6,7 @@ import {
 } from "../components/autocomplete-dropdown";
 import { InputBar, type TextareaHandle } from "../components/input-bar";
 import {
+	createContextBar,
 	resolveModelDisplayName,
 	resolveModelMaxInputTokens,
 	StatusBar,
@@ -67,6 +68,13 @@ export function HomeView(props: {
 		? (config.workspaceRoot.split("/").pop() ?? "")
 		: "";
 	const modeLabel = session.uiMode === "plan" ? "PLAN" : "AUDIT";
+	const contextBar = createContextBar(session.lastTotalTokens, maxInputTokens, 12);
+	const gitText = [
+		repoStatus.branch ? `git ${repoStatus.branch}` : "",
+		repoStatus.diffStats && repoStatus.diffStats.files > 0
+			? `${repoStatus.diffStats.files}f +${repoStatus.diffStats.additions} -${repoStatus.diffStats.deletions}`
+			: "",
+	].filter(Boolean).join(" · ");
 
 	return (
 		<box
@@ -75,24 +83,22 @@ export function HomeView(props: {
 			height="100%"
 			justifyContent="space-between"
 		>
-			<box
-				flexDirection="row"
-				justifyContent="space-between"
-				paddingX={1}
-				flexShrink={0}
-			>
-				<text>
-					<strong>LBE</strong>
-					<span fg="gray">
+			<box flexDirection="column" paddingX={1} flexShrink={0}>
+				<box flexDirection="row" justifyContent="space-between">
+					<text>
+						<strong>LBE</strong>
 						{" · "}
-						{workspaceName || "workspace"}
-						{" · "}
-						{modelDisplayName}
-						{" · "}
-					</span>
-					<span fg={accent}>{modeLabel}</span>
-				</text>
-				<text fg="gray">IDLE</text>
+						<strong>{workspaceName || "workspace"}</strong>
+						<span fg="gray">
+							{" · "}{modelDisplayName}{" · "}{modeLabel}
+						</span>
+					</text>
+					<text fg="gray">{gitText}</text>
+				</box>
+				<box flexDirection="row" justifyContent="space-between">
+					<text fg="gray">IDLE</text>
+					<text fg="gray">ctx [{" "}{contextBar.filled}{contextBar.empty}{" "}]</text>
+				</box>
 			</box>
 
 			<box flexGrow={1} />
@@ -120,6 +126,7 @@ export function HomeView(props: {
 					onLargeTextPaste={onLargeTextPaste}
 					onFocusRequest={props.onInputFocusRequest}
 					textareaRef={props.textareaRef}
+					isRunning={false}
 				/>
 
 				<box height={hasAutocomplete ? 0 : Math.min(0, DROPDOWN_MAX_HEIGHT)} />
