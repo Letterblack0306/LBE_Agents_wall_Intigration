@@ -122,22 +122,8 @@ export interface StatusBarProps {
 }
 
 export function StatusBar(props: StatusBarProps) {
-	const {
-		totalTokens,
-		totalCost,
-		maxInputTokens,
-		uiMode,
-		gitBranch,
-		gitDiffStats,
-		onToggleMode,
-	} = props;
+	const { totalTokens, totalCost, maxInputTokens, uiMode, onToggleMode } = props;
 	const { width } = useTerminalDimensions();
-	const theme = useTheme();
-	const defaultFg = theme.defaultForeground;
-	const successColor = theme.accents.success;
-	const modeAccent =
-		uiMode === "plan" ? theme.accents.plan : theme.accents.act;
-
 	const hasMaxInputTokens =
 		typeof maxInputTokens === "number" &&
 		Number.isFinite(maxInputTokens) &&
@@ -150,21 +136,15 @@ export function StatusBar(props: StatusBarProps) {
 		totalCost,
 		providerId: props.providerId,
 	});
-	const diff =
-		gitDiffStats && gitDiffStats.files > 0
-			? `${gitDiffStats.files}f +${gitDiffStats.additions} -${gitDiffStats.deletions}`
-			: "";
-	const leftParts = [
-		contextPercent === null ? `ctx ${usage}` : `ctx ${contextPercent}% · ${usage}`,
-		gitBranch ? `git ${gitBranch}` : "",
-		diff,
-	].filter(Boolean);
-	const right = `${uiMode === "plan" ? "PLAN" : "AUDIT"} · Tab mode · Ctrl+K`;
-	const maxLeft = Math.max(10, width - right.length - 5);
-	let left = leftParts.join(" · ");
-	if (left.length > maxLeft) {
-		left = `${left.slice(0, Math.max(1, maxLeft - 3))}...`;
-	}
+	const mode = uiMode === "plan" ? "PLAN" : "AUDIT";
+	const left = contextPercent === null
+		? `ctx ${usage} · ${mode}`
+		: `ctx ${contextPercent}% · ${mode}`;
+	const right = "Ctrl+K";
+	const maxLeft = Math.max(8, width - right.length - 4);
+	const clipped = left.length > maxLeft
+		? `${left.slice(0, Math.max(1, maxLeft - 3))}...`
+		: left;
 
 	return (
 		<box
@@ -172,19 +152,12 @@ export function StatusBar(props: StatusBarProps) {
 			justifyContent="space-between"
 			paddingX={1}
 			flexShrink={0}
+			border={["top"]}
+			borderStyle="single"
+			borderColor="gray"
 		>
-			<text fg="gray">
-				{left}
-				{diff && (
-					<>
-						{" "}
-						<span fg={successColor}></span>
-					</>
-				)}
-			</text>
-			<text fg={modeAccent} onMouseDown={onToggleMode}>
-				{right}
-			</text>
+			<text fg="gray">{clipped}</text>
+			<text fg="gray" onMouseDown={onToggleMode}>{right}</text>
 		</box>
 	);
 }
