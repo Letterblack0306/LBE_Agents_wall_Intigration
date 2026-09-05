@@ -95,8 +95,7 @@ export function HomeView(props: {
 					</text>
 					<text fg="gray">{gitText}</text>
 				</box>
-				<box flexDirection="row" justifyContent="space-between">
-					<text fg="gray">IDLE</text>
+				<box flexDirection="row" justifyContent="flex-end">
 					<text fg="gray">ctx [{" "}{contextBar.filled}{contextBar.empty}{" "}]</text>
 				</box>
 			</box>
