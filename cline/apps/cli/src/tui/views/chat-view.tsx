@@ -85,8 +85,6 @@ export function ChatView(props: {
 		? (config.workspaceRoot.split("/").pop() ?? "")
 		: "";
 	const modeLabel = session.uiMode === "plan" ? "PLAN" : "AUDIT";
-	const stateLabel = session.isRunning ? "RUNNING" : "IDLE";
-	const stateColor = session.isRunning ? accent : "gray";
 	const contextBar = createContextBar(session.lastTotalTokens, maxInputTokens, 12);
 	const gitText = [
 		repoStatus.branch ? `git ${repoStatus.branch}` : "",
@@ -109,8 +107,7 @@ export function ChatView(props: {
 					</text>
 					<text fg="gray">{gitText}</text>
 				</box>
-				<box flexDirection="row" justifyContent="space-between">
-					<text fg={stateColor}>{stateLabel}</text>
+				<box flexDirection="row" justifyContent="flex-end">
 					<text fg="gray">ctx [{" "}{contextBar.filled}{contextBar.empty}{" "}]</text>
 				</box>
 			</box>
