@@ -15,7 +15,7 @@ cargo fmt --check
 cargo check
 ```
 
-The real LBE runtime is the default. The active interface is the Rust/Ratatui TUI, which routes actions through the `LbeWrapper` trait and renders typed `LbeSnapshot` / `LbeEvent` values. The fail-closed `RealLbeWrapper` path requires explicit Agent Wall configuration and does not fabricate state. Set `LBE_RUNTIME=mock` only for deterministic local contract previews. LBE's Python runtime remains the authoritative backend for provider access, governance, authorization, execution, evidence, receipts, validation, and completion truth. The Rust TUI is only the client/projection layer and does not replace LBE authority. The Python TUI direction is retired and reference-only; no further Python terminal UI implementation is planned. The app runs in the alternate screen and restores the terminal on normal exit, `q`, or Ctrl+C.
+The active user-facing product is the **LBE CLI/TUI** implemented through the bundled Cline CLI mechanics under `cline/apps/cli`. LBE's Python runtime remains the authoritative backend for workspace/session identity, provider policy, governance, authorization, governed execution, evidence, receipts, persistence, validation, and completion truth. Cline owns provider/model/reasoning/delegated-agent mechanics only; it does not become a second runtime authority. The Rust/Ratatui implementation in `src/` remains a reference/integration client for bounded contract and projection work.
 
 ## Conversational interaction and diagnostic surfaces
 
@@ -50,3 +50,23 @@ The lower-level `/open`, `/read`, `/tree`, `/list`, `/glob`, `/find`, `/search`,
   retired/reference-only.
 - The Rust TUI renders provider/runtime projections supplied by the authoritative
   LBE Python runtime and never owns provider credentials or runtime authority.
+
+
+## Minimal LBE CLI/TUI surface
+
+The current visual/product contract is:
+
+```text
+Docs/37_minimal_lbe_cli_ui_contract.md
+```
+
+The active terminal product should keep only four permanent regions:
+
+```text
+compact runtime header
+ordered conversation/execution timeline
+composer
+compact footer/status
+```
+
+Tool execution, delegated children, approvals, diffs, receipts, evidence, sessions, provider/model selection, and settings must remain inline or transient rather than permanent dashboard panels. Runtime facts must come from the real LBE-bound runtime projection; the UI must not simulate completion, receipts, provider health, or child state.
