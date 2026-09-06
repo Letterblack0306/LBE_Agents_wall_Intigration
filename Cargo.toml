@@ -1,8 +1,8 @@
 [package]
 name = "lbe-terminal"
 version = "0.1.0"
-edition = "2024"
-description = "LetterBlack Engine terminal CLI/TUI prototype"
+edition = "2021"
+description = "LBE (Lockstep Boundary Engine) terminal CLI/TUI prototype"
 
 [[bin]]
 name = "lbe"
