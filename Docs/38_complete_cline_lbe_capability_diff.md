@@ -7,7 +7,7 @@
 
 ```
 cargo check: PASS — 0 errors / 42 warnings
-cargo test: 199 passed / 3 expected live-fixture failures / 2 ignored
+cargo test: 202 passed / 0 failed / 2 ignored (requires --test-threads=1 to avoid parallel state pollution)
 ```
 
 ## RealLbeWrapper Request Coverage
