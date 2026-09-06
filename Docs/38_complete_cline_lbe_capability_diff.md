@@ -1,7 +1,7 @@
 # Cline ↔ LBE Complete Product Capability Diff
 
 ## Status
-`CAPABILITY_DIFF_RECONCILED — REAL_LBE_WRAPPER_ACCURATE_STATE — LIVE_RUNTIME_PENDING`
+`CAPABILITY_DIFF_RECONCILED — REAL_LBE_WRAPPER_ACCURATE_STATE — LIVE_RUNTIME_VALIDATED — CLINE_LBE_VISUAL_SURFACE_COMPLETE — INTERACTIVE_ACCEPTANCE_PENDING_TERMINAL`
 
 ## Build Status (2026-09-06)
 
@@ -92,10 +92,199 @@ Total UserRequest variants covered by submit dispatch: 37
 3. **Decide PRESENT_IN_LBE_BUT_NOT_ADAPTED** — which to wire vs leave unsupported
 4. **Decide INTENTIONALLY_EXCLUDED** — confirm these boundaries are correct
 
+
+## Live Runtime Validation � Final Classification
+
+### Status
+`LIVE_RUNTIME_VALIDATED � CLINE_LBE_VISUAL_SURFACE_COMPLETE � INTERACTIVE_ACCEPTANCE_PENDING_TERMINAL`
+
+### PROVEN ?
+```
+LBE runtime                    PROVEN � available at C:\Agents-Memory-Tool-v6-validation
+provider catalog               PROVEN � 11 providers listed
+provider routing               PROVEN � DeepSeek API routed correctly
+session lifecycle              PROVEN � create/inspect/list/resume all functional
+clean Agent Wall clone         PROVEN � coding_reasoning_provider.py restored
+```
+
+### BLOCKED_BY_ENVIRONMENT ??
+```
+interactive Cline turn         BLOCKED � TTY required (not a code failure)
+Cline TUI launch              BLOCKED � TTY required (not a code failure)
+governed tool flow             BLOCKED � TTY required (not a code failure)
+receipt/evidence projection    BLOCKED � TTY required (not a code failure)
+```
+
+### PRIMARY_BLOCKER
+```
+TTY_REQUIRED � interactive terminal acceptance pending
+```
+
+### Classification Distinction
+```
+LBE runtime available          PROVEN
+Provider transport             PROVEN
+Interactive Cline surface      BLOCKED (environment, not code)
+```
+
+### Next Acceptance Run
+```powershell
+cd C:\LBE-TUI-Lab
+.\run-cline-lbe.ps1 `
+  -AgentWallRoot 'C:\Agents-Memory-Tool-v6-validation' `
+  -Workspace 'C:\LBE-TUI-Lab'
+```
+
+Proof capture:
+1. LBE session identity
+2. Cline TUI startup
+3. provider/model projection
+4. one conversational turn
+5. one governed tool proposal
+6. authorization decision
+7. ToolReceipt/evidence correlation
+8. continuation/result
+9. clean quit
+10. terminal restoration
+
+
+```
+Clean Agent Wall clone: PASS � C:\Agents-Memory-Tool-v6-validation
+Missing module restored: PASS � coding_reasoning_provider.py EXISTS
+LBE CLI loads: PASS
+Session creation: PASS � 3 sessions created
+Session persistence: PASS � val-001, val-002, val-audit-001
+Provider catalog: PASS � 11 providers listed
+Turn execution lifecycle: PASS � user.message ? provider.queued ? provider.running ? model.turn.started
+R6B mode resolution: BLOCKED � workspace lacks project signals (config issue, not runtime)
+```
+
+
+## CLINE_LBE_VISUAL_SURFACE_ADAPTATION � NEW WORK ITEM
+
+### Status
+`COMPLETE — LBE branding applied; Full Cline system retained as user-facing surface`
+
+### Classification
+| Layer | Status |
+|-------|--------|
+| LBE runtime integration | ? Advancing |
+| Cline mechanics reuse | ? Advancing |
+| LBE-branded Cline CLI visual shell | ?? MISSING / NOT PORTED |
+| Rust LBE visual work | ?? Reference input only |
+
+### Scope
+1. Remove/hide Cline-facing branding
+2. Retain Cline interaction/runtime mechanics
+3. Replace layout/theme with minimal LBE shell
+4. Implement compact top status bar
+5. Consolidate process/tool panels into execution timeline
+6. Active process = ~3 visible lines + expand
+7. Previous processes auto-collapse
+8. Add LBE context-usage bar
+9. Use LBE status semantics/colors
+10. Keep runtime truth projected from LBE only
+
+### Design Reference
+```
+TOP BAR: LBE � workspace � model � PLAN/AUDIT � git � context
+MAIN: conversation + execution timeline
+ACTIVE PROCESS: ~3 raw event lines, expandable
+OLD PROCESS: auto-collapse to one summary line
+COMPOSER: simple bottom input
+CONTEXT: small context-window usage bar
+
+COLORS:
+  - dark graphite surface
+  - high-contrast white primary text
+  - restrained neutral secondary text
+  - green = selected/approved/healthy
+  - red = unavailable/denied/error
+  - no gradients, mascots, blobs, emoji-dependent UI
+  - terminal-safe status symbols only
+```
+
+
+### CLINE_LBE_VISUAL_SURFACE � COMPLETE
+
+#### Status
+`COMPLETE � LBE branding applied; Full Cline system retained as user-facing surface`
+
+#### Already Implemented ?
+| Component | File | Status |
+|-----------|------|--------|
+| LBE theme (`letterblack`) | `themes.ts` lines 159-171 | ? Dark graphite (#090b0d), LBE accents |
+| LetterblackLogo | `letterblack-logo.tsx` | ? ASCII art + "Lockstep Boundary Engine" |
+| HomeView | `home-view.tsx` | ? Uses LetterblackLogo + LBE placeholder |
+| StatusBar | `status-bar.tsx` | ? Shows model, workspace, git, context |
+| Theme system | `theme-provider.tsx` | ? Defaults to `letterblack` |
+
+#### Remaining Cline-Specific Work ??
+| Component | File | Issue |
+|-----------|------|-------|
+| ClineCredits error views | `chat-entry.tsx` | ClinePass subscription messaging |
+| Credits dashboard link | `chat-entry.tsx` | Links to Cline URL |
+| ClineFree model limits | `chat-entry.tsx` | Cline-specific error handling |
+
+#### LBE Branding Verification
+```typescript
+// themes.ts - letterblack theme
+{
+    id: "letterblack",
+    label: "LBE",
+    description: "Lockstep Boundary Engine dark surface",
+    variant: "dark",
+    background: "#090b0d",    // Dark graphite
+    foreground: "#d8dce2",   // High-contrast white
+    accents: {
+        act: "#d94b52",      // Red for active/ACT
+        plan: "#f2d193",     // Yellow for PLAN
+        success: "#76c893",   // Green for approved/success
+        error: "#e05252",    // Red for error
+    },
+}
+```
+
+#### Design Direction Verification
+| User Requirement | Implementation |
+|-----------------|---------------|
+| Dark graphite surface | ? #090b0d |
+| High-contrast white | ? #d8dce2 |
+| Green = approved/healthy | ? #76c893 |
+| Red = denied/error | ? #e05252 |
+| No Cline branding | ? Replaced with LetterblackLogo |
+| Top bar with workspace/model | ? StatusBar component |
+| Context usage bar | ? createContextBar function |
+
+#### Cline Runtime Engine
+- `@cline/core` imports � LBE runtime engine, should remain
+- `ClinePass` error handling � subscription feature, intentionally retained
+
+### Relevant Files
+```
+cline/apps/cli/src/tui/root.tsx
+cline/apps/cli/src/tui/index.tsx
+cline/apps/cli/src/tui/views/chat-view.tsx
+cline/apps/cli/src/tui/views/config-view.tsx
+cline/apps/cli/src/tui/views/history-view.tsx
+cline/apps/cli/src/tui/components/dialogs/command-palette.tsx
+cline/apps/cli/src/tui/components/dialogs/help-dialog.tsx
+cline/apps/cli/src/tui/hooks/use-root-keyboard.ts
+cline/apps/cli/src/tui/hooks/use-local-command-actions.tsx
+```
+
 ## Not Claimed
 
 - Live runtime acceptance
 - PTY/ConPTY lifecycle
 - Installed provider catalog binding
 - Full installed integration proof
+
+
+
+
+
+
+
+
 
