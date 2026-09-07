@@ -923,7 +923,7 @@ impl LbeWrapper for MockLbeWrapper {
     fn submit(&mut self, request: UserRequest, now: Instant) -> Result<(), LbeError> {
         match request {
             UserRequest::SubmitTask { intent, mode } => match mode {
-                AgentMode::Regular => {
+                AgentMode::Build => {
                     if self.execution.status.is_terminal() {
                         self.execution.reset_for_new_request();
                         self.snapshot.active_execution_id = None;
@@ -2260,7 +2260,7 @@ impl RealLbeWrapper {
         self.snapshot.validation = validation;
         self.snapshot.session_id = Some(session_context.session_id.clone());
         self.snapshot.active_mode = match session_context.data.session.mode.as_str() {
-            "coding" => AgentMode::Regular,
+            "coding" => AgentMode::Build,
             "investigation" => AgentMode::Plan,
             "audit" => AgentMode::Audit,
             other => {
@@ -2904,7 +2904,7 @@ impl RealLbeWrapper {
             .ok_or_else(|| LbeError::new("authoritative workspace identity is unavailable"))?;
         let session_id = format!("tui-{}", next_real_operation_ordinal());
         let mode = match self.snapshot.active_mode {
-            AgentMode::Regular => "coding",
+            AgentMode::Build => "coding",
             AgentMode::Audit => "audit",
             AgentMode::Plan => "investigation",
         };
@@ -3210,7 +3210,7 @@ impl RealLbeWrapper {
             .and_then(serde_json::Value::as_str)
             .unwrap_or_default();
         let expected_mode = match mode {
-            AgentMode::Regular => "coding",
+            AgentMode::Build => "coding",
             AgentMode::Plan => "investigation",
             AgentMode::Audit => "audit",
         };

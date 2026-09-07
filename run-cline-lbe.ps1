@@ -8,6 +8,7 @@ param(
     [string]$AgentWallRoot = 'C:\Agents-Memory-Tool-v6-integration',
     [string]$AgentWallPython = '',
     [string]$Client = '',
+    [switch]$Plan,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Arguments
 )
@@ -40,9 +41,11 @@ $python = if ($AgentWallPython) {
 }
 
 $clientPath = if ($Client) {
-    Resolve-FullPath $Client 'Cline client'
+    Resolve-FullPath $Client 'LBE CLI client'
 } else {
-    Resolve-FullPath (Join-Path $PSScriptRoot 'cline\apps\cli\dist\cli-windows-x64\bin\cline.exe') 'Cline client'
+    # Use system-installed Cline from npm
+    $clineCommand = Get-Command cline -ErrorAction Stop
+    $clineCommand.Source
 }
 
 $databasePath = if ($Database) {
@@ -81,6 +84,7 @@ $env:LBE_PROJECT_WORKSPACE_ID = $workspaceId
 $env:LBE_TARGET_WORKSPACE = $workspaceRoot
 
 $clineArgs = @('--cwd', $workspaceRoot)
+if ($Plan) { $clineArgs += '--plan' }
 if ($Arguments) { $clineArgs += $Arguments } else { $clineArgs += '--tui' }
 
 Write-Host "LBE session: $session"

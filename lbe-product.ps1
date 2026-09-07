@@ -16,7 +16,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$script:Product = 'LetterBlack LBE'
+$script:Product = 'LBE (Lockstep Boundary Engine)'
 $script:SchemaVersion = 1
 
 function Invoke-Git([string]$Root, [string[]]$Arguments) {
@@ -254,8 +254,8 @@ function Invoke-Install {
         generated_at_utc = [DateTime]::UtcNow.ToString('o')
     }
     $terminalProfile = [ordered]@{
-        name = 'LetterBlack LBE'
-        source = 'LetterBlack LBE installer'
+        name = 'LBE (Lockstep Boundary Engine)'
+        source = 'LBE (Lockstep Boundary Engine) installer'
         commandline = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File lbe-launch.ps1'
         font = [ordered]@{
             face = 'Cascadia Mono'

@@ -1,22 +1,41 @@
 # LBE TUI Product Roadmap
 
+## LBE — Lockstep Boundary Engine
+
+LBE stands for **Lockstep Boundary Engine**. The core engine semantics are:
+every step is a locked boundary, and only proven, observed evidence — never
+assumption — can open it. Authority, authorization, execution, evidence,
+receipt, and completion truth are gated by this boundary model. LBE is the
+runtime authority; the TUI is a client/projection layer over it.
+
 ## Purpose
 
-This package tracks the LBE terminal frontend as a governed coding-agent CLI/TUI, not only an audit surface. Audit is one mode of the product; the full product scope includes coding, runtime/session, tool/process, evidence/receipt, and external interaction frontends. Start with [`00_integration_alignment.md`](00_integration_alignment.md) for the two-repository ownership boundary, runtime modes, and integration sequence.
+This package tracks the LBE terminal frontend as a governed coding-agent CLI/TUI, not only an audit surface. Audit is one mode of the product; the full product scope includes coding, runtime/session, tool/process, evidence/receipt, and external interaction frontends. The actual user-facing CLI is the LBE CLI (Cline engine); the Rust/Ratatui `lbe` binary is a separate reference/integration client. Start with [`00_integration_alignment.md`](00_integration_alignment.md) for the two-repository ownership boundary, runtime modes, and integration sequence.
 
-Rust/Ratatui is the active interface implementation and client/projection layer
-in this workspace. The HTML cockpit in
+The LBE CLI (Cline engine) is the accepted user-facing interface and client/projection
+layer in this workspace:
+
+```text
+C:\LBE-TUI-Lab\cline\apps\cli\src\index.ts
+    -> C:\LBE-TUI-Lab\run-cline-lbe.ps1
+    -> C:\Agents-Memory-Tool-v6-integration
+```
+
+The Rust/Ratatui `lbe` binary remains a separate reference/integration client.
+The HTML cockpit in
 `C:\Agents-Memory-Tool-v6-integration\.ui-preview\agent_cockpit.html` is a
 separate LBE-workspace reference/coordination surface, not a second interface
-authority for this repository. The Python TUI direction is retired/reference-only
-and has no further implementation path. The Python LBE runtime remains authoritative for provider adapters,
-governance, authorization,
-execution, evidence, receipts, validation, and completion truth. The Rust TUI
-must remain a client/projection layer over `LbeWrapper` and LBE.
+authority for this repository.
 
+The Python TUI direction is no longer an absolute prohibition, but it is not the
+accepted user-facing path. The LBE runtime remains authoritative for provider
+adapters, governance, authorization, execution, evidence, receipts, validation,
+and completion truth. The Cline engine and Rust reference client must remain
+client/projection layers over LBE-owned adapters and runtime contracts.
 The separate LBE workspace now records PASS for the complete runtime, session/application contract, governed tool orchestration, external capability registration, provider continuation, and interface control/evidence surfaces. The Rust TUI remains a client/projection adapter; real read-only workspace adapter paths, MCP metadata refresh, connected-state labeling for tool/process/receipt/MCP panels, and provider catalog-before-selection ordering are locally verified, but installed interactive `/mcp` PTY/E2E and live provider acceptance are not yet proven. The real runtime is now the default binary path; set `LBE_RUNTIME=mock` only for deterministic local contract previews.
-Remaining work is Rust/Ratatui interactive acceptance and live integration
-proof. The vendored optional documentation companion is available under
+Remaining work is Cline-to-LBE live integration and installed interactive
+acceptance proof. Rust reference-client acceptance remains separately bounded.
+The vendored optional documentation companion is available under
 `documentation_companion_plugin/`; it consumes only LBE-owned identifiers/events
 when explicitly invoked and is not imported by the active runtime.
 
@@ -68,9 +87,10 @@ Before implementing Modules `17`-`30` natively, inspect the official Cline and O
 
 ### A. Existing Slices Integration
 
-Modules `01`-`16` cover the Rust/Ratatui TUI shell and contracts. The bounded
-read-only provider/tool path is accepted; remaining work is interactive Rust
-client acceptance and additional Rust-side projections over the real LBE wall.
+Modules `01`-`16` cover the existing Rust/Ratatui reference-client shell and
+contracts. The accepted user-facing path is the LBE CLI (Cline engine); remaining
+work is Cline-to-LBE interactive acceptance and additional client projections
+over the real LBE wall.
 
 ### B. Coding Frontend Implementation Roadmap
 
@@ -80,12 +100,13 @@ Modules `17`-`30` cover remaining coding-client surfaces. Build each independent
 
 Module `31` prevents rebuilding generic coding-agent frontend and runtime capabilities that
 can be adopted, adapted, or wrapped from Cline/OpenCode surfaces. Module `32`
-records the deterministic runtime state-machine foundation. Python terminal UI
-is retired/reference-only; Rust/Ratatui is the active interface/client in this
-workspace. The bounded governed read-only path is accepted, and the next work in
-this workspace is Rust client integration/acceptance without making Rust a
-runtime authority. The separate HTML cockpit remains a reference/coordination
-surface owned by the LBE workspace.
+records the deterministic runtime state-machine foundation. The embedded Cline
+CLI is the accepted user-facing interface/client in this workspace; the
+Rust/Ratatui `lbe` binary remains a separate reference/integration client. The
+bounded governed read-only path is accepted, and the next work in this workspace
+is Cline-to-LBE integration/acceptance without making Cline or Rust a runtime
+authority. The separate HTML cockpit remains a reference/coordination surface
+owned by the LBE workspace.
 
 ### D. Real CLI IDE Implementation Plan
 
@@ -97,22 +118,22 @@ Module `33` defines the implementation sequence from mock TUI contract preview t
 |---|---|---|---|
 | `00_integration_alignment.md` | Two-Repository Ownership, Modes, and Sequence | GOVERNANCE | ACTIVE |
 | `01_transcript_viewport.md` | Transcript Viewport and Long Output | CORE | IMPLEMENTED / LOCAL |
-| `02_model_picker.md` | Interactive Model Picker | CORE | IMPLEMENTED / LOCAL — CATALOG ORDERING RECONCILED |
+| `02_model_picker.md` | Interactive Model Picker | CORE | IMPLEMENTED / LOCAL � CATALOG ORDERING RECONCILED |
 | `03_checkpoints_restore.md` | Checkpoint Compare and Restore Requests | CORE | IMPLEMENTED / LOCAL |
 | `04_sessions.md` | Session Management | CORE | PARTIAL |
 | `05_background_processes.md` | Background and Detached Processes | CORE | PARTIAL |
-| `06_provider_configuration.md` | Provider Configuration UI Contract | CORE | PARTIAL — IDENTITY/CATALOG ADAPTER RECONCILED |
-| `07_tools_registry.md` | Tool Registry Surface | CORE | IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN |
-| `08_evidence_browser.md` | Evidence Browser | CORE | IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN |
-| `09_receipts_browser.md` | Receipt Browser | CORE | IMPLEMENTED / LOCAL TESTED — CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN |
-| `10_mcp_surface.md` | MCP Registry Surface | CORE | PROVEN — METADATA/CONNECTED PROJECTION; INSTALLED ACCEPTANCE OPEN |
-| `11_terminal_compatibility.md` | Terminal Compatibility | CORE | IMPLEMENTED / LOCAL TESTED — LIVE ACCEPTANCE OPEN |
-| `12_plain_cli_mode.md` | Plain / Non-TUI Mode Contract | CORE | IMPLEMENTED / LOCAL TESTED — LIVE GOVERNED COMPLETION ACCEPTANCE OPEN |
+| `06_provider_configuration.md` | Provider Configuration UI Contract | CORE | PARTIAL � IDENTITY/CATALOG ADAPTER RECONCILED |
+| `07_tools_registry.md` | Tool Registry Surface | CORE | IMPLEMENTED / LOCAL TESTED � CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN |
+| `08_evidence_browser.md` | Evidence Browser | CORE | IMPLEMENTED / LOCAL TESTED � CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN |
+| `09_receipts_browser.md` | Receipt Browser | CORE | IMPLEMENTED / LOCAL TESTED � CONNECTED PROJECTION; LIVE ACCEPTANCE OPEN |
+| `10_mcp_surface.md` | MCP Registry Surface | CORE | PROVEN � METADATA/CONNECTED PROJECTION; INSTALLED ACCEPTANCE OPEN |
+| `11_terminal_compatibility.md` | Terminal Compatibility | CORE | IMPLEMENTED / LOCAL TESTED � LIVE ACCEPTANCE OPEN |
+| `12_plain_cli_mode.md` | Plain / Non-TUI Mode Contract | CORE | IMPLEMENTED / LOCAL TESTED � LIVE GOVERNED COMPLETION ACCEPTANCE OPEN |
 | `13_lifecycle_acceptance.md` | Terminal Lifecycle Acceptance | CORE | NOT_PROVEN |
-| `14_responsive_acceptance.md` | Responsive and Minimum-Size Acceptance | CORE | IMPLEMENTED / LOCAL TESTED — LIVE TERMINAL ACCEPTANCE OPEN |
+| `14_responsive_acceptance.md` | Responsive and Minimum-Size Acceptance | CORE | IMPLEMENTED / LOCAL TESTED � LIVE TERMINAL ACCEPTANCE OPEN |
 | `15_session_memory_recall.md` | Session Memory and Recall | CORE | PARTIAL |
 | `16_browser_chat_bridge.md` | Browser Chat Interaction Bridge | EXTERNAL INTERACTION | CLOSED_PRE_INTEGRATION |
-| `17_policy_hooks_permissions.md` | Permissions / Policy / Sandbox | CORE | IMPLEMENTED / LOCAL TESTED — LIVE ACCEPTANCE OPEN |
+| `17_policy_hooks_permissions.md` | Permissions / Policy / Sandbox | CORE | IMPLEMENTED / LOCAL TESTED � LIVE ACCEPTANCE OPEN |
 | `18_schedules.md` | Schedules | SUPPORTING | MISSING |
 | `19_connectors.md` | Connectors | SUPPORTING | MISSING |
 | `20_agent_teams.md` | Agent Teams | ADVANCED CORE | MISSING |
@@ -124,14 +145,14 @@ Module `33` defines the implementation sequence from mock TUI contract preview t
 | `26_statusline_title.md` | Statusline / Title | UX SUPPORT | MISSING |
 | `27_code_search.md` | Code Search | CORE | MISSING |
 | `28_usage_quotas.md` | Usage / Quotas | SUPPORTING | MISSING |
-| `29_workspace_changes_diff.md` | Workspace Changes / Diff | CORE | IMPLEMENTED / LOCAL TESTED — LIVE WRITABLE ACCEPTANCE OPEN |
-| `30_file_editor_patch_review.md` | File / Patch Review | CORE | IMPLEMENTED / LOCAL TESTED — LIVE PATCH ACCEPTANCE OPEN |
+| `29_workspace_changes_diff.md` | Workspace Changes / Diff | CORE | IMPLEMENTED / LOCAL TESTED � LIVE WRITABLE ACCEPTANCE OPEN |
+| `30_file_editor_patch_review.md` | File / Patch Review | CORE | IMPLEMENTED / LOCAL TESTED � LIVE PATCH ACCEPTANCE OPEN |
 | `31_cline_interop_reuse_strategy.md` | Cline Interop / Reuse Strategy | STRATEGIC | MISSING |
 | `32_deterministic_runtime_state_machine.md` | Deterministic Runtime State Machine | CORE / BLOCKING | IMPLEMENTED_PRE_INTEGRATION |
 | `33_real_cli_ide_implementation_plan.md` | Real CLI IDE Implementation Plan | CORE / SEQUENCING | ACTIVE SEQUENCE |
 | `34_p1_live_readonly_acceptance.md` | P1 Read-Only Real Runtime Acceptance | ACCEPTANCE | PASS |
 | `35_p1_live_acceptance_evidence_record.md` | P1 Live Acceptance Evidence Record | ACCEPTANCE | PASS |
-| `36_p2_p3_client_contract.md` | Governed Workspace Operation Client Contract | CONTRACT | LIVE READ-ONLY PROVEN — PROVIDER/CATALOG RECONCILED — FULL P2/P3 INCOMPLETE |
+| `36_p2_p3_client_contract.md` | Governed Workspace Operation Client Contract | CONTRACT | LIVE READ-ONLY PROVEN � PROVIDER/CATALOG RECONCILED � FULL P2/P3 INCOMPLETE |
 | `34_autonomous_developer_frontend.md` | Autonomous Developer Frontend Features (Handoff) | CORE | PARTIAL |
 
 ## Optional documentation companion
@@ -177,9 +198,9 @@ the Rust suite (`203 passed`) and `cargo check` PASS.
 
 ## Current end-to-end continuation contract (2026-09-02)
 
-The active implementation path is `src/main.rs` → `WrapperClient`/
-`LbeWrapper` → `MockLbeWrapper` or `RealLbeWrapper` → authoritative LBE/Agent
-Wall → typed `LbeEvent`/`LbeSnapshot` → `App` reduction → Ratatui rendering.
+The active implementation path is `src/main.rs` ? `WrapperClient`/
+`LbeWrapper` ? `MockLbeWrapper` or `RealLbeWrapper` ? authoritative LBE/Agent
+Wall ? typed `LbeEvent`/`LbeSnapshot` ? `App` reduction ? Ratatui rendering.
 The Rust files `src/app.rs`, `src/events.rs`, `src/requests.rs`, and
 `src/types.rs` are active parts of this path, not leftover parallel
 implementations.

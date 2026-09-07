@@ -1,0 +1,6 @@
+@echo off
+REM LBE - Lockstep Boundary Engine
+REM LBE-NATIVE INTERFACE (NOT Cline)
+REM Launches the LBE Textual TUI
+
+python -m lbe_guard_inspector.textual_tui

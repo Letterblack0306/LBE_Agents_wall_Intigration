@@ -165,7 +165,9 @@ fn required_value(arguments: &[String], index: usize, flag: &str) -> io::Result<
 
 fn parse_agent(value: &str) -> io::Result<AgentMode> {
     match value.to_ascii_lowercase().as_str() {
-        "build" | "regular" | "runtime" => Ok(AgentMode::Regular),
+        // "build", "run", "act" all map to the executable Build mode.
+        // "regular" and "runtime" are kept as legacy aliases for back-compat.
+        "build" | "run" | "act" | "regular" | "runtime" => Ok(AgentMode::Build),
         "plan" => Ok(AgentMode::Plan),
         "audit" => Ok(AgentMode::Audit),
         _ => Err(io::Error::new(
@@ -216,7 +218,7 @@ fn parse_model(value: &str) -> io::Result<types::ModelRef> {
 
 fn print_help() {
     println!(
-        "LETTERBLACK ENGINE\n\nUsage:\n  lbe                         Start the TUI\n  lbe [project]               Start the TUI in a project\n  lbe run \"prompt\"           Run a governed task without the TUI\n\nOptions:\n  -m, --model PROVIDER/MODEL  Select a model\n      --agent build|plan|audit\n  -s, --session SESSION_ID    Resume a specific session\n  -c, --continue              Continue the current session\n      --prompt TEXT           Supply the task prompt\n      --json                  Emit headless events as JSON\n  -h, --help                  Show this help\n  -V, --version               Show the version\n\nThe current LBE runtime intentionally rejects --auto, --fork, and --port.\nAuthorization and execution remain governed by LBE."
+        "LBE (Lockstep Boundary Engine)\n\nUsage:\n  lbe                         Start the TUI\n  lbe [project]               Start the TUI in a project\n  lbe run \"prompt\"           Run a governed task without the TUI\n\nOptions:\n  -m, --model PROVIDER/MODEL  Select a model\n      --agent build|plan|audit\n  -s, --session SESSION_ID    Resume a specific session\n  -c, --continue              Continue the current session\n      --prompt TEXT           Supply the task prompt\n      --json                  Emit headless events as JSON\n  -h, --help                  Show this help\n  -V, --version               Show the version\n\nThe current LBE runtime intentionally rejects --auto, --fork, and --port.\nAuthorization and execution remain governed by LBE."
     );
 }
 
@@ -229,7 +231,7 @@ fn run_headless(options: CliOptions) -> io::Result<i32> {
     let mut startup_initialized = false;
     let mut startup_model_applied = options.model.is_some();
     let mut model_catalog_ready = false;
-    let mode = options.mode.unwrap_or(AgentMode::Regular);
+    let mode = options.mode.unwrap_or(AgentMode::Build);
     let deadline = Instant::now() + Duration::from_secs(180);
 
     while Instant::now() < deadline {
@@ -505,7 +507,7 @@ fn run(
         app.input = prompt;
     }
     let mut startup_options_applied = false;
-    let mut startup_model_applied = options.model.is_none();
+    let mut startup_model_applied = options.model.is_some();
     let animation_started = Instant::now();
 
     while !app.should_quit() {
@@ -526,11 +528,6 @@ fn run(
             app.reduce_lbe_event(event);
             if use_real_runtime && !startup_options_applied && has_authoritative_workspace {
                 startup_options_applied = true;
-                if let Some(mode) = options.mode {
-                    app.apply_wrapper_result(
-                        wrapper.submit(requests::UserRequest::SetMode { mode }, Instant::now()),
-                    );
-                }
                 if let Some(session_id) = options.session_id.clone().or_else(|| {
                     options
                         .continue_session
@@ -580,3 +577,4 @@ fn run(
     wrapper.shutdown();
     Ok(())
 }
+

@@ -1,1 +1,47 @@
+# Rust build output
 /target/
+
+# Node modules (reference Cline via dependency, not copy)
+node_modules/
+/node_modules/
+
+# Cline integration (if kept - bounded adapter only)
+/cline/node_modules/
+/cline/apps/cli/node_modules/
+/cline/apps/cli/dist/
+
+# Build outputs
+/dist/
+/begin/
+
+# Runtime state
+/.lbe/
+/.agent/
+
+# Debug/log artifacts
+*.log
+check*.txt
+push*.txt
+test_*.txt
+test_out*.txt
+test_err*.txt
+test_result.txt
+full_test.txt
+lbe_help.txt
+mock-*.log
+submit-*.log
+cline-direct-*.log
+test_output.txt
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Chat history noise
+"Chat histroy"/

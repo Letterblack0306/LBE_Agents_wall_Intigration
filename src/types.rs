@@ -193,25 +193,117 @@ impl ExecutionStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentMode {
+    /// Build / act: the agent may run governed tools and mutate state when
+    /// explicitly authorized by the session. This is the LBE equivalent of
+    /// Cline's "act" mode.
+    Build,
+    /// Read-only audit: inspect evidence, list findings, never mutate.
     Audit,
-    Regular,
+    /// Plan-only: investigate and propose, no execution.
     Plan,
 }
 
 impl AgentMode {
     pub(crate) fn next(self) -> Self {
+        // The LBE user-facing cycle is Build → Plan → Audit → Build.
+        // Build is the "Run" / "Act" mode used to actually execute governed work.
         match self {
-            Self::Audit => Self::Regular,
-            Self::Regular => Self::Plan,
+            Self::Build => Self::Plan,
             Self::Plan => Self::Audit,
+            Self::Audit => Self::Build,
         }
     }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Audit => "Lbe Audit",
-            Self::Regular => "Runtime",
+            Self::Build => "Run",
             Self::Plan => "Plan",
+            Self::Audit => "Audit",
+        }
+    }
+
+    /// Long form used in the TUI status line and command palette.
+    pub(crate) fn long_label(self) -> &'static str {
+        match self {
+            Self::Build => "Run (act)",
+            Self::Plan => "Plan (no execution)",
+            Self::Audit => "Audit (read-only)",
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Child Agent – Cline → LBE spawn admission
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+pub(crate) enum ChildAgentStatus {
+    /// Spawn requested, awaiting LBE governance authorization.
+    Pending,
+    /// Authorized by LBE governance.
+    Authorized,
+    /// Execution has actually begun through LBE lifecycle.
+    Running,
+    /// Completed successfully.
+    Completed,
+    /// Failed with error.
+    Failed,
+    /// Rejected by LBE governance.
+    Rejected,
+    /// Cancelled before completion.
+    Cancelled,
+}
+
+impl ChildAgentStatus {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Pending => "PENDING",
+            Self::Authorized => "AUTHORIZED",
+            Self::Running => "RUNNING",
+            Self::Completed => "COMPLETED",
+            Self::Failed => "FAILED",
+            Self::Rejected => "REJECTED",
+            Self::Cancelled => "CANCELLED",
+        }
+    }
+
+    pub(crate) fn is_terminal(self) -> bool {
+        matches!(self, Self::Completed | Self::Failed | Self::Rejected | Self::Cancelled)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub(crate) struct ChildAgentRun {
+    pub(crate) child_agent_run_id: String,
+    pub(crate) correlation_id: String,
+    pub(crate) parent_session_id: Option<String>,
+    pub(crate) child_session_id: Option<String>,
+    pub(crate) status: ChildAgentStatus,
+    pub(crate) child_tools: Vec<String>,
+    pub(crate) started_at: Option<String>,
+    pub(crate) completed_at: Option<String>,
+    pub(crate) receipt_id: Option<String>,
+    pub(crate) evidence_ref: Option<String>,
+    pub(crate) authorization_rationale: Option<String>,
+    /// Whether recursive child spawn is explicitly authorized by LBE governance.
+    pub(crate) recursive_spawn_authorized: bool,
+}
+
+impl ChildAgentRun {
+    pub(crate) fn new(correlation_id: String, parent_session_id: String) -> Self {
+        Self {
+            child_agent_run_id: format!("child_{}", correlation_id),
+            correlation_id,
+            parent_session_id: Some(parent_session_id),
+            child_session_id: None,
+            status: ChildAgentStatus::Pending,
+            child_tools: Vec::new(),
+            started_at: None,
+            completed_at: None,
+            receipt_id: None,
+            evidence_ref: None,
+            authorization_rationale: None,
+            recursive_spawn_authorized: false,
         }
     }
 }
@@ -302,6 +394,7 @@ pub(crate) struct LbeSnapshot {
     pub(crate) selected_model: Option<ModelRef>,
     pub(crate) memory: MemoryProjection,
     pub(crate) browser_chat: BrowserChatProjection,
+    pub(crate) child_agents: Vec<ChildAgentRun>,
 }
 
 impl Default for LbeSnapshot {
@@ -345,7 +438,7 @@ impl Default for LbeSnapshot {
             active_execution_id: None,
             execution_status: None,
             diagnostics: mock_diagnostics(),
-            active_mode: AgentMode::Regular,
+            active_mode: AgentMode::Build,
             connection: RuntimeConnection::Mock,
             providers: mock_provider_catalog(),
             models: mock_model_catalog(),
@@ -355,6 +448,7 @@ impl Default for LbeSnapshot {
             }),
             memory: MemoryProjection::default(),
             browser_chat: BrowserChatProjection::default(),
+            child_agents: Vec::new(),
         }
     }
 }
@@ -1062,6 +1156,30 @@ pub(crate) struct WorkspaceFile {
     pub(crate) path: String,
     pub(crate) content: String,
     pub(crate) content_sha256: String,
+    pub(crate) evidence_ref: Option<String>,
+    pub(crate) receipt_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspaceGlobMatch {
+    pub(crate) path: String,
+    pub(crate) entry_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspaceGlob {
+    pub(crate) pattern: String,
+    pub(crate) matches: Vec<WorkspaceGlobMatch>,
+    pub(crate) evidence_ref: Option<String>,
+    pub(crate) receipt_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct WorkspaceSearch {
+    pub(crate) query: String,
+    pub(crate) indexed_result_count: u64,
+    pub(crate) current_result_count: u64,
+    pub(crate) results: Vec<serde_json::Value>,
     pub(crate) evidence_ref: Option<String>,
     pub(crate) receipt_id: Option<String>,
 }

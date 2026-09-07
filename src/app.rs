@@ -139,7 +139,7 @@ impl Default for App {
             transcript: Vec::new(),
             activity_log: Vec::new(),
             phase: Phase::Welcome,
-            agent_mode: AgentMode::Regular,
+            agent_mode: AgentMode::Build,
             show_shortcuts: false,
             show_command_palette: false,
             command_palette_index: 0,

@@ -762,7 +762,7 @@ pub(crate) fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
     let line_one_text = format!(
         "{} · {} · context {}%",
         match app.agent_mode {
-            AgentMode::Regular => "Runtime",
+            AgentMode::Build => "Runtime",
             AgentMode::Plan => "Plan",
             AgentMode::Audit => "Audit",
         },
@@ -1226,7 +1226,7 @@ fn audit_text(app: &App) -> Text<'static> {
 fn mode_placeholder(mode: AgentMode) -> &'static str {
     match mode {
         AgentMode::Audit => "Ask the agent to investigate workspace evidence (read-only)",
-        AgentMode::Regular => "Describe what you want the agent to do",
+        AgentMode::Build => "Describe what you want the agent to do",
         AgentMode::Plan => "Investigate or propose a plan (no execution)",
     }
 }
