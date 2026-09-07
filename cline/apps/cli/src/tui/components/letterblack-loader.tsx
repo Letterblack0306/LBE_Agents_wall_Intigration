@@ -10,7 +10,7 @@ const LOADER_STYLES = {
 	square: ["■", "□", "▪", "▫"],
 } as const;
 
-type LoaderStyle = keyof typeof LOADER_STYLES;
+export type LoaderStyle = keyof typeof LOADER_STYLES;
 
 interface LetterblackLoaderProps {
 	color?: string;

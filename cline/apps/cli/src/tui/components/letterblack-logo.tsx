@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../hooks/use-theme";
 
-interface AnimatedLetterblackLogoProps {
+export interface AnimatedLetterblackLogoProps {
 	animate?: boolean;
 	delay?: number;
 }
