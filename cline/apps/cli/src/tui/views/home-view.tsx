@@ -99,7 +99,7 @@ export function HomeView(props: {
 				paddingX={2}
 			>
 				<box flexDirection="column" width={surfaceWidth}>
-					<LetterblackLogo />
+					<LetterblackLogo animate delay={300} />
 
 					<box marginTop={2}>
 						<InputBar
