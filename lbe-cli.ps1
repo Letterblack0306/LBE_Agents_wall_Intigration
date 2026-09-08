@@ -10,6 +10,16 @@ $ErrorActionPreference = 'Continue'
 
 $FG = @{G='Green';A='Yellow';R='Red';M='Magenta';C='Cyan';W='White';GR='Gray'}
 
+# Provider configuration resolution
+# Cline providers.json is the source of truth for provider settings
+$clineProvidersPath = Join-Path $env:USERPROFILE '.cline\data\settings\providers.json'
+if (Test-Path $clineProvidersPath) {
+    $env:LBE_PROVIDER_CONFIG = $clineProvidersPath
+    Write-Host "  Provider config: $clineProvidersPath" -ForegroundColor Green
+} else {
+    Write-Host "  Provider config: NOT FOUND (run 'lbe provider select' to configure)" -ForegroundColor Yellow
+}
+
 function Header {
     param($S, $R, $M)
     Write-Host ''
