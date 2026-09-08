@@ -525,9 +525,14 @@ fn run(
                 LbeEvent::SnapshotUpdated { snapshot }
                     if snapshot.workspace_id.is_some()
             );
-            app.reduce_lbe_event(event);
+                        app.reduce_lbe_event(event);
             if use_real_runtime && !startup_options_applied && has_authoritative_workspace {
                 startup_options_applied = true;
+                // Auto-refresh provider catalog so the landing page shows
+                // real provider status from Cline providers.json.
+                app.apply_wrapper_result(
+                    wrapper.submit(requests::UserRequest::RefreshProviderCatalog, now),
+                );
                 if let Some(session_id) = options.session_id.clone().or_else(|| {
                     options
                         .continue_session

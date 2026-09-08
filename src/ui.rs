@@ -407,6 +407,11 @@ fn draw_workspace_sidebar(frame: &mut Frame, area: Rect, app: &App) {
 fn draw_landing(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let safe_area = area.inner(Margin::new(2, 1));
+    let mode = match app.agent_mode {
+        AgentMode::Build => "Build",
+        AgentMode::Plan => "Plan",
+        AgentMode::Audit => "Audit",
+    };
 
     // Vertical centering for the landing content
     let sections = Layout::vertical([
@@ -433,7 +438,7 @@ fn draw_landing(frame: &mut Frame, app: &App) {
     frame.render_widget(block, sections[1]);
 
     // Landing content
-    let mut lines = vec![
+        let mut lines = vec![
         Line::default(),
         Line::from(Span::styled(
             "Welcome to LBE",
@@ -441,7 +446,11 @@ fn draw_landing(frame: &mut Frame, app: &App) {
         )),
         Line::default(),
         Line::from(Span::styled(
-            "Configure your provider to get started.",
+            if app.snapshot.connection == RuntimeConnection::Connected {
+                "Connected to LBE runtime"
+            } else {
+                "Configure your provider to get started."
+            },
             Style::default().fg(PALETTE.ink),
         )),
         Line::default(),
@@ -449,13 +458,17 @@ fn draw_landing(frame: &mut Frame, app: &App) {
             "Provider:",
             Style::default().fg(PALETTE.muted),
         )),
-        Line::from(Span::styled(
+                Line::from(Span::styled(
             if app.snapshot.providers.is_empty() {
-                "  ▸ Select a provider (F2)"
+                "  ▸ Select a provider (F2)".to_string()
             } else {
-                "  ▸ Provider configured"
+                format!("  ▸ {} providers available", app.snapshot.providers.len())
             },
-            Style::default().fg(PALETTE.ink),
+            Style::default().fg(if app.snapshot.providers.is_empty() {
+                PALETTE.ink
+            } else {
+                PALETTE.green
+            }),
         )),
         Line::default(),
         Line::from(Span::styled(
@@ -464,15 +477,19 @@ fn draw_landing(frame: &mut Frame, app: &App) {
         )),
         Line::from(Span::styled(
             if app.snapshot.model_id.is_empty() {
-                "  ▸ Select a model (F3)"
+                "  ▸ Select a model (F3)".to_string()
             } else {
-                "  ▸ Model configured"
+                format!("  ▸ {}", app.snapshot.model_id)
             },
-            Style::default().fg(PALETTE.ink),
+            Style::default().fg(if app.snapshot.model_id.is_empty() {
+                PALETTE.ink
+            } else {
+                PALETTE.green
+            }),
         )),
         Line::default(),
         Line::from(Span::styled(
-            "Mode: Plan (default) · Audit · Build",
+            format!("Mode: {mode} · Audit · Build"),
             Style::default().fg(PALETTE.faint),
         )),
         Line::default(),
