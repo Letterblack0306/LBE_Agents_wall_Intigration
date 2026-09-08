@@ -97,6 +97,10 @@ fn terminal_cursor_visible(visible: bool) -> Csi {
 }
 
 pub(crate) fn draw(frame: &mut Frame, app: &App) {
+    if app.phase == Phase::Landing {
+        draw_landing(frame, app);
+        return;
+    }
     draw_at(frame, app, Duration::from_secs(2));
 }
 
@@ -398,6 +402,90 @@ fn draw_workspace_sidebar(frame: &mut Frame, area: Rect, app: &App) {
         )));
     }
     frame.render_widget(Paragraph::new(Text::from(lines)).scroll((0, 0)), inner);
+}
+
+fn draw_landing(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+    let safe_area = area.inner(Margin::new(2, 1));
+
+    // Vertical centering for the landing content
+    let sections = Layout::vertical([
+        Constraint::Percentage(20),
+        Constraint::Min(16),
+        Constraint::Percentage(20),
+    ])
+    .split(safe_area);
+
+    // Main landing block
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(PALETTE.green))
+        .style(Style::default().bg(PALETTE.bg))
+        .title(Line::from(vec![
+            Span::styled(
+                " LBE - LOCKSTEP BOUNDARY ENGINE ",
+                Style::default().fg(PALETTE.green).add_modifier(Modifier::BOLD),
+            ),
+        ]))
+        .title_alignment(Alignment::Center);
+
+    let inner = block.inner(sections[1]);
+    frame.render_widget(block, sections[1]);
+
+    // Landing content
+    let mut lines = vec![
+        Line::default(),
+        Line::from(Span::styled(
+            "Welcome to LBE",
+            Style::default().fg(PALETTE.amber).add_modifier(Modifier::BOLD),
+        )),
+        Line::default(),
+        Line::from(Span::styled(
+            "Configure your provider to get started.",
+            Style::default().fg(PALETTE.ink),
+        )),
+        Line::default(),
+        Line::from(Span::styled(
+            "Provider:",
+            Style::default().fg(PALETTE.muted),
+        )),
+        Line::from(Span::styled(
+            if app.snapshot.providers.is_empty() {
+                "  ▸ Select a provider (F2)"
+            } else {
+                "  ▸ Provider configured"
+            },
+            Style::default().fg(PALETTE.ink),
+        )),
+        Line::default(),
+        Line::from(Span::styled(
+            "Model:",
+            Style::default().fg(PALETTE.muted),
+        )),
+        Line::from(Span::styled(
+            if app.snapshot.model_id.is_empty() {
+                "  ▸ Select a model (F3)"
+            } else {
+                "  ▸ Model configured"
+            },
+            Style::default().fg(PALETTE.ink),
+        )),
+        Line::default(),
+        Line::from(Span::styled(
+            "Mode: Plan (default) · Audit · Build",
+            Style::default().fg(PALETTE.faint),
+        )),
+        Line::default(),
+        Line::from(Span::styled(
+            "Press Enter to continue · F2 provider · F3 model · Tab mode",
+            Style::default().fg(PALETTE.green),
+        )),
+    ];
+
+    frame.render_widget(
+        Paragraph::new(Text::from(lines)).alignment(Alignment::Center),
+        inner,
+    );
 }
 
 fn draw_main_body(frame: &mut Frame, area: Rect, app: &App, split_layout: bool) {

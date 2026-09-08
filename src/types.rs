@@ -115,6 +115,7 @@ pub(crate) const PALETTE: Palette = Palette {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Phase {
+    Landing,
     Welcome,
     PatchReview {
         path: String,

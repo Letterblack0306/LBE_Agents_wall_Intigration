@@ -138,8 +138,8 @@ impl Default for App {
             input: String::new(),
             transcript: Vec::new(),
             activity_log: Vec::new(),
-            phase: Phase::Welcome,
-            agent_mode: AgentMode::Build,
+            phase: Phase::Landing,
+            agent_mode: AgentMode::Audit,
             show_shortcuts: false,
             show_command_palette: false,
             command_palette_index: 0,
@@ -242,6 +242,21 @@ impl App {
             } else {
                 input_trace("action=quit_ctrl_c_idle");
                 self.should_quit = true;
+            }
+            return;
+        }
+        if self.phase == Phase::Landing {
+            match key.code {
+                KeyCode::Enter => {
+                    input_trace("action=enter_landing");
+                    self.phase = Phase::Welcome;
+                }
+                KeyCode::Tab => {
+                    let mode = self.agent_mode.next();
+                    input_trace(format!("action=set_mode requested={mode:?}"));
+                    self.set_mode(wrapper, mode);
+                }
+                _ => {}
             }
             return;
         }
