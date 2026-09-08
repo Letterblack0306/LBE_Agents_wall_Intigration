@@ -125,6 +125,10 @@ fn parse_cli(arguments: &[String]) -> io::Result<(Option<&str>, CliOptions)> {
                 index += 1;
                 options.session_id = Some(required_value(arguments, index, argument)?);
             }
+            "--project" | "--workspace" => {
+                index += 1;
+                options.project = Some(required_value(arguments, index, argument)?);
+            }
             value if value.starts_with('-') => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,

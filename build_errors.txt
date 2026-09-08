@@ -10,9 +10,9 @@ warning: variable does not need to be mutable
     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
 warning: function `headless_prompt` is never used
-   --> src\main.rs:339:4
+   --> src\main.rs:343:4
     |
-339 | fn headless_prompt(arguments: &[String]) -> io::Result<String> {
+343 | fn headless_prompt(arguments: &[String]) -> io::Result<String> {
     |    ^^^^^^^^^^^^^^^
     |
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -223,132 +223,132 @@ warning: constant `SLOGAN_REVEAL` is never used
    |                  ^^^^^^^^^^^^^
 
 warning: method `long_label` is never used
-   --> src\types.rs:227:19
+   --> src\types.rs:228:19
     |
 207 | impl AgentMode {
     | -------------- method in this implementation
 ...
-227 |     pub(crate) fn long_label(self) -> &'static str {
+228 |     pub(crate) fn long_label(self) -> &'static str {
     |                   ^^^^^^^^^^
 
 warning: methods `label` and `is_terminal` are never used
-   --> src\types.rs:259:19
+   --> src\types.rs:260:19
     |
-258 | impl ChildAgentStatus {
+259 | impl ChildAgentStatus {
     | --------------------- methods in this implementation
-259 |     pub(crate) fn label(self) -> &'static str {
+260 |     pub(crate) fn label(self) -> &'static str {
     |                   ^^^^^
 ...
-271 |     pub(crate) fn is_terminal(self) -> bool {
+272 |     pub(crate) fn is_terminal(self) -> bool {
     |                   ^^^^^^^^^^^
 
 warning: associated function `new` is never used
-   --> src\types.rs:294:19
+   --> src\types.rs:295:19
     |
-293 | impl ChildAgentRun {
+294 | impl ChildAgentRun {
     | ------------------ associated function in this implementation
-294 |     pub(crate) fn new(correlation_id: String, parent_session_id: String) -> Self {
+295 |     pub(crate) fn new(correlation_id: String, parent_session_id: String) -> Self {
     |                   ^^^
 
 warning: variants `Connecting`, `Reconnecting`, and `Lost` are never constructed
-   --> src\types.rs:320:5
+   --> src\types.rs:321:5
     |
-317 | pub(crate) enum RuntimeConnection {
+318 | pub(crate) enum RuntimeConnection {
     |                 ----------------- variants in this enum
 ...
-320 |     Connecting,
+321 |     Connecting,
     |     ^^^^^^^^^^
-321 |     Connected,
-322 |     Reconnecting,
+322 |     Connected,
+323 |     Reconnecting,
     |     ^^^^^^^^^^^^
-323 |     Lost,
+324 |     Lost,
     |     ^^^^
     |
     = note: `RuntimeConnection` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
 
 warning: variants `Hub` and `Detached` are never constructed
-   --> src\types.rs:464:5
+   --> src\types.rs:465:5
     |
-461 | pub(crate) enum RuntimeMode {
+462 | pub(crate) enum RuntimeMode {
     |                 ----------- variants in this enum
 ...
-464 |     Hub,
+465 |     Hub,
     |     ^^^
-465 |     Detached,
+466 |     Detached,
     |     ^^^^^^^^
     |
     = note: `RuntimeMode` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
 
 warning: struct `CredentialRef` is never constructed
-   --> src\types.rs:536:19
+   --> src\types.rs:537:19
     |
-536 | pub(crate) struct CredentialRef(String);
+537 | pub(crate) struct CredentialRef(String);
     |                   ^^^^^^^^^^^^^
 
 warning: struct `ProviderConfig` is never constructed
-   --> src\types.rs:539:19
+   --> src\types.rs:540:19
     |
-539 | pub(crate) struct ProviderConfig {
+540 | pub(crate) struct ProviderConfig {
     |                   ^^^^^^^^^^^^^^
 
 warning: struct `Message` is never constructed
-   --> src\types.rs:626:19
+   --> src\types.rs:627:19
     |
-626 | pub(crate) struct Message {
+627 | pub(crate) struct Message {
     |                   ^^^^^^^
 
 warning: struct `ToolDefinition` is never constructed
-   --> src\types.rs:632:19
+   --> src\types.rs:633:19
     |
-632 | pub(crate) struct ToolDefinition {
+633 | pub(crate) struct ToolDefinition {
     |                   ^^^^^^^^^^^^^^
 
 warning: struct `ModelRequest` is never constructed
-   --> src\types.rs:638:19
+   --> src\types.rs:639:19
     |
-638 | pub(crate) struct ModelRequest {
+639 | pub(crate) struct ModelRequest {
     |                   ^^^^^^^^^^^^
 
 warning: enum `ModelEvent` is never used
-   --> src\types.rs:646:17
+   --> src\types.rs:647:17
     |
-646 | pub(crate) enum ModelEvent {
+647 | pub(crate) enum ModelEvent {
     |                 ^^^^^^^^^^
 
 warning: struct `Usage` is never constructed
-   --> src\types.rs:659:19
+   --> src\types.rs:660:19
     |
-659 | pub(crate) struct Usage {
+660 | pub(crate) struct Usage {
     |                   ^^^^^
 
 warning: enum `FinishReason` is never used
-   --> src\types.rs:667:17
+   --> src\types.rs:668:17
     |
-667 | pub(crate) enum FinishReason {
+668 | pub(crate) enum FinishReason {
     |                 ^^^^^^^^^^^^
 
 warning: struct `ProviderError` is never constructed
-   --> src\types.rs:676:19
+   --> src\types.rs:677:19
     |
-676 | pub(crate) struct ProviderError {
+677 | pub(crate) struct ProviderError {
     |                   ^^^^^^^^^^^^^
 
 warning: struct `WorkspaceGlobMatch` is never constructed
-    --> src\types.rs:1165:19
+    --> src\types.rs:1166:19
      |
-1165 | pub(crate) struct WorkspaceGlobMatch {
+1166 | pub(crate) struct WorkspaceGlobMatch {
      |                   ^^^^^^^^^^^^^^^^^^
 
 warning: struct `WorkspaceGlob` is never constructed
-    --> src\types.rs:1171:19
+    --> src\types.rs:1172:19
      |
-1171 | pub(crate) struct WorkspaceGlob {
+1172 | pub(crate) struct WorkspaceGlob {
      |                   ^^^^^^^^^^^^^
 
 warning: struct `WorkspaceSearch` is never constructed
-    --> src\types.rs:1179:19
+    --> src\types.rs:1180:19
      |
-1179 | pub(crate) struct WorkspaceSearch {
+1180 | pub(crate) struct WorkspaceSearch {
      |                   ^^^^^^^^^^^^^^^
 
 warning: function `draw` is never used
@@ -403,4 +403,4 @@ warning: methods `disconnect`, `reconnect`, and `connection_state` are never use
      |                   ^^^^^^^^^^^^^^^^
 
 warning: `lbe-terminal` (bin "lbe") generated 44 warnings (run `cargo fix --bin "lbe" -p lbe-terminal` to apply 1 suggestion)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.55s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.44s

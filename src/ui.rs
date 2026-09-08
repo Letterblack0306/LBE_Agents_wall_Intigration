@@ -489,7 +489,7 @@ fn draw_landing(frame: &mut Frame, app: &App) {
         )),
         Line::default(),
         Line::from(Span::styled(
-            format!("Mode: {mode} · Audit · Build"),
+            format!("Mode: {mode}  (Tab to switch)"),
             Style::default().fg(PALETTE.faint),
         )),
         Line::default(),

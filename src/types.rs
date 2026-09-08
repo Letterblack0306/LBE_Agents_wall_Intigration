@@ -206,29 +206,30 @@ pub(crate) enum AgentMode {
 
 impl AgentMode {
     pub(crate) fn next(self) -> Self {
-        // The LBE user-facing cycle is Build → Plan → Audit → Build.
-        // Build is the "Run" / "Act" mode used to actually execute governed work.
+        // The LBE user-facing cycle is PLAN ↔ ACT.
+        // ACT = Build (governed execution with authorization).
+        // Audit semantics are absorbed into PLAN internally for compatibility.
         match self {
             Self::Build => Self::Plan,
-            Self::Plan => Self::Audit,
-            Self::Audit => Self::Build,
+            Self::Plan => Self::Build,
+            Self::Audit => Self::Plan,
         }
     }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Build => "Run",
-            Self::Plan => "Plan",
-            Self::Audit => "Audit",
+            Self::Build => "ACT",
+            Self::Plan => "PLAN",
+            Self::Audit => "PLAN",
         }
     }
 
-    /// Long form used in the TUI status line and command palette.
+        /// Long form used in the TUI status line and command palette.
     pub(crate) fn long_label(self) -> &'static str {
         match self {
-            Self::Build => "Run (act)",
-            Self::Plan => "Plan (no execution)",
-            Self::Audit => "Audit (read-only)",
+            Self::Build => "Act (executes with authorization)",
+            Self::Plan => "Plan (investigate, no mutation)",
+            Self::Audit => "Plan (audit-read compatibility)",
         }
     }
 }
