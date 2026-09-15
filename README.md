@@ -1,161 +1,237 @@
-# LBE — Lockstep Boundary Engine terminal CLI
+# LBE — Lockstep Boundary Engine terminal integration
 
-## PRODUCT IDENTITY
-
-```
-LBE CLI      =  LBE-NATIVE user-facing terminal (NOT Cline)
-Rust TUI     =  Reference/integration client
-LBE Runtime  =  C:\Agents-Memory-Tool-v6-integration (sole authority)
-BirdEye MCP  =  Evidence, memory, and skills integration
-```
-
-**The LBE CLI is a completely different interface from Cline.** It uses a unique
-Green/Amber color scheme, governance-focused layout, and LBE-specific commands.
-BirdEye MCP provides evidence, memory recall, and skills integration.
-
-## Quick Start
-
-### LBE CLI (Recommended)
-
-```powershell
-lbe                    # Open LBE in current directory
-lbe C:\project        # Open LBE in specified directory
-lbe /evidence         # View evidence browser
-lbe /memory           # Recall session memory
-lbe /skills           # View skills registry
-lbe /audit            # View audit trail
-lbe /governance        # View governance status
-```
-
-The `lbe` command opens the **LBE-NATIVE CLI** with:
-- **Unique UI** — NOT Cline's interface
-- **Green/Amber** color scheme (not blue/purple)
-- **Governance-focused** — Evidence, receipts, authorization always visible
-- **BirdEye MCP** integration — Memory recall, skills registry, workspace identity
-- **Slash commands** — /evidence, /memory, /skills, /audit, /governance, /mode
-
-### Install LBE Command
-
-If `lbe` is not in PATH:
-```powershell
-.\install-lbe-path.ps1    # Add to user PATH
-.\install-lbe-path.ps1 -SystemWide   # Add to system PATH (requires admin)
-```
-
-To uninstall:
-```powershell
-.\install-lbe-path.ps1 -Remove
-```
-
-## Runtime requirement
-
-Rust 1.88 or newer. This workspace was validated with Rust 1.96.0 on Windows.
-
-## Rust Reference Client Commands
+## Authority and product identity
 
 ```text
-cargo run --bin lbe      # Run Rust reference client
-cargo test               # Run tests
-cargo fmt --check        # Format check
-cargo check              # Type check
+PRODUCT                         = LBE
+RUNTIME / GOVERNANCE AUTHORITY  = LBE Persistent Agent Wall
+ACCEPTED PRODUCT-SURFACE DIR    = Cline CLI/TUI mechanics under LBE authority
+RUST / RATATUI                  = reference / integration client
+CLINE                            = reasoning/provider/UI mechanics; not LBE authority
 ```
 
-## LBE-NATIVE CLI Commands
+LBE owns workspace/session identity, policy, authorization, governed execution,
+ToolReceipt/evidence persistence, validation, recovery, and completion truth.
 
-```
-/evidence     - Browse evidence chain through LBE governance
-/memory       - Recall session memory via BirdEye
-/skills       - View skills registry
-/audit        - View LBE audit trail
-/governance   - View authorization, evidence, receipts status
-/mode [x]     - Set agent mode (build|plan|audit)
-/clear        - Clear conversation
-/quit         - Exit LBE CLI
-```
+Cline may supply reasoning, provider interaction, continuation, and terminal UI
+mechanics, but it must not become a second session, authorization, execution,
+receipt/evidence, persistence, or completion owner.
 
-## BirdEye MCP Integration
+The Rust/Ratatui client in this repository remains useful integration evidence.
+It must not be promoted to final-product authority merely because it builds or
+passes local tests.
 
-The LBE CLI integrates with BirdEye MCP at `C:\MCP Local\Letterblack_BirdEye`:
-- **Workspace Identity** — Workspace root, Git branch, commit hash
-- **Memory Recall** — Session memory search and retrieval
-- **Skills Registry** — Governed skill invocation status
+## Current source-truth rule
 
-All BirdEye operations pass through LBE authorization and generate receipts.
-# LBE — Lockstep Boundary Engine terminal CLI
+Do not use this README as a release/status record.
 
-## PRODUCT IDENTITY
-
-```
-LBE CLI/TUI  =  Cline-based user-facing product surface
-Rust TUI     =  Reference/integration client
-LBE Runtime  =  C:\Agents-Memory-Tool-v6-integration (sole authority)
-```
-
-Cline provides the embedded provider/reasoning engine. LBE runtime owns governance,
-evidence, receipts, and completion truth. The Rust TUI renders projections supplied
-by the authoritative LBE Python runtime and never owns provider credentials or runtime
-authority.
-
-## Quick Start
-
-### LBE CLI (Recommended)
-
-```powershell
-lbe                    # Open LBE in current directory
-lbe C:\project        # Open LBE in specified directory
-```
-
-The `lbe` command opens the **LBE-branded CLI** with:
-- LBE header/branding displayed
-- Cline embedded underneath for AI provider/reasoning
-- Automatic session creation with LBE runtime
-- Full LBE governance, evidence, and receipts
-
-### Install LBE Command
-
-If `lbe` is not in PATH:
-```powershell
-.\install-lbe-path.ps1    # Add to user PATH
-.\install-lbe-path.ps1 -SystemWide   # Add to system PATH (requires admin)
-```
-
-To uninstall:
-```powershell
-.\install-lbe-path.ps1 -Remove
-```
-
-## Runtime requirement
-
-Rust 1.88 or newer. This workspace was validated with Rust 1.96.0 on Windows.
-
-## Rust Reference Client Commands
+For current acceptance and implementation truth, use this precedence:
 
 ```text
-cargo run --bin lbe      # Run Rust reference client
-cargo test               # Run tests
-cargo fmt --check        # Format check
-cargo check              # Type check
-```
-# LBE — Lockstep Boundary Engine terminal CLI
-
-## PRODUCT IDENTITY
-
-```
-LBE CLI/TUI  =  Cline-based user-facing product surface
-Rust TUI     =  Reference/integration client
-LBE Runtime  =  C:\Agents-Memory-Tool-v6-integration (sole authority)
+1. live runtime evidence
+2. current local worktree/source
+3. LBE machine gate / governance state
+4. project-owned acceptance checkpoints
+5. backend docs/CURRENT_STATUS.md
+6. accepted project-specific interaction/design contract
+7. GPT-Knowledge reusable UI/engineering guidance
+8. reference/research documents
+9. historical chats, mockups, and superseded plans
 ```
 
-Cline provides the embedded provider/reasoning engine. LBE runtime owns governance,
-evidence, receipts, and completion truth. The Rust TUI renders projections supplied
-by the authoritative LBE Python runtime and never owns provider credentials or runtime
-authority.
+A historical PASS does not automatically prove the currently installed product
+surface. Build success does not equal runtime acceptance. Runtime acceptance does
+not automatically equal user-flow or UX acceptance.
 
-## Runtime requirement
+## Locked LBE terminal interaction contract
 
-Rust 1.88 or newer. This workspace was validated with Rust 1.96.0 on Windows.
+The September 5 interaction decisions are the product-specific baseline. Do not
+redesign these behaviors unless the user explicitly changes the contract.
 
-## Commands
+### Primary shell
+
+```text
+LBE · <workspace> · <model> · <mode>                  git <branch> · <diff>
+                                                       [ ||||........ ]
+                                                       context usage
+
+<conversation / execution timeline>
+
+<active process>
+<raw runtime event 1>
+<raw runtime event 2>
+<raw runtime event 3>
+
+✓ <previous process> · <target> · <duration>
+
+[I] Message LBE…
+────────────────────────────────────────────────────────────────────────
+ctx <usage> · <active mode>                                      Ctrl+K
+```
+
+### Visual hierarchy
+
+Primary/high-visibility information:
+
+```text
+LBE identity
+workspace
+conversation
+active execution
+composer/input
+```
+
+Secondary/muted information:
+
+```text
+model
+mode
+git branch
+diff
+context metadata
+footer metadata
+shortcut hints
+```
+
+Secondary metadata should remain visible without competing with the active task.
+
+### Context indicator
+
+The thin context bar represents **real model context-window utilization**.
+
+It must not be reused for arbitrary task progress, decorative loading, or an
+unverified approximation.
+
+### `[I]` composer/activity identity
+
+Idle state:
+
+```text
+[I] Message LBE…
+```
+
+During verified active execution, the same identity area may animate as a
+bounded horizontal activity indicator. Animation must be driven by real runtime
+execution state; it must not imply work when no authoritative operation is
+running.
+
+### Active-process projection
+
+For the currently active process:
+
+```text
+show at most 3 raw emitted runtime/event lines
+scroll those 3 lines internally while active
+single-click/explicit expand reveals full process history
+```
+
+When the next process begins, the prior process automatically collapses to one
+ordered summary line, for example:
+
+```text
+✓ workspace.read · product_entry.py · 180ms
+```
+
+Completed process history remains available without keeping every raw event
+expanded in the main conversation surface.
+
+### State-truth requirements
+
+The UI is a projection/control surface, not a simulation.
+
+```text
+configured != connected
+connected  != healthy
+healthy    != current operation succeeded
+selected   != authenticated
+requested  != authorized
+started    != completed
+completed  != validated
+```
+
+Provider state, tool activity, authorization, receipts, evidence, completion,
+context usage, and process progress must come from authoritative runtime state.
+The UI must not synthesize receipt IDs, evidence IDs, completion, connection,
+or execution state.
+
+## Visual system
+
+The terminal surface follows the canonical Letterblack Industrial Dark system
+from GPT-Knowledge:
+
+```text
+background primary    #0b0b0c
+background secondary  #141416
+background tertiary   #1c1c1f
+accent red            #ff3b3b
+border                #2a2a2d
+main text             #e1e1e6
+muted text            #8e8e93
+```
+
+Use compact technical hierarchy, thin structural lines, restrained rounding,
+monospace output where appropriate, and state-semantic colors. Red is a signal
+color, not a default large surface. Green is reserved for evidence-backed healthy
+or verified-running state. Do not use emoji for operational UI.
+
+## User interaction acceptance
+
+A feature is not product-complete merely because a unit/integration test says
+PASS. User-facing features should be classified separately:
+
+```text
+FUNCTIONAL         PASS / FAIL
+CANONICAL_PATH     PASS / FAIL
+INSTALLED          PASS / FAIL
+RUNTIME_EVIDENCE   PASS / FAIL
+USER_FLOW          PASS / FAIL
+UX                 PASS / FAIL
+FINAL_FEATURE      PASS only when all applicable layers pass
+```
+
+Normal users should not need to understand internal provider-config paths,
+database paths, runtime adapter names, or raw session identifiers for ordinary
+use.
+
+## Product-surface reconciliation rule
+
+Do not reopen Textual vs Rust vs HTML vs Cline as a greenfield design decision.
+Current accepted direction is Cline CLI/TUI mechanics under LBE authority; Rust
+remains the bounded reference/integration client.
+
+Do not create another UI plan or alternative layout unless one of these is true:
+
+1. the locked September 5 contract explicitly requires it;
+2. the Industrial Dark system requires it;
+3. a proven runtime capability requires a projection that has no existing owner;
+4. the user explicitly changes the product interaction contract.
+
+Textual is not a canonical final-product surface.
+
+## Implementation target
+
+The intended final interaction chain is:
+
+```text
+LBE terminal
+  -> authoritative LBE session
+  -> configured/discovered provider + model
+  -> Cline reasoning/provider mechanics
+  -> LBE authorization
+  -> LBE governed execution
+  -> persisted ToolReceipt
+  -> persisted Evidence
+  -> validation
+  -> LBE completion truth
+  -> truthful terminal projection
+  -> clean exit / restart / resume proof
+```
+
+No layer in the client may bypass or recreate LBE authority.
+
+## Rust reference client
+
+This repository still contains the Rust/Ratatui reference client.
 
 ```text
 cargo run --bin lbe
@@ -164,32 +240,23 @@ cargo fmt --check
 cargo check
 ```
 
-The real LBE runtime is the default. The active interface routes actions through the
-`LbeWrapper` trait and renders typed `LbeSnapshot` / `LbeEvent` values. The fail-closed
-`RealLbeWrapper` path requires explicit Agent Wall configuration and does not fabricate
-state. Set `LBE_RUNTIME=mock` only for deterministic local contract previews.
+Its real-runtime path must continue to route through `LbeWrapper` /
+`RealLbeWrapper` and authoritative LBE product-entry contracts. Mock mode is
+preview/test scope only and must never be represented as installed product proof.
 
-## Conversational interaction and diagnostic surfaces
+## Evidence discipline
 
-Chat is the primary user-facing interface. The agent interprets the conversation, selects
-capabilities, and submits requests through `LbeWrapper`; LBE performs access control,
-policy evaluation, execution, validation, evidence, receipts, and completion.
+Use explicit classifications when reporting implementation state:
 
-The TUI has three conversational modes:
+```text
+PROVEN
+IMPLEMENTED
+DOCUMENTED
+INFERRED
+UNVERIFIED
+STALE
+BLOCKED
+```
 
-- **Runtime** — broad workspace-aware agent assistance using governed capabilities.
-- **Plan** — broad workspace investigation and proposal; no execution.
-- **Audit** — focused, read-only investigation of workspace rules, guards, and evidence.
-
-Slash commands (`/help`, `/mode`, `/audit`, `/clear`, `/new`, `/quit`, `/mcp`, `/status`)
-are diagnostic scaffolding, not required user operations.
-
-## LBE provider integration policy
-
-- Cline documentation is reference only.
-- Cline authentication is not used.
-- `api.cline.bot` is not used.
-- Providers connect through LBE-owned provider gateway.
-- Provider credentials remain provider-native; never rendered in snapshots.
-- OpenCode and Cline are external behavior references only; any reuse must pass
-  through `LbeWrapper` and the authoritative LBE runtime.
+Do not report READY, WORKING, DONE, or COMPLETE unless the evidence level matches
+the exact claim.
