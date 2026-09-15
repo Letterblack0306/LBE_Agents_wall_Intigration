@@ -1,243 +1,232 @@
-# LBE-TUI-Lab Agent Information Hub
+# LBE-TUI-Lab Agent Operating Contract
 
-## PRIMARY AUTHORITY
+## Purpose
 
-**This document is the authoritative source of information for any agent operating in this workspace.**
+This file is the workspace-local operating contract for agents working in
+`C:\LBE-TUI-Lab`.
 
-All agents must read this file first before performing any work.
+It is **not** the global LBE runtime/status authority. Agents must establish
+current project truth before changing code.
 
----
+## Required authority order
 
-## PRODUCT IDENTITY
+For implementation, debugging, acceptance, or UI work, use this order:
 
-**LBE (Lockstep Boundary Engine)** - An accountable AI agent terminal owned by **LETTERBLACK**.
-
-### Final Product Definition
-
-### Final Product Definition
-```
-LBE CLI (user-facing product)  <-- LBE-NATIVE INTERFACE (NOT Cline)
-    - Green/Amber color scheme (not blue/purple)
-    - Governance-focused layout
-    - BirdEye MCP integration
-Cline  ---->  embedded provider/reasoning engine
-LBE    ---->  sole authority (session / governance / evidence / completion)
-```
-
-
-```
-LBE CLI (user-facing product)
-    Cline  ---->  embedded provider/reasoning engine
-    LBE    ---->  sole authority (session / governance / evidence / completion)
+```text
+1. explicit current user instruction
+2. live runtime evidence
+3. current local worktree/source and Git identity
+4. LBE machine gate / active governance intent
+5. project-owned acceptance checkpoints
+6. C:\Agents-Memory-Tool-v6-integration\docs\CURRENT_STATUS.md
+7. accepted project-specific interaction/design contract
+8. GPT-Knowledge canonical engineering/UI guidance
+9. reference/research documents
+10. historical chats, prototypes, and superseded plans
 ```
 
-### Core Principle
-> **The agent owns cognition. LBE owns capabilities and consequences.**
+Do not promote a lower source over a higher one.
 
-### What LBE Provides
-| Feature | Description |
-|---------|-------------|
-| **Authorization** | Every action is checked against policy before execution |
-| **Receipts** | Every action produces a proof record of what happened |
-| **Evidence** | Complete audit trail tied to operations |
-| **Persistence** | Sessions survive restarts |
-| **Governance** | Mutation requires approval; read operations are fast |
+## Product identity
 
----
-
-## WORKSPACE STRUCTURE
-
-```
-C:\LBE-TUI-Lab                        <-- This workspace (TUI/Integration)
-        |
-        v
-C:\Agents-Memory-Tool-v6-integration  <-- LBE Runtime (Authority)
-        |
-        v
-C:\LBE_RUNTIME_PY312                  <-- Installed runtime (v2.0.3)
+```text
+PRODUCT                         = LBE
+RUNTIME / GOVERNANCE AUTHORITY  = LBE Persistent Agent Wall
+ACCEPTED PRODUCT-SURFACE DIR    = Cline CLI/TUI mechanics under LBE authority
+RUST / RATATUI                  = reference / integration client
+CLINE                            = reasoning/provider/UI mechanics; not authority
 ```
 
-### Key Paths
-| Component | Path | Purpose |
+The governing invariant is:
 
-### Key Paths
-| Component | Path | Purpose |
-|-----------|------|---------|
-| **LBE-NATIVE CLI** | `lbe.ps1`/`lbe.bat` | User-facing LBE interface (NOT Cline) |
-| **LBE CLI Script** | `lbe-cli.ps1` | Unique green/amber terminal UI |
-| **Rust source** | `src/` | Reference client implementation |
-| **Rust binary** | `target/release/lbe.exe` | Built reference client |
-| **Docs** | `Docs/` | Integration documentation |
+> The reasoning agent owns cognition. LBE owns capabilities, authorization,
+> governed execution, receipts/evidence, persistence, validation, and completion
+> truth.
 
+Cline or Rust must never become a second owner for session identity,
+authorization, execution, receipt/evidence truth, persistence, or completion.
 
-|-----------|------|---------|
-| **Rust source** | `src/` | Reference client implementation |
-| **LBE CLI launcher** | `run-cline-lbe.ps1` | Uses npm-installed Cline |
-| **Rust binary** | `target/release/lbe.exe` | Built reference client |
-| **Docs** | `Docs/` | Integration documentation |
+## Linked authoritative runtime workspace
 
----
-
-## LINKED WORKSPACE: C:\Agents-Memory-Tool-v6-integration
-
-This workspace is the **authoritative LBE runtime** that owns:
-- Governance and policy evaluation
-- Evidence and receipts
-- Session persistence and recovery
-- Provider integration
-- Capability registry
-- Tool orchestration and execution
-
-**Never bypass or replace LBE runtime authority.**
-
-### Key Memory Integration
-- **BirdEye MCP Server**: Evidence and knowledge management endpoint
-- **Evidence projections**: Consumed through `LbeWrapper` in Rust client
-- **Receipts**: Proof records from the runtime
-
----
-
-## MAJOR DOCUMENTATION
-
-### This Workspace (C:\LBE-TUI-Lab) Root Documents
-
-| Document | Purpose |
-|----------|---------|
-| `README.md` | Product overview, commands, and runtime requirements |
-| `WHAT_IS_LBE.md` | Core product definition and principles |
-| `Agent.md` | (This file) Agent information hub |
-| `CLEANUP_PLAN.md` | Workspace cleanup and migration plan |
-
-### This Workspace (C:\LBE-TUI-Lab) Docs Directory
-
-| Document | Topic |
-|----------|-------|
-| `00_integration_alignment.md` | Two-repository ownership boundary |
-| `01_transcript_viewport.md` | Chat transcript handling |
-| `02_model_picker.md` | Provider/AI model selection |
-| `03_checkpoints_restore.md` | Session checkpoint and restore |
-| `04_sessions.md` | Session management |
-| `05_background_processes.md` | Background process handling |
-| `06_provider_configuration.md` | AI provider configuration |
-| `07_tools_registry.md` | Tool registration and management |
-| `08_evidence_browser.md` | Evidence browsing interface |
-| `09_receipts_browser.md` | Receipt viewing |
-| `10_mcp_surface.md` | MCP (Model Context Protocol) integration |
-| `11_terminal_compatibility.md` | Terminal compatibility |
-| `12_plain_cli_mode.md` | CLI-only mode |
-| `13_lifecycle_acceptance.md` | Lifecycle acceptance testing |
-| `14_responsive_acceptance.md` | Responsive UI acceptance |
-| `15_session_memory_recall.md` | Memory recall integration |
-| `16_browser_chat_bridge.md` | Browser-based chat interface |
-| `17_policy_hooks_permissions.md` | Policy hooks and permissions |
-| `18_schedules.md` | Scheduled operations |
-| `19_connectors.md` | External connectors |
-| `20_agent_teams.md` | Multi-agent team support |
-| `21_conversation_handoff.md` | Conversation handoff |
-| `22_artifacts_review.md` | Artifact review interface |
-| `23_subagents.md` | Subagent management |
-| `24_projects_settings.md` | Project settings |
-| `25_composer_prompt_editor.md` | Prompt composition |
-| `26_statusline_title.md` | Status line display |
-| `27_code_search.md` | Code search integration |
-| `28_usage_quotas.md` | Usage tracking |
-| `29_workspace_changes_diff.md` | Workspace diff viewer |
-| `30_file_editor_patch_review.md` | Patch review interface |
-| `31_cline_interop_reuse_strategy.md` | Cline interoperability strategy |
-| `32_deterministic_runtime_state_machine.md` | State machine design |
-| `33_real_cli_ide_implementation_plan.md` | CLI/IDE implementation plan |
-| `34_autonomous_developer_frontend.md` | Autonomous developer mode |
-| `34_p1_live_readonly_acceptance.md` | P1 live read-only acceptance |
-| `35_p1_live_acceptance_evidence_record.md` | Acceptance evidence |
-| `36_p2_p3_client_contract.md` | P2/P3 client contracts |
-| `37_opencode_go_reference_and_gap_analysis.md` | OpenCode reference |
-| `38_complete_cline_lbe_capability_diff.md` | Capability comparison |
-
-### Linked Workspace (C:\Agents-Memory-Tool-v6-integration) Docs
-
-| Document | Purpose |
-|----------|---------|
-| `docs/README.md` | LBE documentation library entrypoint |
-| `docs/DOCUMENT_INTENT_MANIFEST.md` | Document classification and ownership manifest |
-| `docs/CURRENT_STATUS.md` | Human-readable current-state projection |
-| `docs/IMPLEMENTATION_PLAN.md` | Ordered roadmap and implementation sequence |
-| `docs/LBE_AGENT_LIFECYCLE.md` | Agent lifecycle and state management |
-| `docs/AUDIT_FINDING_REVIEW_REGISTER.md` | Finding review and disposition records |
-| `PROJECT_INDEX.md` | Root structural authority index |
-| `BASELINE_VALIDATION.md` | Historical baseline and validation record |
-| `MIGRATION.md` | Legacy-state migration and rollback instructions |
-| `WHAT_IS_LBE.md` | Core product definition |
-
----
-
-## EVIDENCE CLASSIFICATION
-
-| Level | Meaning |
-|-------|---------|
-| `PROVEN` | Deterministic wrapper lifecycle, typed contracts |
-| `SUPPORTED` | Evidence exists but not conclusive |
-| `HYPOTHESIS` | Proposed but not verified |
-| `UNKNOWN` | Status unclear |
-| `BLOCKED` | Cannot proceed |
-
----
-
-## AUTHORITY FLOW
-
-```
-USER -> AGENT (reasons) -> LBE (checks) -> EXECUTION (does) -> RECEIPT (proves)
+```text
+C:\Agents-Memory-Tool-v6-integration
 ```
 
-### Runtime Authority
-- **LBE Runtime** (`C:\Agents-Memory-Tool-v6-integration`) owns all authority
-- **Rust TUI** is a client/projection layer only
-- **Cline** provides the embedded provider/reasoning engine
+Before significant work, inspect at minimum:
 
----
+```text
+.lbe/governance/implementation-gates.json
+docs/CURRENT_STATUS.md
+relevant acceptance checkpoint(s)
+current Git status / HEAD / origin alignment
+```
 
-## BUILD AND RUN COMMANDS
+GPT-Knowledge is methodology/design guidance, not runtime authority. For UI work,
+load the canonical Letterblack Industrial Dark UI system before inventing visual
+direction.
+
+## Locked terminal interaction baseline
+
+The September 5 LBE interaction contract is locked unless the user explicitly
+changes it. The workspace README records the consolidated contract.
+
+Do not create new alternative UI directions, setup/dashboard concepts, or
+replacement layout plans before reconciling the current build against that
+contract.
+
+Required interaction invariants include:
+
+```text
+primary focus       = conversation + active execution + composer
+secondary metadata  = model / mode / git / diff / context / shortcuts
+context bar         = real context-window utilization
+idle composer       = [I] Message LBE…
+active [I] state    = bounded runtime-driven activity animation
+active process      = max 3 raw event lines, internally scrolling
+expanded process    = explicit user expansion to full history
+completed process   = one-line ordered summary
+next process        = previous process auto-collapses
+UI state            = authoritative runtime projection only
+```
+
+The visual system is Letterblack Industrial Dark. Do not reverse-engineer a new
+palette from prototypes when GPT-Knowledge already defines the canonical tokens
+and state semantics.
+
+## State-truth rules
+
+Never conflate these states:
+
+```text
+configured != connected
+connected  != healthy
+healthy    != operation succeeded
+selected   != authenticated
+requested  != authorized
+started    != completed
+completed  != validated
+```
+
+The UI must not fabricate provider health, execution, ToolReceipt IDs, evidence,
+completion, or context usage.
+
+## Evidence vocabulary
+
+Use evidence labels only when earned by the claim-matched proof:
+
+```text
+PROVEN
+IMPLEMENTED
+DOCUMENTED
+INFERRED
+UNVERIFIED
+STALE
+BLOCKED
+```
+
+A local build or focused unit test does not establish installed/runtime/user-flow
+acceptance.
+
+For user-facing features track applicable layers separately:
+
+```text
+FUNCTIONAL
+CANONICAL_PATH
+INSTALLED
+RUNTIME_EVIDENCE
+USER_FLOW
+UX
+FINAL_FEATURE
+```
+
+`FINAL_FEATURE = PASS` only when all applicable layers pass.
+
+## Existing-owner rule
+
+Before adding a module, planner, provider adapter, executor, UI surface, state
+store, or document:
+
+```text
+1. identify the current owner
+2. inspect whether it already satisfies the requirement
+3. reuse / adapt / wrap / extend the existing owner
+4. create a new owner only when incompatibility is proven
+```
+
+Do not create new work faster than existing work is verified or retired.
+
+## Document discipline
+
+Do not create another planning/status document when an existing canonical owner
+can be updated.
+
+The workspace README is product/integration guidance, not release truth.
+`Docs/STATUS.md` is a Rust-module projection, not backend runtime authority.
+Backend `docs/CURRENT_STATUS.md`, machine gates, and acceptance checkpoints
+remain higher authority.
+
+Historical docs and chat exports are evidence/provenance only unless explicitly
+promoted by current project authority.
+
+## Workspace roles
+
+```text
+C:\LBE-TUI-Lab
+  -> client / product-surface integration workspace
+
+C:\Agents-Memory-Tool-v6-integration
+  -> authoritative LBE runtime workspace
+```
+
+Important client paths:
+
+```text
+src/                 Rust/Ratatui reference client
+run-cline-lbe.ps1    accepted Cline-based product launcher when the bundled/local
+                     Cline surface is present and proven
+Docs/                integration/reference documentation
+```
+
+The existence of a local or copied Cline tree does not itself prove installed
+product acceptance.
+
+## Validation rule
+
+Use the evidence ladder appropriate to the claim:
+
+```text
+source inspection
+-> build/static validation
+-> focused tests
+-> contract tests
+-> integration tests
+-> runtime proof
+-> installed product proof
+-> user-flow / UX acceptance
+```
+
+Do not skip directly from source/build success to READY or COMPLETE.
+
+## Mutation rules
+
+1. Preserve unrelated user work.
+2. Follow the active LBE governance intent and allowed scope.
+3. Do not silently change the machine gate.
+4. Do not create branches/worktrees unless explicitly authorized.
+5. Do not publish/tag/release unless explicitly authorized.
+6. Do not bypass LBE authorization or execution owners.
+7. Prefer the smallest architecture-consistent patch.
+8. Validate the exact changed path before reporting completion.
+
+## Rust reference-client commands
 
 ```powershell
-cargo build --release    # Build Rust binary
-cargo run --bin lbe      # Run LBE TUI
-cargo test               # Run tests
-cargo fmt --check        # Format check
-.\run-cline-lbe.ps1      # LBE CLI (Cline-powered)
+cargo check
+cargo test
+cargo fmt --check
+cargo run --bin lbe
 ```
 
----
-
-## PRODUCT VERSION
-
-```
-lbe_guard_inspector v2.0.3
-```
-
----
-
-## CHAT HISTORY REFERENCE
-
-```
-G:\Datatest\LoopGPTV2\chat_Print\
-  chatgpt_export_20260906_051733.json
-  chatgpt_export_20260906_191358.json
-  chatgpt_export_20260906_210436.json
-  chatgpt_export_20260906_213302.json
-  chatgpt_export_20260906_213749.json
-  chatgpt_export_20260906_224148.json
-```
-
----
-
-## AGENT RULES
-
-1. **Always read this file first** before any work
-2. **Never fabricate state** -- only proven, observed evidence counts
-3. **Route all authority through LBE runtime** -- never bypass it
-4. **Preserve existing behavior** outside requested scope
-5. **Use smallest targeted changes** that resolve stated problems
-6. **Validate all changes** before reporting completion
-
----
-
-*This file is the source of truth for all agents operating in C:\LBE-TUI-Lab.*
+These commands validate the Rust reference/integration client only. They do not,
+by themselves, prove the accepted Cline/LBE product surface or installed LBE
+runtime behavior.
