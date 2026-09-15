@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://letterblack.local/schemas/task_record.schema.json",
+  "title": "LBE Guard Inspector Task Record",
+  "type": "object",
+  "required": [
+    "task_id",
+    "problem",
+    "mode",
+    "write_allowed",
+    "created_at"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "problem": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_root": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "inspect",
+        "explain",
+        "propose_rule",
+        "apply_profile"
+      ]
+    },
+    "write_allowed": {
+      "type": "boolean"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LBE Core — Agent Execution Authority</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root{
+  --lbe-bg:        #0a0b10;
+  --lbe-bg-raised: #101118;
+  --lbe-bg-inset:  #06070b;
+  --lbe-border:    #1e1f28;
+  --lbe-border-lt: #2c2d38;
+  --lbe-frame:     #eef0f5;
+  --lbe-text:      #eef0f5;
+  --lbe-text-dim:  #8b8d9a;
+  --lbe-text-faint:#4d4f5b;
+  --lbe-red:       #e94247;
+  --lbe-red-dim:   #7a2528;
+  --lbe-red-glow:  rgba(233,66,71,0.18);
+  --lbe-green:     #4fd18b;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%; background:var(--lbe-bg);}
+body{
+  font-family:var(--sans);
+  color:var(--lbe-text);
+  overflow-x:hidden;
+  background:
+    radial-gradient(900px 500px at 50% -10%, rgba(233,66,71,0.10), transparent 60%),
+    radial-gradient(700px 400px at 90% 10%, rgba(233,66,71,0.05), transparent 60%),
+    var(--lbe-bg);
+}
+
+/* faint scanline / grid texture */
+body::before{
+  content:"";
+  position:fixed; inset:0; pointer-events:none; z-index:1;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size:42px 42px;
+  mask-image:radial-gradient(circle at 50% 0%, black, transparent 70%);
+}
+
+.wrap{position:relative; z-index:2; max-width:1040px; margin:0 auto; padding:0 24px;}
+
+/* ===== nav ===== */
+nav{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:22px 0;
+}
+.nav-brand{display:flex; align-items:center; gap:10px;}
+.nav-word{font-family:var(--mono); font-weight:600; font-size:14px; letter-spacing:.03em;}
+.nav-word b{color:var(--lbe-red);}
+.nav-links{display:flex; gap:28px; font-family:var(--mono); font-size:12.5px; color:var(--lbe-text-dim);}
+.nav-links a{color:inherit; text-decoration:none;}
+.nav-links a:hover{color:var(--lbe-text);}
+.nav-cta{
+  font-family:var(--mono); font-size:12px; font-weight:600;
+  border:1px solid var(--lbe-border-lt); padding:7px 14px; border-radius:6px;
+  color:var(--lbe-text); text-decoration:none;
+}
+.nav-cta:hover{border-color:var(--lbe-red);}
+
+/* ===== hero ===== */
+.hero{
+  display:flex; flex-direction:column; align-items:center; text-align:center;
+  padding:70px 0 60px;
+}
+
+/* --- animated logo mark --- */
+.logo-stage{
+  width:120px; height:120px; margin-bottom:30px;
+  filter:drop-shadow(0 0 40px rgba(233,66,71,0.15));
+}
+.logo-stage svg{width:100%; height:100%; display:block;}
+
+.lg-outer{
+  transform-origin:150px 150px;
+  animation:lg-outer-in 900ms cubic-bezier(.16,1,.3,1) both;
+}
+.lg-inner{
+  transform-origin:150px 150px;
+  animation:lg-fade-in 900ms ease-out 150ms both;
+}
+.lg-frame{
+  stroke-dasharray:736; stroke-dashoffset:736;
+  animation:lg-draw 1100ms cubic-bezier(.16,1,.3,1) 300ms forwards;
+}
+.lg-bracket-l{
+  transform-origin:150px 150px;
+  animation:lg-bracket-l-in 600ms cubic-bezier(.16,1,.3,1) 700ms both;
+}
+.lg-bracket-r{
+  transform-origin:150px 150px;
+  animation:lg-bracket-r-in 600ms cubic-bezier(.16,1,.3,1) 700ms both;
+}
+.lg-bar{
+  animation:lg-cursor 1100ms steps(1) 1000ms infinite;
+  transform-origin:150px 150px;
+}
+
+@keyframes lg-outer-in{
+  from{opacity:0; transform:scale(.8) rotate(-6deg);}
+  to{opacity:1; transform:scale(1) rotate(0deg);}
+}
+@keyframes lg-fade-in{
+  from{opacity:0;} to{opacity:1;}
+}
+@keyframes lg-draw{
+  to{stroke-dashoffset:0;}
+}
+@keyframes lg-bracket-l-in{
+  from{opacity:0; transform:translateX(-14px);}
+  to{opacity:1; transform:translateX(0);}
+}
+@keyframes lg-bracket-r-in{
+  from{opacity:0; transform:translateX(14px);}
+  to{opacity:1; transform:translateX(0);}
+}
+@keyframes lg-cursor{
+  0%, 45%{opacity:1;}
+  50%, 95%{opacity:.25;}
+  100%{opacity:1;}
+}
+
+.eyebrow{
+  font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--lbe-red); margin-bottom:16px; display:flex; align-items:center; gap:8px;
+}
+.eyebrow .pulse{
+  width:6px; height:6px; border-radius:50%; background:var(--lbe-green);
+  box-shadow:0 0 0 0 rgba(79,209,139,.5);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(79,209,139,.45);}
+  70%{box-shadow:0 0 0 8px rgba(79,209,139,0);}
+  100%{box-shadow:0 0 0 0 rgba(79,209,139,0);}
+}
+
+h1{
+  font-family:var(--sans); font-weight:700; font-size:44px; line-height:1.15;
+  letter-spacing:-.01em; max-width:680px; margin-bottom:18px;
+}
+h1 .accent{color:var(--lbe-red);}
+
+.sub{
+  font-family:var(--sans); font-size:16px; color:var(--lbe-text-dim); max-width:520px;
+  line-height:1.6; margin-bottom:34px;
+}
+
+/* terminal typing line */
+.typeline{
+  font-family:var(--mono); font-size:13.5px; color:var(--lbe-text-dim);
+  background:var(--lbe-bg-raised); border:1px solid var(--lbe-border);
+  border-radius:8px; padding:12px 16px; margin-bottom:36px;
+  display:inline-flex; align-items:center; gap:8px;
+}
+.typeline .caret{color:var(--lbe-red);}
+.typeline .type-out{
+  display:inline-block; overflow:hidden; white-space:nowrap;
+  border-right:2px solid var(--lbe-red);
+  width:0;
+  animation:typing 3.4s steps(38, end) 1.6s forwards, blink 750ms step-end infinite 1.6s;
+}
+@keyframes typing{ to{width:37ch;} }
+@keyframes blink{ 50%{border-color:transparent;} }
+
+.cta-row{display:flex; gap:12px; flex-wrap:wrap; justify-content:center;}
+.btn-primary{
+  font-family:var(--mono); font-weight:600; font-size:13px;
+  background:var(--lbe-red); color:#fff; border:1px solid var(--lbe-red);
+  padding:12px 22px; border-radius:7px; text-decoration:none;
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.btn-primary:hover{transform:translateY(-1px); box-shadow:0 8px 24px -8px rgba(233,66,71,0.5);}
+.btn-secondary{
+  font-family:var(--mono); font-weight:600; font-size:13px;
+  color:var(--lbe-text); border:1px solid var(--lbe-border-lt);
+  padding:12px 22px; border-radius:7px; text-decoration:none; background:transparent;
+}
+.btn-secondary:hover{border-color:var(--lbe-text-dim);}
+
+/* ===== strip of trust / chain ===== */
+.chain{
+  display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
+  font-family:var(--mono); font-size:11px; color:var(--lbe-text-faint);
+  padding:40px 0 70px; letter-spacing:.02em;
+}
+.chain span.node{color:var(--lbe-text-dim);}
+.chain span.arrow{color:var(--lbe-red-dim);}
+
+/* ===== feature grid ===== */
+.grid{
+  display:grid; grid-template-columns:repeat(3, 1fr); gap:1px;
+  background:var(--lbe-border); border:1px solid var(--lbe-border); border-radius:10px;
+  overflow:hidden; margin-bottom:70px;
+}
+.card{background:var(--lbe-bg-raised); padding:26px 22px;}
+.card .tag{
+  font-family:var(--mono); font-size:10.5px; color:var(--lbe-red); letter-spacing:.08em;
+  text-transform:uppercase; margin-bottom:10px; display:block;
+}
+.card h3{font-size:15.5px; font-weight:600; margin-bottom:8px;}
+.card p{font-size:13px; color:var(--lbe-text-dim); line-height:1.55;}
+
+footer{
+  border-top:1px solid var(--lbe-border); padding:24px 0 40px;
+  display:flex; align-items:center; justify-content:space-between;
+  font-family:var(--mono); font-size:11px; color:var(--lbe-text-faint);
+}
+
+@media (max-width:720px){
+  h1{font-size:32px;}
+  .grid{grid-template-columns:1fr;}
+  .nav-links{display:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <nav>
+    <div class="nav-brand">
+      <svg width="22" height="24" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="292" height="292" rx="10" fill="var(--lbe-red)"/>
+        <rect x="26" y="26" width="248" height="248" rx="6" fill="var(--lbe-bg-inset)"/>
+        <rect x="58" y="58" width="184" height="184" rx="4" fill="none" stroke="var(--lbe-frame)" stroke-width="16"/>
+        <path d="M118 108 H100 V192 H118" fill="none" stroke="var(--lbe-frame)" stroke-width="15"/>
+        <path d="M182 108 H200 V192 H182" fill="none" stroke="var(--lbe-frame)" stroke-width="15"/>
+        <rect x="141" y="103" width="18" height="94" fill="var(--lbe-red)"/>
+      </svg>
+      <span class="nav-word">LBE <b>CORE</b></span>
+    </div>
+    <div class="nav-links">
+      <a href="#">Runtime</a>
+      <a href="#">Governance</a>
+      <a href="#">Audit</a>
+      <a href="#">Docs</a>
+    </div>
+    <a href="#" class="nav-cta">lbe-exec init</a>
+  </nav>
+
+  <section class="hero">
+
+    <div class="logo-stage">
+      <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+        <g class="lg-outer">
+          <rect x="4" y="4" width="292" height="292" rx="14" fill="var(--lbe-red)"/>
+        </g>
+        <g class="lg-inner">
+          <rect x="26" y="26" width="248" height="248" rx="9" fill="var(--lbe-bg-inset)"/>
+          <rect class="lg-frame" x="58" y="58" width="184" height="184" rx="6"
+                fill="none" stroke="var(--lbe-frame)" stroke-width="16"/>
+          <path class="lg-bracket-l" d="M118 108 H100 V192 H118"
+                fill="none" stroke="var(--lbe-frame)" stroke-width="15" stroke-linecap="square"/>
+          <path class="lg-bracket-r" d="M182 108 H200 V192 H182"
+                fill="none" stroke="var(--lbe-frame)" stroke-width="15" stroke-linecap="square"/>
+          <rect class="lg-bar" x="141" y="103" width="18" height="94" fill="var(--lbe-red)"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="eyebrow"><span class="pulse"></span> execution authority · not advisory</div>
+
+    <h1>Your agents propose.<br><span class="accent">LBE</span> decides what actually runs.</h1>
+
+    <p class="sub">
+      A governed execution layer for AI coding agents — every write, shell call, and patch
+      passes through authorization, audit, and rollback before it touches your workspace.
+    </p>
+
+    <div class="typeline">
+      <span class="caret">$</span>
+      <span class="type-out">npx @letterblack/lbe-exec run-node --audit</span>
+    </div>
+
+    <div class="cta-row">
+      <a href="#" class="btn-primary">Get started →</a>
+      <a href="#" class="btn-secondary">View on GitHub</a>
+    </div>
+
+  </section>
+
+  <div class="chain">
+    <span class="node">AI reasons</span><span class="arrow">→</span>
+    <span class="node">LBE governs</span><span class="arrow">→</span>
+    <span class="node">adapter executes</span><span class="arrow">→</span>
+    <span class="node">audit proves</span><span class="arrow">→</span>
+    <span class="node">rollback recovers</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <span class="tag">Governance</span>
+      <h3>Authorization, not suggestion</h3>
+      <p>Every consequential action routes through a real decision point — approve, deny, or inspect before anything executes.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Audit</span>
+      <h3>Proof, every run</h3>
+      <p>Hook-intercepted events land in <code>.lbe/events.jsonl</code> with git diff proof, not just a log line.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Runtime</span>
+      <h3>Local server, sandboxed runner</h3>
+      <p>Signal-only remote API. Your code never leaves the runner/sandbox boundary you control.</p>
+    </div>
+  </div>
+
+  <footer>
+    <span>© LBE Core</span>
+    <span>@letterblack/lbe-exec</span>
+  </footer>
+
+</div>
+
+</body>
+</html>

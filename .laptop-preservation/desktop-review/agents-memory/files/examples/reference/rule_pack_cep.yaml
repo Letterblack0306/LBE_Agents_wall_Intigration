@@ -1,0 +1,29 @@
+id: cep-core
+version: 1
+applies_when:
+  project_types:
+    - cep-extension
+rules:
+  - id: cep.manifest.parse-first
+    severity: high
+    trigger: CEP project detected
+    action: Parse CSXS/manifest.xml before runtime diagnosis
+    evidence_required: Parsed manifest summary
+
+  - id: cep.runtime.boundary
+    severity: critical
+    trigger: Browser JavaScript calls ExtendScript
+    action: Treat browser and host code as separate runtimes and validate transport encoding
+    evidence_required: Caller and host entry-point inspection
+
+  - id: cep.evalscript.envelope
+    severity: high
+    trigger: evalScript is used
+    action: Prefer structured JSON request and response envelopes
+    evidence_required: Round-trip validation
+
+  - id: cep.fast-fail
+    severity: high
+    trigger: Any CEP repair task
+    action: Run manifest, syntax, load-order, and narrow host-bridge checks before broad edits
+    evidence_required: Validation run record

@@ -1,0 +1,363 @@
+from unittest.mock import patch
+
+from lbe_guard_inspector.evidence_service import EvidenceService
+
+
+class FakeContext:
+    @classmethod
+    def load(cls):
+        return cls()
+
+
+def test_build_evidence_package_wraps_existing_search() -> None:
+    search_output = {
+        "query": "Provided callback is not a function",
+        "search_completed": True,
+        "outcome": "matches_found",
+        "message": "Found 1 matching files.",
+        "result_count": 1,
+        "results": [
+            {
+                "root": "CEP_Project",
+                "path": "CEP_Project/cep/client/js/CSInterface.js",
+                "score": 672,
+                "size": 42759,
+                "line": 525,
+                "snippet": "Provided callback is not a function",
+                "sha256": "abc123",
+                "matched_terms": 4,
+                "exact_phrase": True,
+            }
+        ],
+        "searched_roots": ["CEP_Project"],
+        "meaningful_terms": ["provided", "callback", "function"],
+        "minimum_required_matches": 2,
+        "scanned_files": 10,
+        "skipped_unreadable_files": 0,
+        "scope": {
+            "roots_requested": None,
+            "roots_searched": ["CEP_Project"],
+            "extensions": [".js"],
+            "files_considered": 10,
+        },
+    }
+
+    with patch(
+        "lbe_guard_inspector.evidence_service.Context",
+        FakeContext,
+    ), patch(
+        "lbe_guard_inspector.evidence_service.search_workspace",
+        return_value=search_output,
+    ):
+        package = EvidenceService().build_evidence_package(
+            task_id="task-1",
+            query="Provided callback is not a function",
+            max_results=10,
+        )
+
+    assert len(package["indexed_evidence"]) == 1
+    evidence = package["indexed_evidence"][0]
+    assert evidence["path"].endswith("CSInterface.js")
+    assert evidence["hash"] == "abc123"
+    assert evidence["line_start"] == 525
+    assert evidence["exact_phrase"] is True
+    assert evidence["metadata"]["retrieval_source"] == "agent.search_workspace"
+
+
+def test_no_matches_becomes_evidence_gap() -> None:
+    search_output = {
+        "query": "missing phrase",
+        "search_completed": True,
+        "outcome": "no_matches",
+        "message": "No content matched the query.",
+        "result_count": 0,
+        "results": [],
+        "searched_roots": ["CEP_Project"],
+        "meaningful_terms": ["missing", "phrase"],
+        "minimum_required_matches": 2,
+        "scanned_files": 10,
+        "skipped_unreadable_files": 0,
+        "scope": {
+            "roots_requested": None,
+            "roots_searched": ["CEP_Project"],
+            "extensions": [".js"],
+            "files_considered": 10,
+        },
+    }
+
+    with patch(
+        "lbe_guard_inspector.evidence_service.Context",
+        FakeContext,
+    ), patch(
+        "lbe_guard_inspector.evidence_service.search_workspace",
+        return_value=search_output,
+    ):
+        package = EvidenceService().build_evidence_package(
+            task_id="task-2",
+            query="missing phrase",
+        )
+
+    assert package["indexed_evidence"] == []
+    assert package["gaps"] == [
+        "Indexed files were scanned, but no content matched the query.",
+        "Current workspace evidence was not supplied; workspace PASS/FAIL is not permitted.",
+    ]
+
+
+def test_excluded_classifications_are_filtered_by_default() -> None:
+    search_output = {
+        "query": "Provided callback is not a function",
+        "search_completed": True,
+        "outcome": "matches_found",
+        "message": "Found 2 matching files.",
+        "result_count": 2,
+        "results": [
+            {
+                "root": "dev",
+                "path": "dev/project/backup/file.js",
+                "score": 700,
+                "size": 100,
+                "line": 10,
+                "snippet": "Provided callback is not a function",
+                "sha256": "backup-hash",
+                "matched_terms": 4,
+                "exact_phrase": True,
+            },
+            {
+                "root": "dev",
+                "path": "dev/project/src/file.js",
+                "score": 650,
+                "size": 100,
+                "line": 10,
+                "snippet": "Provided callback is not a function",
+                "sha256": "source-hash",
+                "matched_terms": 4,
+                "exact_phrase": True,
+            },
+        ],
+    }
+
+    with patch(
+        "lbe_guard_inspector.evidence_service.Context",
+        FakeContext,
+    ), patch(
+        "lbe_guard_inspector.evidence_service.search_workspace",
+        return_value=search_output,
+    ):
+        package = EvidenceService().build_evidence_package(
+            task_id="task-filter",
+            query="Provided callback is not a function",
+            include_excluded=False,
+        )
+
+    assert len(package["indexed_evidence"]) == 1
+    assert package["indexed_evidence"][0]["hash"] == "source-hash"
+    assert package["indexed_evidence"][0]["classification"] == "indexed_reference"
+
+
+def test_excluded_classifications_can_be_included_explicitly() -> None:
+    search_output = {
+        "query": "Provided callback is not a function",
+        "search_completed": True,
+        "outcome": "matches_found",
+        "message": "Found 1 matching file.",
+        "result_count": 1,
+        "results": [
+            {
+                "root": "dev",
+                "path": "dev/project/backup/file.js",
+                "score": 700,
+                "size": 100,
+                "line": 10,
+                "snippet": "Provided callback is not a function",
+                "sha256": "backup-hash",
+                "matched_terms": 4,
+                "exact_phrase": True,
+            }
+        ],
+    }
+
+    with patch(
+        "lbe_guard_inspector.evidence_service.Context",
+        FakeContext,
+    ), patch(
+        "lbe_guard_inspector.evidence_service.search_workspace",
+        return_value=search_output,
+    ):
+        package = EvidenceService().build_evidence_package(
+            task_id="task-include-filtered",
+            query="Provided callback is not a function",
+            include_excluded=True,
+        )
+
+    assert len(package["indexed_evidence"]) == 1
+    assert package["indexed_evidence"][0]["classification"] == "backup"
+
+
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class FakeRoot:
+    name: str
+    path: Path
+
+
+class FakeWorkspaceContext:
+    def __init__(self, root: Path):
+        self.roots = [FakeRoot(name="dev", path=root)]
+        self.config = {"max_file_bytes": 5_000_000}
+
+    @classmethod
+    def load(cls):
+        raise AssertionError("Use a patched instance")
+
+
+def test_workspace_evidence_is_attached_separately(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source = workspace / "src"
+    source.mkdir()
+    target = source / "callback.js"
+    target.write_text(
+        'console.log("Provided callback is not a function");',
+        encoding="utf-8",
+    )
+
+    search_output = {
+        "query": "Provided callback is not a function",
+        "search_completed": True,
+        "outcome": "no_matches",
+        "message": "No content matched the query.",
+        "result_count": 0,
+        "results": [],
+        "searched_roots": ["dev"],
+        "meaningful_terms": ["provided", "callback", "function"],
+        "minimum_required_matches": 2,
+        "scanned_files": 1,
+        "skipped_unreadable_files": 0,
+        "scope": {
+            "roots_requested": ["dev"],
+            "roots_searched": ["dev"],
+            "extensions": [".js"],
+            "files_considered": 1,
+        },
+    }
+
+    fake_context = FakeWorkspaceContext(tmp_path)
+
+    with patch(
+        "lbe_guard_inspector.evidence_service.Context.load",
+        return_value=fake_context,
+    ), patch(
+        "lbe_guard_inspector.evidence_service.search_workspace",
+        return_value=search_output,
+    ):
+        package = EvidenceService().build_evidence_package(
+            task_id="task-workspace",
+            query="Provided callback is not a function",
+            workspace_id="browser-dev",
+            workspace_root=str(workspace),
+            max_results=10,
+            extensions=[".js"],
+            roots=["dev"],
+        )
+
+    assert len(package["workspace_evidence"]) == 1
+    evidence = package["workspace_evidence"][0]
+    assert evidence["source_type"] == "workspace"
+    assert evidence["classification"] == "current_workspace"
+    assert evidence["verified"] is True
+    assert evidence["authority"] == 2
+    assert evidence["path"] == str(target.resolve())
+
+
+def test_workspace_outside_configured_roots_is_rejected(tmp_path: Path) -> None:
+    configured = tmp_path / "configured"
+    configured.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    search_output = {
+        "query": "test query",
+        "search_completed": True,
+        "outcome": "no_matches",
+        "message": "No content matched the query.",
+        "result_count": 0,
+        "results": [],
+    }
+
+    fake_context = FakeWorkspaceContext(configured)
+
+    with patch(
+        "lbe_guard_inspector.evidence_service.Context.load",
+        return_value=fake_context,
+    ), patch(
+        "lbe_guard_inspector.evidence_service.search_workspace",
+        return_value=search_output,
+    ):
+        try:
+            EvidenceService().build_evidence_package(
+                task_id="task-outside",
+                query="test query",
+                workspace_root=str(outside),
+            )
+        except Exception as exc:
+            assert "outside configured knowledge roots" in str(exc)
+        else:
+            raise AssertionError("Expected outside workspace root to be rejected")
+
+
+def test_workspace_build_directories_are_excluded(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    build = workspace / "build" / "bundle"
+    build.mkdir(parents=True)
+    (build / "generated.js").write_text(
+        "runAutonomousInstruction",
+        encoding="utf-8",
+    )
+
+    source = workspace / "src"
+    source.mkdir()
+    current = source / "AgentService.js"
+    current.write_text(
+        "runAutonomousInstruction",
+        encoding="utf-8",
+    )
+
+    search_output = {
+        "query": "runAutonomousInstruction",
+        "search_completed": True,
+        "outcome": "no_matches",
+        "message": "No content matched the query.",
+        "result_count": 0,
+        "results": [],
+    }
+
+    fake_context = FakeWorkspaceContext(tmp_path)
+
+    with patch(
+        "lbe_guard_inspector.evidence_service.Context.load",
+        return_value=fake_context,
+    ), patch(
+        "lbe_guard_inspector.evidence_service.search_workspace",
+        return_value=search_output,
+    ):
+        package = EvidenceService().build_evidence_package(
+            task_id="task-build-filter",
+            query="runAutonomousInstruction",
+            workspace_root=str(workspace),
+            extensions=[".js"],
+            include_excluded=False,
+        )
+
+    paths = [
+        item["path"]
+        for item in package["workspace_evidence"]
+    ]
+
+    assert str(current.resolve()) in paths
+    assert str((build / "generated.js").resolve()) not in paths

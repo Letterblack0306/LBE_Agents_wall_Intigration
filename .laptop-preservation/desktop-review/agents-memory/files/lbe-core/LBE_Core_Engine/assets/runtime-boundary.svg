@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="440" viewBox="0 0 960 440" role="img" aria-labelledby="title desc">
+  <title id="title">LetterBlack LBE runtime boundary</title>
+  <desc id="desc">An application sends a serialized request to the local LBE WASM validation runtime, which returns a structured allow, deny, or error decision to the application.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" x2="1"><stop stop-color="#172033"/><stop offset="1" stop-color="#202d47"/></linearGradient>
+    <linearGradient id="runtime" x1="0" x2="1"><stop stop-color="#3756d6"/><stop offset="1" stop-color="#7356d6"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8fa3c9"/></marker>
+  </defs>
+  <rect width="960" height="440" rx="24" fill="#0e1524"/>
+  <text x="56" y="65" fill="#f5f8ff" font-family="Arial, sans-serif" font-size="28" font-weight="700">Local validation boundary</text>
+  <text x="56" y="98" fill="#aab9d4" font-family="Arial, sans-serif" font-size="17">The host owns execution. LBE returns a deterministic decision before the host accepts an action.</text>
+
+  <rect x="55" y="165" width="220" height="170" rx="16" fill="url(#panel)" stroke="#405273"/>
+  <text x="165" y="220" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="21" font-weight="700">Host application</text>
+  <text x="165" y="254" text-anchor="middle" fill="#b9c7df" font-family="Arial, sans-serif" font-size="15">agent, tool, or service</text>
+  <text x="165" y="286" text-anchor="middle" fill="#7fe1c3" font-family="Arial, sans-serif" font-size="15">serializes request</text>
+
+  <line x1="285" y1="250" x2="402" y2="250" stroke="#8fa3c9" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="343" y="229" text-anchor="middle" fill="#aab9d4" font-family="Arial, sans-serif" font-size="14">JSON request</text>
+
+  <rect x="415" y="132" width="290" height="236" rx="18" fill="url(#runtime)" stroke="#9a8cff" stroke-width="2"/>
+  <text x="560" y="183" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="23" font-weight="700">LBE WASM runtime</text>
+  <line x1="453" y1="205" x2="667" y2="205" stroke="#bfc8ff" opacity=".55"/>
+  <text x="560" y="242" text-anchor="middle" fill="#f0efff" font-family="Arial, sans-serif" font-size="16">schema · timestamp · key lifecycle</text>
+  <text x="560" y="271" text-anchor="middle" fill="#f0efff" font-family="Arial, sans-serif" font-size="16">signature · rate limit · nonce · policy</text>
+  <text x="560" y="319" text-anchor="middle" fill="#d7d1ff" font-family="Arial, sans-serif" font-size="14">local, deterministic validation</text>
+
+  <line x1="718" y1="250" x2="825" y2="250" stroke="#8fa3c9" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="770" y="229" text-anchor="middle" fill="#aab9d4" font-family="Arial, sans-serif" font-size="14">structured result</text>
+
+  <rect x="838" y="165" width="80" height="170" rx="16" fill="url(#panel)" stroke="#405273"/>
+  <text x="878" y="215" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="16" font-weight="700">Host</text>
+  <text x="878" y="249" text-anchor="middle" fill="#7fe1c3" font-family="Arial, sans-serif" font-size="14">allow</text>
+  <text x="878" y="275" text-anchor="middle" fill="#ffadad" font-family="Arial, sans-serif" font-size="14">deny</text>
+  <text x="878" y="301" text-anchor="middle" fill="#ffd28a" font-family="Arial, sans-serif" font-size="14">error</text>
+</svg>

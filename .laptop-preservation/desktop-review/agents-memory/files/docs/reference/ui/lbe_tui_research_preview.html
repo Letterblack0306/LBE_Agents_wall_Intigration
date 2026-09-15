@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LBE — Agent Runtime (Research Prototype)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root{
+  --lbe-bg:        #0c0d13;
+  --lbe-bg-raised: #14151d;
+  --lbe-bg-inset:  #0a0b10;
+  --lbe-border:    #24252f;
+  --lbe-border-lt: #33343f;
+  --lbe-frame:     #eef0f5;
+  --lbe-text:      #eef0f5;
+  --lbe-text-dim:  #8b8d9a;
+  --lbe-text-faint:#5a5c69;
+  --lbe-red:       #e94247;
+  --lbe-red-dim:   #7a2528;
+  --lbe-red-glow:  rgba(233,66,71,0.16);
+  --lbe-green:     #4fd18b;
+  --lbe-amber:     #e0a84f;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;background:var(--lbe-bg);}
+body{
+  font-family:var(--mono);
+  color:var(--lbe-text);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  padding:28px;
+  background:
+    radial-gradient(1200px 500px at 15% -10%, rgba(233,66,71,0.05), transparent 60%),
+    var(--lbe-bg);
+}
+
+.shell{
+  width:100%;
+  max-width:980px;
+  background:var(--lbe-bg-raised);
+  border:1px solid var(--lbe-border);
+  border-radius:10px;
+  overflow:hidden;
+  box-shadow:0 30px 80px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+/* ===== research banner ===== */
+.banner{
+  background:repeating-linear-gradient(135deg, var(--lbe-red-dim), var(--lbe-red-dim) 10px, #5c1a1c 10px, #5c1a1c 20px);
+  color:#fff;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.08em;
+  text-align:center;
+  padding:6px 10px;
+  border-bottom:1px solid var(--lbe-red);
+}
+
+/* ===== title bar / branding ===== */
+.titlebar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 16px;
+  border-bottom:1px solid var(--lbe-border);
+  background:var(--lbe-bg);
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.brand-mark{
+  width:26px;
+  height:30px;
+  flex:none;
+  display:block;
+}
+.brand-word{
+  font-family:var(--sans);
+  font-weight:600;
+  font-size:14px;
+  letter-spacing:.03em;
+  color:var(--lbe-text);
+}
+.brand-word b{color:var(--lbe-red); font-weight:700;}
+.brand-sub{
+  font-family:var(--sans);
+  font-size:10.5px;
+  color:var(--lbe-text-faint);
+  letter-spacing:.06em;
+  margin-top:1px;
+}
+.brand-text-col{display:flex; flex-direction:column;}
+
+.dots{display:flex; gap:6px;}
+.dots span{width:9px; height:9px; border-radius:50%; background:var(--lbe-border-lt);}
+
+/* ===== compact status strip (truthful chrome, not a dashboard) ===== */
+.statusbar{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:8px 16px;
+  font-size:11.5px;
+  color:var(--lbe-text-dim);
+  border-bottom:1px solid var(--lbe-border);
+  background:var(--lbe-bg-inset);
+  flex-wrap:wrap;
+}
+.status-item{display:flex; align-items:center; gap:6px;}
+.status-dot{width:6px; height:6px; border-radius:50%;}
+.dot-audit{background:var(--lbe-amber);}
+.dot-live{background:var(--lbe-green); box-shadow:0 0 0 3px rgba(79,209,139,0.15);}
+.status-sep{color:var(--lbe-border-lt);}
+.status-item.unresolved{color:var(--lbe-text-faint); font-style:italic;}
+
+/* ===== conversation stream ===== */
+.stream{
+  padding:18px 16px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  max-height:440px;
+  overflow-y:auto;
+  background:
+    linear-gradient(var(--lbe-bg-raised), var(--lbe-bg-raised));
+}
+.msg{display:flex; gap:10px; font-size:13px; line-height:1.55;}
+.msg .avatar{
+  width:20px; height:20px; flex:none; border-radius:4px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; font-weight:700; margin-top:1px;
+}
+.avatar.user{background:var(--lbe-border-lt); color:var(--lbe-text);}
+.avatar.agent{background:var(--lbe-red-glow); color:var(--lbe-red); border:1px solid var(--lbe-red-dim);}
+.msg .who{color:var(--lbe-text-faint); font-size:10.5px; margin-bottom:2px; letter-spacing:.04em; text-transform:uppercase;}
+.msg .body{color:var(--lbe-text); max-width:100%;}
+.msg .body p{margin:0 0 6px 0;}
+.msg .body p:last-child{margin-bottom:0;}
+.dim{color:var(--lbe-text-dim);}
+
+/* contextual tool cell — inline, not a side panel */
+.tool-cell{
+  margin-top:6px;
+  border:1px solid var(--lbe-border-lt);
+  border-radius:7px;
+  background:var(--lbe-bg-inset);
+  overflow:hidden;
+  font-size:12px;
+}
+.tool-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:7px 10px;
+  border-bottom:1px solid var(--lbe-border);
+  color:var(--lbe-text-dim);
+}
+.tool-head .name{color:var(--lbe-text); font-weight:500;}
+.tool-state{
+  font-size:10px; letter-spacing:.05em; text-transform:uppercase;
+  padding:2px 7px; border-radius:20px; font-weight:600;
+}
+.tool-state.ok{color:var(--lbe-green); background:rgba(79,209,139,0.1);}
+.tool-state.blocked{color:var(--lbe-amber); background:rgba(224,168,79,0.1);}
+.tool-body{padding:8px 10px; color:var(--lbe-text-dim); font-size:12px;}
+.tool-body .path{color:var(--lbe-text);}
+.tool-foot{
+  padding:6px 10px; border-top:1px solid var(--lbe-border);
+  font-size:11px; color:var(--lbe-text-faint);
+  display:flex; justify-content:space-between;
+}
+.link{color:var(--lbe-red); cursor:pointer; text-decoration:none;}
+.link:hover{text-decoration:underline;}
+
+/* ===== approval overlay — temporary decision UI ===== */
+.approval{
+  margin-top:6px;
+  border:1px solid var(--lbe-red-dim);
+  border-radius:7px;
+  background:linear-gradient(180deg, rgba(233,66,71,0.06), transparent 60%), var(--lbe-bg-inset);
+  overflow:hidden;
+}
+.approval-head{
+  display:flex; align-items:center; gap:8px;
+  padding:9px 12px;
+  border-bottom:1px solid var(--lbe-red-dim);
+  font-size:11.5px; color:var(--lbe-red); font-weight:600; letter-spacing:.03em;
+}
+.approval-body{padding:10px 12px; font-size:12.5px; color:var(--lbe-text-dim);}
+.approval-row{display:flex; gap:8px; margin-bottom:5px;}
+.approval-row .k{width:64px; flex:none; color:var(--lbe-text-faint);}
+.approval-row .v{color:var(--lbe-text);}
+.approval-actions{
+  display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--lbe-border);
+}
+.btn{
+  font-family:var(--mono);
+  font-size:11.5px; font-weight:600;
+  padding:6px 14px; border-radius:5px;
+  border:1px solid var(--lbe-border-lt);
+  background:transparent; color:var(--lbe-text-dim);
+  cursor:pointer;
+}
+.btn.approve{background:var(--lbe-red); border-color:var(--lbe-red); color:#fff;}
+.btn.deny{color:var(--lbe-text-dim);}
+.btn kbd{opacity:.6; margin-left:6px; font-size:10px;}
+
+/* ===== composer ===== */
+.composer{
+  border-top:1px solid var(--lbe-border);
+  background:var(--lbe-bg);
+  padding:10px 14px;
+}
+.composer-input{
+  display:flex; align-items:center; gap:8px;
+  background:var(--lbe-bg-inset);
+  border:1px solid var(--lbe-border-lt);
+  border-radius:7px;
+  padding:9px 12px;
+}
+.composer-input .caret{color:var(--lbe-red); font-weight:700;}
+.composer-input input{
+  flex:1; background:none; border:none; outline:none;
+  color:var(--lbe-text); font-family:var(--mono); font-size:13px;
+}
+.composer-input input::placeholder{color:var(--lbe-text-faint);}
+.composer-hints{
+  display:flex; gap:12px; margin-top:7px; font-size:10.5px; color:var(--lbe-text-faint);
+}
+.composer-hints span b{color:var(--lbe-text-dim);}
+
+/* ===== footer note ===== */
+.footnote{
+  padding:9px 16px; font-size:10.5px; color:var(--lbe-text-faint);
+  border-top:1px solid var(--lbe-border); font-family:var(--sans);
+  display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <div class="banner">RESEARCH PROTOTYPE — NOT IMPLEMENTED — DESIGN ARTIFACT ONLY</div>
+
+  <div class="titlebar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="292" height="292" rx="10" fill="var(--lbe-red)"/>
+        <rect x="26" y="26" width="248" height="248" rx="6" fill="var(--lbe-bg-inset)"/>
+        <rect x="58" y="58" width="184" height="184" rx="4" fill="none" stroke="var(--lbe-frame)" stroke-width="16"/>
+        <g fill="none" stroke="var(--lbe-frame)" stroke-width="15" stroke-linecap="square">
+          <path d="M118 108 H100 V192 H118"/>
+          <path d="M182 108 H200 V192 H182"/>
+        </g>
+        <rect x="141" y="103" width="18" height="94" fill="var(--lbe-red)"/>
+      </svg>
+      <div class="brand-text-col">
+        <div class="brand-word">LBE <b>CORE</b></div>
+        <div class="brand-sub">agent runtime · session</div>
+      </div>
+    </div>
+    <div class="dots"><span></span><span></span><span></span></div>
+  </div>
+
+  <div class="statusbar">
+    <div class="status-item"><span class="status-dot dot-live"></span>connected · local runner</div>
+    <span class="status-sep">·</span>
+    <div class="status-item"><span class="status-dot dot-audit"></span>mode: <b style="color:var(--lbe-text)">audit&nbsp;/&nbsp;read_only</b></div>
+    <span class="status-sep">·</span>
+    <div class="status-item unresolved">default-on-launch: unresolved — verify against local workspace</div>
+    <span class="status-sep">·</span>
+    <div class="status-item">task: LBE-P1-001</div>
+  </div>
+
+  <div class="stream">
+
+    <div class="msg">
+      <div class="avatar user">U</div>
+      <div class="body">
+        <div class="who">you</div>
+        <p>Update the CEP loader path and re-run validation.</p>
+      </div>
+    </div>
+
+    <div class="msg">
+      <div class="avatar agent">A</div>
+      <div class="body">
+        <div class="who">agent</div>
+        <p>Proposing an edit to <span class="dim">src/loader/init.ts</span>, then requesting a validation run.</p>
+
+        <div class="tool-cell">
+          <div class="tool-head">
+            <span class="name">edit · <span class="path">src/loader/init.ts</span></span>
+            <span class="tool-state ok">proposed</span>
+          </div>
+          <div class="tool-body">3 lines changed · scoped to loader path resolution</div>
+          <div class="tool-foot">
+            <span>awaiting authorization</span>
+            <span class="link">view diff</span>
+          </div>
+        </div>
+
+        <div class="approval">
+          <div class="approval-head">⚠ authorization required</div>
+          <div class="approval-body">
+            <div class="approval-row"><span class="k">action</span><span class="v">write file</span></div>
+            <div class="approval-row"><span class="k">target</span><span class="v">src/loader/init.ts</span></div>
+            <div class="approval-row"><span class="k">scope</span><span class="v">within forbiddenAreas? no</span></div>
+            <div class="approval-row"><span class="k">reason</span><span class="v">correct debug-port fallback for CEP dev runtime</span></div>
+          </div>
+          <div class="approval-actions">
+            <button class="btn approve">approve <kbd>↵</kbd></button>
+            <button class="btn deny">deny <kbd>esc</kbd></button>
+            <button class="btn">view full diff</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="msg">
+      <div class="avatar user">U</div>
+      <div class="body">
+        <div class="who">you</div>
+        <p>approved</p>
+      </div>
+    </div>
+
+    <div class="msg">
+      <div class="avatar agent">A</div>
+      <div class="body">
+        <div class="who">agent</div>
+        <p>Applied. Running the validation gate now.</p>
+
+        <div class="tool-cell">
+          <div class="tool-head">
+            <span class="name">validate · lint + test + audit</span>
+            <span class="tool-state ok">passed</span>
+          </div>
+          <div class="tool-body">normalized result — raw shell output withheld per current TUI contract</div>
+          <div class="tool-foot">
+            <span>git diff proof recorded</span>
+            <span class="link">view evidence</span>
+          </div>
+        </div>
+
+        <p class="dim">Nothing further requires authorization. Session log updated.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="composer">
+    <div class="composer-input">
+      <span class="caret">›</span>
+      <input type="text" placeholder="Message LBE, or type / for commands" />
+    </div>
+    <div class="composer-hints">
+      <span><b>/diff</b> view</span>
+      <span><b>/permissions</b> change</span>
+      <span><b>/model</b> switch</span>
+      <span><b>esc</b> interrupt</span>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <span>no permanent side panel · runtime facts render where they matter</span>
+    <span>AI reasons → LBE governs → adapter executes → audit proves → TUI renders the truth</span>
+  </div>
+
+</div>
+
+</body>
+</html>

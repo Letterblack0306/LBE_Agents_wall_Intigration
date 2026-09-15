@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LBE Guard Inspector Task Record",
+  "type": "object",
+  "required": [
+    "task_id",
+    "problem",
+    "mode",
+    "write_allowed"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "problem": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_root": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "inspect",
+        "explain",
+        "propose_rule",
+        "apply_profile"
+      ]
+    },
+    "write_allowed": {
+      "type": "boolean"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

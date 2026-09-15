@@ -1,0 +1,24 @@
+{
+  "$note": "Hardcoded ports and model config removed. Runtime allocation is now managed by runtime_allocator.py -> .workspace-runtime/runtime.json",
+  "knowledge_roots": [
+    {
+      "name": "dev",
+      "path": "G:/Developments"
+    },
+    {
+      "name": "lbe-workspace",
+      "path": "C:/Agents-Memory-Tool-v6-integration"
+    },
+    {
+      "name": "tui-workspace",
+      "path": "C:/LBE-TUI-Lab"
+    }
+  ],
+  "active_workspace_root": null,
+  "write_enabled": false,
+  "validation_enabled": false,
+  "max_file_bytes": 5000000,
+  "progress_every_files": 250,
+  "checkpoint_every_files": 1000,
+  "reasoning_provider_config": "reasoning-provider.json"
+}

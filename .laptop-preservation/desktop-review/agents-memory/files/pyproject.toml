@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lbe-guard-inspector"
+version = "2.0.3"
+description = "Deterministic local workspace inspection with evidence-bound guard verdicts"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema==4.23.0"
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest==8.3.5"
+]
+tui = [
+]
+
+[project.scripts]
+lbe = "lbe_guard_inspector.product_entry:main"
+lbe-guard-inspector-evidence = "lbe_guard_inspector.server:main"
+
+[tool.setuptools]
+py-modules = ["agent", "audit_controller", "server"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["lbe_guard_inspector*", "rules*", "schemas*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+schemas = ["*.json"]
+lbe_guard_inspector = [
+  "memory/*.sql",
+  "runtime/cline_worker/*.mjs",
+  "runtime/cline_worker/*.json"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://letterblack.local/schemas/session_context_projection.schema.json",
+  "title": "Session Context Projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "projection_type", "generated_at", "workspace_id", "session_id", "read_only", "data"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "projection_type": {"const": "session_context"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "workspace_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "read_only": {"const": true},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session", "workspace", "task", "checkpoint", "checkpoint_revalidation", "verified_facts", "active_constraints", "recent_failures", "transcript"],
+      "properties": {
+        "session": {"$ref": "#/$defs/session_state"},
+        "workspace": {"type": "object", "additionalProperties": false, "required": ["project_workspace_id", "canonical_root", "branch", "head", "status_short"], "properties": {"project_workspace_id": {"type": "string", "minLength": 1}, "canonical_root": {"type": "string", "minLength": 1}, "branch": {"type": "string"}, "head": {"type": "string"}, "status_short": {"type": "array", "items": {"type": "string"}}}},
+        "task": {"anyOf": [{"$ref": "#/$defs/opaque_owner_payload"}, {"type": "null"}]},
+        "checkpoint": {"anyOf": [{"$ref": "#/$defs/opaque_owner_payload"}, {"type": "null"}]},
+        "checkpoint_revalidation": {"anyOf": [{"$ref": "#/$defs/opaque_owner_payload"}, {"type": "null"}]},
+        "verified_facts": {"type": "array", "items": {"$ref": "#/$defs/opaque_owner_payload"}},
+        "active_constraints": {"type": "array", "items": {"$ref": "#/$defs/opaque_owner_payload"}},
+        "recent_failures": {"type": "array", "items": {"$ref": "#/$defs/opaque_owner_payload"}},
+        "transcript": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["sequence", "kind", "status", "text", "event_id", "item_id"], "properties": {"sequence": {"type": "integer", "minimum": 0}, "kind": {"type": "string", "minLength": 1}, "status": {"type": "string", "minLength": 1}, "text": {"type": "string"}, "event_id": {"type": "string", "minLength": 1}, "item_id": {"type": ["string", "null"]}}}}
+      }
+    }
+  },
+  "$defs": {
+    "session_state": {"type": "object", "additionalProperties": false, "required": ["session_id", "project_workspace_id", "canonical_workspace_root", "mode", "permission", "runtime_policy", "provider_id", "provider_model", "active_profile_id", "permission_policy_id", "evidence_policy_id", "checkpoint_id", "created_at", "updated_at"], "properties": {"session_id": {"type": "string", "minLength": 1}, "project_workspace_id": {"type": "string", "minLength": 1}, "canonical_workspace_root": {"type": "string", "minLength": 1}, "mode": {"type": "string", "minLength": 1}, "permission": {"type": ["string", "null"]}, "runtime_policy": {"type": ["string", "null"]}, "provider_id": {"type": ["string", "null"]}, "provider_model": {"type": ["string", "null"]}, "active_profile_id": {"type": ["string", "null"]}, "permission_policy_id": {"type": ["string", "null"]}, "evidence_policy_id": {"type": ["string", "null"]}, "checkpoint_id": {"type": ["string", "null"]}, "created_at": {"type": "string", "format": "date-time"}, "updated_at": {"type": "string", "format": "date-time"}}},
+    "opaque_owner_payload": {"type": "object", "additionalProperties": false, "required": ["owner_payload_version", "opaque", "payload"], "properties": {"owner_payload_version": {"const": "1.0"}, "opaque": {"const": true}, "payload": {"type": "object", "additionalProperties": true}}}
+  }
+}

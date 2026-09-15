@@ -1,0 +1,105 @@
+// src/cli/public-strings.js — SINGLE SOURCE OF TRUTH for all public-facing text.
+// Every label, description, and prompt the user sees comes from here.
+// No other file hardcodes public-facing strings.
+
+// ─── TUI Main Menu (6 items) ─────────────────────────────────────────────────
+export const MENU_ITEMS = [
+  'Set Up Protection',
+  'Remove Protection',
+  'Check Status',
+  'Review Activity',
+  'Task Rules',
+  'Exit',
+];
+
+// ─── Public help (lbe --help) ────────────────────────────────────────────────
+export const PUBLIC_HELP = {
+  tagline: 'Local execution boundary for AI agents.',
+  install: 'npm install -g @letterblack/lbe-core',
+  run: 'lbe',
+  menu: [
+    { label: 'Set Up Protection', desc: 'Initialize protection for this workspace' },
+    { label: 'Remove Protection', desc: 'Clear protection settings' },
+    { label: 'Check Status', desc: 'Show current protection status' },
+    { label: 'Review Activity', desc: 'Review recent activity log' },
+    { label: 'Task Rules', desc: 'Set task boundaries and checks' },
+  ],
+  directNote: 'Direct commands for automation:',
+  advancedNote: 'Advanced help:',
+  advancedHint: 'lbe --help --advanced',
+};
+
+// ─── Advanced help (lbe --help --advanced) ───────────────────────────────────
+export const ADVANCED_COMMANDS = [
+  { cmd: 'init', desc: 'Set up protection for this workspace.' },
+  { cmd: 'verify', desc: 'Validate a proposal without running it.' },
+  { cmd: 'dryrun', desc: 'Simulate execution without making changes.' },
+  { cmd: 'run', desc: 'Validate and run a proposal.' },
+  { cmd: 'policy-sign', desc: 'Sign the protection rules.' },
+  { cmd: 'policy-add', desc: 'Add a rule to the protection list.' },
+  { cmd: 'observe', desc: 'Monitor mode (log actions without blocking).' },
+  { cmd: 'enforce', desc: 'Protect mode (block unapproved actions).' },
+  { cmd: 'health', desc: 'Run system health checks.' },
+  { cmd: 'integrity-check', desc: 'Verify system files are unchanged.' },
+  { cmd: 'integrity-generate', desc: 'Create a system file manifest.' },
+  { cmd: 'audit-verify', desc: 'Verify activity log integrity.' },
+  { cmd: 'status', desc: 'Show current workspace summary.' },
+  { cmd: 'instructions', desc: 'Show the active Agent Instructions document.' },
+  { cmd: 'scope', desc: 'View or set task boundaries.' },
+  { cmd: 'intent', desc: 'Start or view a task record.' },
+  { cmd: 'snapshot', desc: 'Save workspace state for later comparison.' },
+  { cmd: 'logs', desc: 'Show recent activity.' },
+  { cmd: 'open-state', desc: 'Open workspace data folder.' },
+  { cmd: 'proof', desc: 'Show the latest task result.' },
+  { cmd: 'assert-consumer', desc: 'Verify package installation.' },
+  { cmd: 'help', desc: 'Show this help message.' },
+];
+
+// ─── TUI flow labels ─────────────────────────────────────────────────────────
+export const FLOW = {
+  applyBoundary: 'Set Up Protection',
+  removeBoundary: 'Remove Protection',
+  checkStatus: 'Check Status',
+  reviewActivity: 'Review Activity',
+  taskRules: 'Task Rules',
+  taskRulesFileMgmt: 'Task Rules — File Settings',
+  boundaryApplied: 'Protection already applied.',
+  reapplyPrompt: 'Re-apply to update?',
+  skipped: 'Skipped.',
+  noBoundary: 'No protection set up yet.',
+  removeConfirm: 'Remove protection from this workspace?',
+  removing: 'Removing protection settings...',
+  removed: 'Protection removed.',
+  initializing: 'Initializing...',
+  policyCreated: 'Protection rules created',
+  policyExists: 'Protection rules exist',
+  auditLogCreated: 'Activity log created',
+  auditLogExists: 'Activity log exists',
+  workspaceCreated: 'Workspace contract created',
+  workspaceExists: 'Workspace contract exists',
+  currentPlan: 'Current Plan',
+  noPlanYet: 'No plan yet.',
+  setUpdatePrompt: 'Set or update task rules?',
+  objectivePrompt: 'Objective / Goal',
+  allowedPrompt: 'Allowed files/actions (comma-separated)',
+  forbiddenPrompt: 'Forbidden files/actions (comma-separated)',
+  validationsPrompt: 'Required checks (comma-separated)',
+  cancelled: 'Cancelled.',
+  scopeSaved: 'Scope saved',
+  intentLogged: 'Task record logged',
+  blocksUpdated: 'Updated managed blocks in project files.',
+  instructionsSaved: 'Task rules saved.',
+  addFile: 'Add file',
+  changeFile: 'Change file',
+  removeReference: 'Remove reference',
+  viewSources: 'View sources',
+  backToMenu: 'Back to menu',
+  notFound: 'Not found.',
+  registered: 'Registered',
+  contractUpdated: 'Contract updated',
+  noFileRegistered: 'No file registered.',
+  removedFile: 'Removed reference',
+  sourcesFor: 'Sources for',
+  noSources: 'No sources recorded.',
+  noCustomFile: 'No custom file.',
+};

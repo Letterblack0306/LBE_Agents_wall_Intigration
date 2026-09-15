@@ -1,0 +1,142 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "LBE_PRODUCT_SURFACE_CONTRACT",
+  "status": "LIVING_SPEC",
+  "lifecycle": {
+    "id": "lbe_agent_lifecycle",
+    "owner": "LBE",
+    "phase_sequence": ["boot", "understand", "plan", "execute", "validate", "persist", "continue"],
+    "loop_back": ["continue", "understand", "plan"],
+    "note": "The same lifecycle applies across CLI, TUI, IDE panel, or API. A new turn re-enters at understand."
+  },
+  "owner_classes": {
+    "agent": {
+      "name": "Reasoning agent",
+      "owns": ["reasoning", "capability selection", "interpretation", "communication"],
+      "does_not_own": ["authorization", "execution", "validation", "persistence", "completion"]
+    },
+    "lbe": {
+      "name": "LBE Core",
+      "owns": ["workspace/session identity", "authorization", "governed execution", "receipts", "validation", "completion", "persistence"],
+      "does_not_own": ["reasoning"]
+    },
+    "knowledge_workspace": {
+      "name": "Knowledge & workspace layer",
+      "owns": ["retrieval", "inspection", "evidence"],
+      "does_not_own": ["truth", "authority", "verdicts"]
+    }
+  },
+  "panels": [
+    {
+      "id": "conversation",
+      "name": "Conversation / Composer",
+      "purpose": "Human-agent exchange: turns, reasoning output, and the input composer.",
+      "owner": "agent",
+      "phase": ["understand", "plan", "continue"],
+      "talks_to": ["plan", "evidence", "execution", "validation", "history"],
+      "next_step": "agent produces a plan -> plan panel",
+      "states": ["idle", "thinking", "waiting_approval", "executing", "validating", "done"],
+      "transitions": [
+        { "from": "idle", "to": "thinking", "by": "user_message" },
+        { "from": "thinking", "to": "waiting_approval", "by": "approval_required" },
+        { "from": "thinking", "to": "executing", "by": "tool_ready" },
+        { "from": "waiting_approval", "to": "thinking", "by": "approved" },
+        { "from": "waiting_approval", "to": "idle", "by": "rejected" },
+        { "from": "executing", "to": "validating", "by": "execution_complete" },
+        { "from": "validating", "to": "thinking", "by": "needs_revision" },
+        { "from": "validating", "to": "done", "by": "validated" },
+        { "from": "done", "to": "thinking", "by": "new_message" }
+      ]
+    },
+    {
+      "id": "plan",
+      "name": "Plan / Capability",
+      "purpose": "Agent-owned plan and chosen capabilities.",
+      "owner": "agent",
+      "phase": ["plan"],
+      "talks_to": ["conversation", "evidence", "execution"],
+      "next_step": "confirmed plan -> execution panel for authorization",
+      "states": ["empty", "drafting", "proposed", "confirmed", "revising", "complete"],
+      "transitions": [
+        { "from": "empty", "to": "drafting", "by": "task_understood" },
+        { "from": "drafting", "to": "proposed", "by": "plan_drafted" },
+        { "from": "proposed", "to": "confirmed", "by": "agent_confirms" },
+        { "from": "proposed", "to": "revising", "by": "evidence_conflicts" },
+        { "from": "revising", "to": "drafting", "by": "revised" },
+        { "from": "confirmed", "to": "complete", "by": "capability_selected" },
+        { "from": "confirmed", "to": "revising", "by": "new_evidence" },
+        { "from": "complete", "to": "revising", "by": "replan" }
+      ]
+    },
+    {
+      "id": "evidence",
+      "name": "Evidence / Context",
+      "purpose": "Retrieved knowledge and current workspace facts supplied to reasoning.",
+      "owner": "knowledge_workspace",
+      "phase": ["understand"],
+      "talks_to": ["conversation", "plan", "validation"],
+      "next_step": "ready evidence -> reasoning (conversation/plan)",
+      "states": ["idle", "retrieving", "ready", "incomplete", "empty"],
+      "transitions": [
+        { "from": "idle", "to": "retrieving", "by": "query" },
+        { "from": "retrieving", "to": "ready", "by": "results" },
+        { "from": "retrieving", "to": "incomplete", "by": "partial" },
+        { "from": "retrieving", "to": "empty", "by": "no_results" },
+        { "from": "ready", "to": "retrieving", "by": "new_query" },
+        { "from": "incomplete", "to": "retrieving", "by": "retry" }
+      ]
+    },
+    {
+      "id": "execution",
+      "name": "Execution / Activity / Receipt",
+      "purpose": "LBE-governed tool dispatch and operation receipts.",
+      "owner": "lbe",
+      "phase": ["execute"],
+      "talks_to": ["conversation", "plan", "validation", "history"],
+      "next_step": "receipted operation -> validation panel",
+      "states": ["idle", "authorizing", "running", "awaiting_receipt", "receipted", "blocked", "error"],
+      "transitions": [
+        { "from": "idle", "to": "authorizing", "by": "capability_requested" },
+        { "from": "authorizing", "to": "running", "by": "authorized" },
+        { "from": "authorizing", "to": "blocked", "by": "denied" },
+        { "from": "running", "to": "awaiting_receipt", "by": "operation_complete" },
+        { "from": "awaiting_receipt", "to": "receipted", "by": "receipt_issued" },
+        { "from": "running", "to": "error", "by": "failure" }
+      ]
+    },
+    {
+      "id": "validation",
+      "name": "Validation / Results",
+      "purpose": "Deterministic LBE validation and completion truth.",
+      "owner": "lbe_validation",
+      "phase": ["validate"],
+      "talks_to": ["conversation", "execution", "history"],
+      "next_step": "verdict -> conversation; evidence -> history",
+      "states": ["pending", "running", "passed", "failed", "insufficient_evidence", "not_applicable"],
+      "transitions": [
+        { "from": "pending", "to": "running", "by": "validation_started" },
+        { "from": "running", "to": "passed", "by": "all_checks_pass" },
+        { "from": "running", "to": "failed", "by": "concrete_violation" },
+        { "from": "running", "to": "insufficient_evidence", "by": "evidence_missing" },
+        { "from": "running", "to": "not_applicable", "by": "out_of_scope" }
+      ]
+    },
+    {
+      "id": "history",
+      "name": "History / Checkpoints / Resume",
+      "purpose": "LBE-owned durable session, turn, item, evidence, and checkpoint state.",
+      "owner": "lbe_persistence",
+      "phase": ["persist", "continue"],
+      "talks_to": ["conversation", "execution", "validation"],
+      "next_step": "checkpointed/resumed state -> conversation (continue)",
+      "states": ["empty", "recording", "checkpointed", "restoring", "resumed"],
+      "transitions": [
+        { "from": "empty", "to": "recording", "by": "activity" },
+        { "from": "recording", "to": "checkpointed", "by": "checkpoint" },
+        { "from": "checkpointed", "to": "restoring", "by": "resume_requested" },
+        { "from": "restoring", "to": "resumed", "by": "state_restored" },
+        { "from": "resumed", "to": "recording", "by": "activity" }
+      ]
+    }
+  ]
+}

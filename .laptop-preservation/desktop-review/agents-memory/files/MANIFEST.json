@@ -1,0 +1,24 @@
+{
+  "package": "LBE Phase 1 Typed Contracts",
+  "version": "0.1.0",
+  "files": [
+    "README.md",
+    "config.example.json",
+    "lbe_guard_inspector/__init__.py",
+    "lbe_guard_inspector/config.py",
+    "lbe_guard_inspector/contracts.py",
+    "lbe_guard_inspector/evidence_service.py",
+    "lbe_guard_inspector/server.py",
+    "pyproject.toml",
+    "requirements.txt",
+    "run-tests.ps1",
+    "schemas/evidence_package.schema.json",
+    "schemas/guard_request.schema.json",
+    "schemas/guard_result.schema.json",
+    "schemas/rule_proposal.schema.json",
+    "schemas/task_record.schema.json",
+    "start-evidence-endpoint.ps1",
+    "tests/test_contracts.py",
+    "tests/test_evidence_service.py"
+  ]
+}

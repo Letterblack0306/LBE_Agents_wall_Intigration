@@ -1,0 +1,76 @@
+name: Public Mirror Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate Package Shape
+    runs-on: ubuntu-latest
+
+    env:
+      MAINHEAD_GUARD_CI_VALIDATE: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+
+    defaults:
+      run:
+        working-directory: LBE_Core_Engine
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        shell: bash
+        run: npm install --ignore-scripts
+
+      - name: Build public SDK mirror
+        shell: bash
+        run: node scripts/build-public-sdk.mjs
+
+      - name: Validate public mirror package metadata
+        shell: bash
+        working-directory: LBE_Core_Engine/release-public
+        run: |
+          set -euo pipefail
+          node -e "
+            const pkg = require('./package.json');
+            if (pkg.name !== '@letterblack/lbe-core') throw new Error('Package name mismatch');
+            if (pkg.main !== 'dist/index.js') throw new Error('Public main must be dist/index.js');
+            if (pkg.bin.lbe !== 'dist/cli.js') throw new Error('Public bin must be dist/cli.js');
+          "
+
+      - name: Run packed-artifact regression tests
+        shell: bash
+        run: node --test --test-timeout=120000 --test-reporter=spec test/pack-proof.test.js
+
+      - name: Extract and verify actual npm tarball bytes
+        shell: bash
+        run: node scripts/verify-pack-proof.mjs
+
+      - name: Check for stale markers and placeholders
+        shell: bash
+        working-directory: LBE_Core_Engine/release-public
+        run: |
+          set -euo pipefail
+          # Restrict to text file types only — binary assets (png, jpg, wasm) contain arbitrary bytes
+          EXTS="--include=*.js --include=*.mjs --include=*.cjs --include=*.json --include=*.md --include=*.ts --include=*.yml --include=*.yaml --include=*.txt"
+          if grep -rq $EXTS "{{" .; then
+            echo "Template placeholder leaked into public mirror"
+            exit 1
+          fi
+          if grep -rq $EXTS "@letterblack/lbe-sdk\|@letterblack/lbe-exec\|lbe-sdk v\|lbe-exec v" .; then
+            echo "Old package marker leaked into public mirror"
+            exit 1
+          fi
+          echo "Stale marker check passed."
+
+      - name: Run core audit
+        shell: bash
+        run: npm run audit:public-docs

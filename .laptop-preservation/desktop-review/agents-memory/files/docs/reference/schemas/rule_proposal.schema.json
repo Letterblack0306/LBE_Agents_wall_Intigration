@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workspace Rule Proposal",
+  "type": "object",
+  "required": [
+    "proposal_id",
+    "workspace_id",
+    "rule_id",
+    "trigger",
+    "rationale",
+    "scope",
+    "evidence_refs",
+    "diff",
+    "approval_required"
+  ],
+  "properties": {
+    "proposal_id": {
+      "type": "string"
+    },
+    "workspace_id": {
+      "type": "string"
+    },
+    "rule_id": {
+      "type": "string"
+    },
+    "trigger": {
+      "type": "string"
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "required_action": {
+      "type": "string"
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "blocking"
+      ]
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "equivalent_rule_checked": {
+      "type": "boolean"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "diff": {
+      "type": "string"
+    },
+    "validation_plan": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rollback_plan": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "approval_required": {
+      "const": true
+    }
+  },
+  "additionalProperties": false
+}

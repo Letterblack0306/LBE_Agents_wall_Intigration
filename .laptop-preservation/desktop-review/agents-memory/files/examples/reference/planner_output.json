@@ -1,0 +1,21 @@
+{
+  "goal": "Fix CEP callback failure",
+  "mode": "propose",
+  "project_profile": {
+    "project_types": ["cep-extension", "node-frontend", "extendscript-host"],
+    "recommended_rule_packs": ["cep-core", "fast-fail-default", "safe-editing"]
+  },
+  "steps": [
+    {"tool": "workspace.read", "purpose": "Inspect current callback caller and CSInterface wrapper"},
+    {"tool": "retrieval.search", "purpose": "Find exact historical error matches"},
+    {"tool": "gallery.lookup", "purpose": "Load evalScript transport and callback patterns"},
+    {"tool": "static.analyze", "purpose": "Run syntax and load-order checks"},
+    {"tool": "workspace.diff", "purpose": "Generate minimal proposed change"},
+    {"tool": "test.run", "purpose": "Run narrow callback reproduction and project tests"}
+  ],
+  "stop_conditions": [
+    "Workspace is ambiguous",
+    "Required host files are missing",
+    "No validation path exists for a high-risk change"
+  ]
+}

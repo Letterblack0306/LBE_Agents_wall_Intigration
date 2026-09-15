@@ -1,0 +1,52 @@
+name: Public Mirror Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate Package Shape
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "
+            const pkg = require('./package.json');
+            if (pkg.name !== '@letterblack/lbe-core') throw new Error('Package name mismatch');
+            if (pkg.main !== 'dist/index.js') throw new Error('Public main must be dist/index.js');
+            if (pkg.bin.lbe !== 'dist/cli.js') throw new Error('Public bin must be dist/cli.js');
+            if (pkg.files && pkg.files.includes('.github/')) throw new Error('.github/ must not appear in npm files field');
+          "
+
+      - name: Dry-run pack and check contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACK_JSON=$(npm pack --dry-run --json 2>/dev/null)
+          echo "$PACK_JSON"
+
+          # Required files
+          echo "$PACK_JSON" | grep -q "dist/index.js" || (echo "Missing dist/index.js"; exit 1)
+          echo "$PACK_JSON" | grep -q "dist/cli.js" || (echo "Missing dist/cli.js"; exit 1)
+
+          # Forbidden paths in npm pack
+          FORBIDDEN=".env keys/ tests/ src/ scripts/ .github/ release-public/ package-lock.json"
+          for p in $FORBIDDEN; do
+            if echo "$PACK_JSON" | grep -q "\"$p"; then
+              echo "HARD STOP: forbidden path in npm pack: $p"
+              exit 1
+            fi
+          done
+          echo "Public validation passed."

@@ -1,0 +1,116 @@
+id: architecture.authority-ownership
+version: 1
+title: Single Authority Ownership
+record_type: state-owner-pattern
+source_class: reference_pattern
+authority_level: reviewed
+verification_status: verified
+superseded: false
+project_types:
+  - agent-runtime
+  - browser-agent
+  - desktop-application
+  - extension
+  - persistent-memory
+  - automation-system
+workspace_scope:
+  kind: reference
+  origin: LBE_Presistent_Agent_wall
+trigger:
+  Multiple components appear to mutate, persist, execute, or claim ownership of the same canonical operation or state.
+problem:
+  Duplicate or undeclared authorities can create repeated execution, conflicting state, stale projections, corrupted persistence, and false completion claims.
+rationale:
+  Every authoritative operation must have one declared owner. Other participating components must be observers, subscribers, delegates, or projections with explicitly bounded capabilities.
+principle:
+  authoritative_owner: The single component permitted to create or mutate canonical state.
+  observer: Receives authoritative events and may derive secondary state without rewriting canonical state.
+  projection: Displays state supplied by the authority and cannot independently mutate it.
+authoritative_operations:
+  - session persistence
+  - message persistence
+  - task-state transition
+  - command execution
+  - browser lifecycle
+  - workspace selection
+  - approval decisions
+  - compaction creation
+  - context injection
+  - validated-memory promotion
+  - SQLite memory writes
+  - completion verdict
+required_evidence:
+  - exact owning component and symbol
+  - canonical state or side effect
+  - all mutation call sites
+  - allowed callers
+  - persistence location
+  - observer, subscriber, delegate, and projection relationships
+  - source paths and hashes
+  - runtime validation when available
+finding_types:
+  - SINGLE_OWNER_CONFIRMED
+  - DUPLICATE_AUTHORITY
+  - UNDECLARED_AUTHORITY
+  - OWNER_CONTRACT_BROKEN
+  - STALE_OWNER_RECORD
+  - INSUFFICIENT_EVIDENCE
+  - NOT_APPLICABLE
+retrieval_terms:
+  - authority owner
+  - duplicate handler
+  - duplicate execution
+  - state owner
+  - persistence owner
+  - competing writer
+  - repeated trigger
+  - UI runtime disagreement
+reasoning_constraints:
+  - Retrieve this pattern when a task involves duplicated behavior, competing state, repeated execution, persistence, lifecycle hooks, or UI/runtime disagreement.
+  - Identify the suspected authoritative operation before selecting a guard.
+  - Request current workspace evidence for every writer and caller.
+  - Distinguish owners, observers, subscribers, delegates, and projections.
+  - Never declare a duplicate authority from reference knowledge alone.
+  - Select only a registered deterministic guard.
+  - Never create permanent policy without explicit approval.
+runtime_memory_constraint:
+  native_runtime:
+    owns:
+      - native session persistence
+      - native message persistence
+  session_memory_adapter:
+    role: observer
+    owns:
+      - validated-memory promotion
+      - dedicated validated-memory SQLite store
+    must_not:
+      - rewrite native session JSON
+      - become a second native persistence authority
+  context_injection:
+    requirement: one declared runtime owner
+  user_interface:
+    default_role: projection
+promotion_boundary:
+  - Preserve the originating workspace as provenance.
+  - Do not use this record as proof of a defect in another workspace.
+  - A verified occurrence should become a workspace-profile proposal first.
+  - Global enforcement requires a deterministic implementation, tests, review, and explicit approval.
+execution_status: knowledge_only
+guard_binding:
+  proposed_guard_id: architecture.authority_ownership
+  implementation_available: false
+  verdict_restriction: No PASS or FAIL may be produced until a deterministic implementation and required validation exist.
+inspector_design:
+  status: acceptance_ready_contract
+  contract_path: docs/design/AUTHORITY_OWNERSHIP_INSPECTOR_CONTRACT.md
+  read_only: true
+  implementation_available: false
+  pass_fail_authorized: false
+  next_gate: approve exact schemas, deterministic finding tests, runtime observation boundaries, and registry design before implementation.
+evidence_references:
+  - docs/history/reference-legacy/docs/02_ARCHITECTURE.md
+  - docs/history/reference-legacy/docs/05_TOOL_REGISTRY.md
+  - docs/history/reference-legacy/docs/07_RULES_AND_GUARDS.md
+  - docs/history/reference-legacy/docs/08_LBE_GALLERY.md
+  - docs/design/AUTHORITY_OWNERSHIP_INSPECTOR_CONTRACT.md
+confidence: 1.0

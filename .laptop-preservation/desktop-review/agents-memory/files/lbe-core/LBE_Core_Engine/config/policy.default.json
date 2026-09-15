@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "createdAt": "2026-06-19T00:00:00Z",
+  "default": "DENY",
+  "requesters": {
+    "agent:sdk": {
+      "allowAdapters": ["file", "shell", "noop"],
+      "allowCommands": ["READ_FILE", "WRITE_FILE", "PATCH_FILE", "DELETE_FILE", "RUN_SHELL", "ECHO"],
+      "filesystem": {
+        "roots": ["."],
+        "denyPatterns": ["**/.git/**", "**/keys/**", "**/*.key", "**/.env*"]
+      },
+      "exec": {
+        "allowCmds": ["node", "echo"],
+        "denyCmds": ["rm", "del", "format", "curl", "wget", "sudo"]
+      }
+    }
+  },
+  "security": {
+    "maxClockSkewSec": 600,
+    "maxPolicyCreatedAtSkewSec": 31536000,
+    "defaultRateLimit": { "windowSec": 60, "maxRequests": 30 }
+  }
+}

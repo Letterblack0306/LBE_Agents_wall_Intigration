@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://letterblack.local/schemas/guard_request.schema.json",
+  "title": "LBE Guard Request",
+  "type": "object",
+  "required": [
+    "request_id",
+    "guard_id",
+    "workspace_id",
+    "reason",
+    "evidence_refs",
+    "requested_mode",
+    "created_at"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "guard_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "guard_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "requested_mode": {
+      "type": "string",
+      "enum": [
+        "inspect"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://letterblack.local/schemas/guard_result.schema.json",
+  "title": "LBE Guard Result",
+  "type": "object",
+  "required": [
+    "result_id",
+    "guard_id",
+    "verdict",
+    "summary",
+    "findings",
+    "evidence_refs",
+    "validation_refs",
+    "governance_state",
+    "executed_at"
+  ],
+  "properties": {
+    "result_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "guard_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "guard_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "INSUFFICIENT_EVIDENCE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "validation_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "governance_state": {
+      "type": "string",
+      "enum": [
+        "READ_ONLY",
+        "ALLOW",
+        "DENY",
+        "APPROVAL_REQUIRED",
+        "INCOMPLETE"
+      ]
+    },
+    "executed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "PASS"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_refs": {
+            "minItems": 1
+          },
+          "validation_refs": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "FAIL"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_refs": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

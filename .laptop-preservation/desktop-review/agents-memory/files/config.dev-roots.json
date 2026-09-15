@@ -1,0 +1,30 @@
+{
+  "knowledge_roots": [
+    {
+      "name": "dev",
+      "path": "G:/Developments"
+    },
+    {
+      "name": "mini",
+      "path": "Z:/"
+    },
+    {
+      "name": "letterblack",
+      "path": "G:/Developments/40_AEP_Letterblack_GenAI/Letterblack_Gen_AI"
+    }
+  ],
+  "active_workspace_root": null,
+  "write_enabled": false,
+  "validation_enabled": false,
+  "server_host": "127.0.0.1",
+  "server_port": 8765,
+  "max_file_bytes": 5000000,
+  "progress_every_files": 250,
+  "checkpoint_every_files": 1000,
+  "model": {
+    "enabled": false,
+    "base_url": "http://127.0.0.1:1234/v1",
+    "model_name": "your-local-coding-model",
+    "api_key": "lm-studio"
+  }
+}

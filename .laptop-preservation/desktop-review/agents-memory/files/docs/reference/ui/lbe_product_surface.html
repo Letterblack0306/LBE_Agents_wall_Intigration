@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LBE Product Surface — Living Spec (Machine-Legible)</title>
+<style>
+  :root{ --bg:#0a0d12; --txt:#d8dee6; --dim:#7a8694;
+    --green:#3ddc84; --amber:#e8b339; --red:#ff6b7a; --cyan:#7fd6ff;
+    --panel:#0f141c; --edge:#1d2430; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--txt); font-family:"Segoe UI",system-ui,sans-serif;}
+  .wrap{max-width:1280px; margin:0 auto; padding:28px 32px 60px;}
+  header h1{font-size:22px; color:var(--cyan); margin-bottom:4px;}
+  header .meta{font-size:11px; color:var(--dim); letter-spacing:.06em;}
+  .pill{display:inline-block; font-size:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700;
+    padding:2px 8px; border-radius:6px; vertical-align:middle; margin-left:6px;}
+  .pill.agent{background:#3a2e0e; color:var(--amber);} .pill.lbe{background:#0f2a1a; color:var(--green);}
+  .pill.knowledge_workspace{background:#3a1220; color:var(--red);}
+  .pill.lbe_validation{background:#0f2a1a; color:var(--green);} .pill.lbe_persistence{background:#0f2a1a; color:var(--green);}
+  .owner-cls{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:18px 0;}
+  .owner-cls .card{border:1px solid var(--edge); border-radius:12px; padding:14px 16px; background:var(--panel);}
+  .owner-cls h2{font-size:13px; margin-bottom:6px; color:var(--cyan);}
+  .owner-cls .card ul{margin:0 0 0 16px; font-size:11px; color:#c3ccd8;}
+  .owner-cls .card li{margin:3px 0;}
+  .owner-cls .not{color:var(--dim); font-size:10.5px; margin-top:6px;}
+  .band{display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 18px; font-size:11px; color:var(--dim);}
+  .band b{color:var(--txt);}
+  .phase{display:inline-block; padding:2px 8px; border-radius:10px; border:1px solid #2a3647; font-size:10px; color:#b8c4d2;}
+  .panels{display:grid; grid-template-columns:repeat(auto-fill,minmax(370px,1fr)); gap:16px;}
+  .panel{border:1px solid var(--edge); border-top:4px solid var(--c,#888); border-radius:12px; background:var(--panel); padding:14px 16px;}
+  .panel .head{display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
+  .panel h3{font-size:14px;}
+  .panel .pid{font-family:ui-monospace,Consolas,monospace; font-size:10px; color:var(--dim);}
+  .panel .purpose{font-size:11.5px; color:#c3ccd8; margin-bottom:10px; line-height:1.4;}
+  .panel .rows{font-size:11px; color:#c3ccd8; line-height:1.5; margin-bottom:8px;}
+  .panel .rows b{color:var(--txt);}
+  .talks{display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin:6px 0 10px;}
+  .talks .lbl{font-size:11px; color:var(--dim);}
+  .talks span{background:#182130; border:1px solid #263342; border-radius:6px; padding:1px 6px; font-size:10px; color:#9fb1c3; font-family:ui-monospace,Consolas,monospace;}
+  .current{font-size:11px; color:var(--dim); margin:8px 0;}
+  .current b{color:var(--cyan); background:#0d1b26; border:1px solid #1f3a4d; padding:2px 8px; border-radius:6px;}
+  .states{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;}
+  .states .st{font-size:9px; padding:2px 7px; border-radius:8px; border:1px solid #263342; color:#9fb1c3;}
+  .states .st.on{background:#173241; border-color:#2b5c78; color:var(--cyan); font-weight:600;}
+  .trans{display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:10px;}
+  .trans .cur{color:var(--dim);}
+  .trans button{background:#182330; border:1px solid #2c3c4e; color:#b8d4e6; border-radius:6px; padding:3px 8px; cursor:pointer; font-size:10.5px;}
+  .trans button:hover{background:#1f3042;}
+  .trans .sep{color:#4a5a6c;}
+  .next-step{margin-top:11px; font-size:10.5px; color:var(--dim);}
+  .next-step b{color:var(--txt);}
+  .jsondump{margin-top:28px; border:1px solid var(--edge); border-radius:12px; background:#0b1016;}
+  .jsondump summary{cursor:pointer; padding:12px 16px; color:var(--dim); font-size:12px; list-style:none;}
+  .jsondump summary:before{content:"▸ "; }
+  .jsondump summary:hover{color:var(--txt);}
+  .jsondump pre{max-height:480px; overflow:auto; padding:14px 18px; font-size:11px; line-height:1.45; color:#9fd6a8;}
+  .machine-note{margin-top:14px; font-size:11px; color:var(--dim); line-height:1.5;}
+  .machine-note b{color:var(--cyan);}
+  .machine-note code{background:#161c26; padding:1px 5px; border-radius:4px; color:#e8b339; font-size:10px;}
+  .load-err{color:var(--red); font-size:12px; padding:16px 0; display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>LBE Product Surface — Living Spec <span id="ownerpill" class="pill lbe">LIVING SPEC</span></h1>
+    <div class="meta" id="meta">Loading model…</div>
+  </header>
+
+  <div class="band" id="phaseband"></div>
+  <div class="owner-cls" id="ownerbar"></div>
+
+  <div class="panels" id="panels">
+    <p class="err" id="err" style="display:none"></p>
+  </div>
+
+  <div class="machine-note">
+    <b>Machine legibility:</b> every panel card is a <code>&lt;section data-panel-id data-owner
+    data-phase data-current-state&gt;</code>. The model below is the <b>stable diff target</b>;
+    never hand-parse a rendered page.
+  </div>
+
+  <div class="jsondump">
+    <details>
+      <summary>Machine model — the disciplined JSON this page renders from (copy to diff)</summary>
+      <pre id="json"></pre>
+    </details>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const SHORT = { "agent":"AGENT","lbe":"LBE","knowledge_workspace":"K&W","lbe_validation":"LBE·VAL","lbe_persistence":"LBE·PERSIST" };
+
+function renderOwner({ card, key }){
+  const el = document.createElement("div"); el.className="card";
+  el.innerHTML = "<h2>"+key+" · "+card.name+"</h2>"
+    + "<ul>"+card.owns.map(o=>"<li>owns <b>"+o+"</b></li>").join("")+"</ul>"
+    + "<div class='not'>does not own: "+card.does_not_own.join(", ")+"</div>";
+  return el;
+}
+function renderPanel(p){
+  const sec = document.createElement("section");
+  sec.className = "panel";
+  sec.dataset.panelId = p.id;
+  sec.dataset.owner = p.owner;
+  sec.dataset.phase = p.phase.join(",");
+  sec.dataset.currentState = p.states[0];
+
+  let cur = p.states[0];
+
+  sec.innerHTML =
+    '<div class="head"><h3>'+p.name+'</h3><span class="pid">'+p.id+'</span></div>'
+    + '<div class="rows">owner: <b>'+OWNER_HTML(p.owner)+'</b><br>phase: '+p.phase.join(", ")+'</div>'
+    + '<div class="purpose">'+p.purpose+'</div>'
+    + '<div class="talks"><span class="l">talks to:</span> '+p.talks_to.map(t=>"<span>"+t+"</span>").join(" ")+'</div>'
+    + '<div class="current">current state: <b data-state>'+cur+'</b></div>'
+    + '<div class="states">'+p.states.map(s=>"<span class='st' data-chip='"+s+"'>"+s+"</span>").join("")+'</div>'
+    + '<div class="trans" data-trans></div>'
+    + '<div class="next-step"><b>next step:</b> '+p.next_step+'</div>';
+
+  const stateEl = sec.querySelector("[data-state]");
+  const transEl = sec.querySelector("[data-trans]");
+  const chips = sec.querySelectorAll("[data-chip]");
+
+  function refresh(){
+    sec.dataset.currentState = cur;
+    stateEl.textContent = cur;
+    chips.forEach(c=>c.classList.toggle("on", c.dataset.chip===cur));
+    // outgoing transitions from current state
+    const outs = p.transitions.filter(t=>t.from===cur);
+    if(outs.length===0){ transEl.textContent = "(terminal)"; return; }
+    transEl.innerHTML = "";
+    outs.forEach((t,i)=>{
+      if(i>0){ const s=document.createElement("span"); s.className="sep"; s.textContent="-"; transEl.appendChild(s); }
+      const b=document.createElement("button");
+      b.textContent = "→ "+t.to+"  ("+t.by+")";
+      b.title = t.from+" --"+t.by+"--> "+t.to;
+      b.onclick = ()=>{ cur=t.to; refresh(); };
+      transEl.appendChild(b);
+    });
+  }
+  refresh();
+  return sec;
+}
+function OWNER_HTML(o){
+  return '<span class="pill '+o+'">'+ (SHORT[o]||o) +'</span>';
+}
+function render(m){
+  $("meta").textContent = "schema v"+m.schema_version+" · kind "+m.kind+" · status "+m.status;
+  const band = $("phaseband");
+  band.innerHTML = "<b>phases:</b> "+m.lifecycle.phase_sequence.map(ph=>"<span class='phase'>"+ph+"</span>").join(" ") 
+    + " &nbsp;·&nbsp; loop: " + m.lifecycle.loop_back.join(" → ");
+  const ob = $("ownerbar");
+  Object.entries(m.owner_classes).forEach(([k,c])=>ob.appendChild(renderOwner({ card:c, key:k })));
+  const panels = $("panels");
+  m.panels.forEach(p=>panels.appendChild(renderPanel(p)));
+  $("json").textContent = JSON.stringify(m, null, 2);
+}
+async function loadSpec(){
+  try{
+    const m = await fetch("../../design/lbe_product_surface_spec.json").then(r=>{ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
+    render(m);
+  }catch(e){
+    const err = $("err"); err.style.display="block";
+    err.textContent = "Could not load the spec model ("+e.message+"). Serve over HTTP, not file:// . Example: python -m http.server 8080  then open  http://localhost:8080/docs/reference/ui/lbe_product_surface.html";
+    $("meta").textContent = "model load failed — see error below";
+  }
+}
+loadSpec();
+</script>
+</body>
+</html>

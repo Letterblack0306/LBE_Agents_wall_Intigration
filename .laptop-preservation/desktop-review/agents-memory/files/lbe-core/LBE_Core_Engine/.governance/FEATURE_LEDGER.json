@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "features": [
+    {
+      "id": "governance-authority",
+      "state": "ACTIVE",
+      "reason": "Provides the active governance document index and validates authority references.",
+      "ownedBy": "governance"
+    },
+    {
+      "id": "source-lifecycle-registry",
+      "state": "ACTIVE",
+      "reason": "Declares source lifecycle state so orphan detection is data-driven.",
+      "ownedBy": "governance"
+    },
+    {
+      "id": "agent-preflight-validation",
+      "state": "ACTIVE",
+      "reason": "Ensures fast validation includes governance gates that block source changes.",
+      "ownedBy": "governance"
+    },
+    {
+      "id": "issue-scope-governance",
+      "state": "ACTIVE",
+      "reason": "Prevents agents from mixing unrelated work into the current task by adding files to the changelog.",
+      "ownedBy": "governance"
+    }
+  ],
+  "states": [
+    "ACTIVE",
+    "PLANNED",
+    "DEPRECATED",
+    "REMOVED",
+    "BLOCKED",
+    "UNKNOWN"
+  ]
+}

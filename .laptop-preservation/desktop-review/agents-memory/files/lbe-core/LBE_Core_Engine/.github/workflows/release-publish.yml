@@ -1,0 +1,68 @@
+# release-publish — Publish @letterblack/lbe-core to npm
+# Protected environment with human approval.
+# Core package only — no @letterblack/lbe-exec.
+# Tag before npm publish, verify after publish.
+name: release-publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to publish (must match git tag)"
+        required: true
+        type: string
+
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  LBE_PUBLIC_PACKAGE_VERSION: ${{ inputs.version }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify version
+        run: |
+          echo "Publishing @letterblack/lbe-core v${{ inputs.version }}"
+          node -e "const v = '${{ inputs.version }}'.split('.'); if (v.length !== 3 || v.some(n => isNaN(Number(n)))) { process.exit(1) }"
+
+      - name: Build engine
+        run: npm run build:engine
+
+      - name: Build public SDK
+        run: npm run build:public-sdk
+
+      - name: Validate generated CLI
+        run: node --check release-public/dist/cli.js
+
+      - name: npm pack dry-run
+        run: |
+          cd release-public
+          npm pack --dry-run --json
+
+      - name: Tag release
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git tag v${{ inputs.version }}
+          git push origin v${{ inputs.version }}
+
+      - name: Publish @letterblack/lbe-core
+        run: |
+          cd release-public
+          npm publish --access public
+
+      - name: Verify npm registry
+        run: |
+          npm view @letterblack/lbe-core@${{ inputs.version }} version
+          echo "Verified @letterblack/lbe-core@${{ inputs.version }} is published"

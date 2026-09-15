@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LBE Tool Definition",
+  "type": "object",
+  "required": ["id", "description", "permission", "risk", "input_schema", "output_schema"],
+  "properties": {
+    "id": {"type": "string"},
+    "description": {"type": "string"},
+    "permission": {"enum": ["read-only", "controlled-execution", "write", "destructive"]},
+    "risk": {"enum": ["low", "medium", "high", "critical"]},
+    "timeout_seconds": {"type": "integer", "minimum": 1},
+    "preconditions": {"type": "array", "items": {"type": "string"}},
+    "failure_modes": {"type": "array", "items": {"type": "string"}},
+    "input_schema": {"type": "object"},
+    "output_schema": {"type": "object"}
+  }
+}

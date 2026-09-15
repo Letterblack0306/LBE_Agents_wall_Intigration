@@ -1,0 +1,98 @@
+name: LBE Release Check
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate LBE core release surface
+    runs-on: ubuntu-latest
+
+    env:
+      MAINHEAD_GUARD_CI_VALIDATE: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+
+    defaults:
+      run:
+        working-directory: LBE_Core_Engine
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: LBE_Core_Engine/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Rust WASM target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: CLI source syntax check
+        run: |
+          node --check src/cli/main.js
+          node --check src/cli/parseArgs.js
+          node --check src/cli/public-strings.js
+          node --check src/cli/tui.js
+          node --check src/cli/tui-flows.js
+          node --check src/cli/commands/init.js
+          node --check src/cli/commands/status.js
+          node --check src/cli/commands/verify.js
+          node --check src/cli/commands/dryrun.js
+          node --check src/cli/commands/run.js
+          node --check src/exec/localExecutor.js
+          node --check src/state/scopeContract.js
+          node --check src/state/auditMode.js
+          node --check src/state/proofRunner.js
+
+      - name: Rust/WASM checks
+        run: |
+          cargo test --manifest-path native/lbe-engine/Cargo.toml
+          cargo build --target wasm32-unknown-unknown --release --manifest-path native/lbe-engine/Cargo.toml
+
+      - name: Release hygiene gate
+        run: npm run release:check
+
+      - name: Build public SDK
+        run: npm run build:public-sdk
+
+      - name: Generated CLI syntax check
+        run: node --check release-public/dist/cli.js
+
+      - name: Public artifact check
+        run: node scripts/check-public-artifact.mjs
+
+      - name: Audit checks
+        run: |
+          npm run audit:encoding
+          npm run audit:public-docs
+
+      - name: Forbidden public string scan
+        run: |
+          set +e
+          grep -RIn "@letterblack/lbe-exec|lbe-exec|release-exec|Used in production|After Effects|all governance decisions|automatic rollback|persistent replay" release-public --include="*.md" --include="*.json" --include="*.ts" --include="*.js"
+          EXIT_CODE=$?
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "FAIL: forbidden public strings found"
+            exit 1
+          fi
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            echo "PASS: no forbidden public strings found"
+            exit 0
+          fi
+          echo "FAIL: grep error $EXIT_CODE"
+          exit 1
+
+      - name: npm pack dry-run
+        run: |
+          cd release-public
+          npm pack --dry-run --json

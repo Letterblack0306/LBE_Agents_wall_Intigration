@@ -1,0 +1,12 @@
+commit 31984f5f5d982dc3b6541d5d52eeba220b59ee16
+Author:     Letterblack <pravesh.pandey@letterblack.ae>
+AuthorDate: Mon Sep 14 04:43:24 2026 +0400
+Commit:     Letterblack <pravesh.pandey@letterblack.ae>
+CommitDate: Mon Sep 14 04:43:24 2026 +0400
+
+    Record launcher-source reconciliation scope under existing Cline/LBE integration intent
+    
+    Adds the AFFECTED_STRUCTURE/EXISTING_OWNER/DESIRED_RESULT/NON_GOALS scope note
+    for the single-command LBE CLI/TUI launcher composition slice. Under
+    LBE-INTENT-CLINE-CLI-LBE-RUNTIME-INTEGRATION-001. No new intent invented; no
+    duplicate authority introduced.

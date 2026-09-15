@@ -1,0 +1,37 @@
+#!/bin/sh
+# pre-push: runs from git root (Z:\Core_Control)
+# Main/tag push requires full release hygiene. Feature branches use lighter checks.
+set -e
+
+node LBE_Core_Engine/scripts/mainhead-guard.mjs
+node LBE_Core_Engine/scripts/workspace-index-guard.mjs
+
+# Get the branch being pushed
+while read local_ref local_sha remote_ref remote_sha; do
+  BRANCH=$(echo "$remote_ref" | sed 's|refs/heads/||')
+done
+
+# Full release gate for main branch and release tags
+case "$BRANCH" in
+  main|release/*)
+    echo "[pre-push] Running release hygiene gate for $BRANCH..."
+    node LBE_Core_Engine/scripts/release-hygiene.mjs --quick || {
+      echo "[pre-push] BLOCKED: release hygiene failed"
+      exit 1
+    }
+    ;;
+  *)
+    echo "[pre-push] Feature branch $BRANCH — skipping full release gate"
+    ;;
+esac
+
+# Block tag push without full check
+TAG=$(echo "$remote_ref" | grep 'refs/tags/v')
+if [ -n "$TAG" ]; then
+  echo "[pre-push] Tag push detected — running full release hygiene..."
+  node LBE_Core_Engine/scripts/release-hygiene.mjs || {
+    echo "[pre-push] BLOCKED: release hygiene failed for tag"
+    exit 1
+  }
+fi
+

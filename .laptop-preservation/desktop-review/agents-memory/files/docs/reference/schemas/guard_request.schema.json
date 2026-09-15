@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Guard Request",
+  "type": "object",
+  "required": [
+    "request_id",
+    "guard_id",
+    "workspace_id",
+    "reason",
+    "evidence_refs"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string"
+    },
+    "guard_id": {
+      "type": "string"
+    },
+    "guard_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requested_mode": {
+      "enum": [
+        "inspect"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

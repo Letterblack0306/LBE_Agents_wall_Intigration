@@ -1,0 +1,60 @@
+{
+  "npmFiles": [
+    "dist/",
+    "assets/",
+    "docs/decisions/*.md",
+    "types.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "publicRepoFiles": [
+    "assets",
+    "dist",
+    "docs",
+    ".github",
+    "LICENSE",
+    "README.md",
+    "package.json",
+    "types.d.ts"
+  ],
+  "forbiddenNpmPackedPaths": [
+    "src/",
+    "test/",
+    "tests/",
+    "scripts/",
+    "native/",
+    "runtime/",
+    "release/",
+    "release-public/",
+    "release-exec/",
+    ".github/",
+    ".githooks/",
+    "config/",
+    "keys/",
+    "data/",
+    "package-lock.json",
+    ".env",
+    "Thumbs.db",
+    ".DS_Store",
+    "Desktop.ini",
+    "*.map"
+  ],
+  "forbiddenTextMarkers": [
+    "secretKey",
+    "keyId",
+    "nonce",
+    "Ed25519",
+    "HMAC",
+    "verifyEd25519",
+    "createPolicySignatureEnvelope",
+    "WEAK_PROOF",
+    "internal adapter",
+    "gate pipeline",
+    "executeAdapter",
+    "evaluatePolicy",
+    "validateCommand",
+    "child_process",
+    "allowAdapters",
+    "allowCommands"
+  ]
+}
