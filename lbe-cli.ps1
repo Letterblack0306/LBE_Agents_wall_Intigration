@@ -57,7 +57,40 @@ $workspaceId = if ($env:LBE_PROJECT_WORKSPACE_ID) {
     "workspace-$($hex.Substring(0, 24))"
 }
 
-if ([string]::IsNullOrWhiteSpace($SessionId)) {
+$providerConfig = Join-Path $env:USERPROFILE '.cline\data\settings\providers.json'
+if (-not (Test-Path -LiteralPath $providerConfig -PathType Leaf)) {
+    throw "Provider configuration is required but was not found: $providerConfig"
+}
+$env:LBE_PROVIDER_CONFIG = [IO.Path]::GetFullPath($providerConfig)
+
+$sessionListArgs = @(
+    '-m', 'lbe_guard_inspector.cli', '--format', 'json',
+    'session', 'list',
+    '--database', $Database,
+    '--project-workspace-id', $workspaceId
+)
+$sessionListOutput = & $python @sessionListArgs 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "LBE session listing failed: $([Environment]::NewLine)$($sessionListOutput -join [Environment]::NewLine)"
+}
+try {
+    $sessionList = ($sessionListOutput -join [Environment]::NewLine) | ConvertFrom-Json -ErrorAction Stop
+} catch {
+    throw "LBE session-list response was not valid JSON"
+}
+$session = @($sessionList.sessions) |
+    Where-Object {
+        if (-not $_.session_id -or -not $_.canonical_workspace_root) { return $false }
+        $storedRoot = ([string]$_.canonical_workspace_root).Replace('/', '\').TrimEnd('\')
+        $currentRoot = $workspaceRoot.Replace('/', '\').TrimEnd('\')
+        return $storedRoot -ieq $currentRoot
+    } |
+    Sort-Object updated_at -Descending |
+    Select-Object -First 1
+
+if ($session) {
+    $SessionId = [string]$session.session_id
+} else {
     $SessionId = "lbe-$([guid]::NewGuid().ToString('N'))"
     $createArgs = @(
         '-m', 'lbe_guard_inspector.cli', '--format', 'json',
@@ -66,7 +99,7 @@ if ([string]::IsNullOrWhiteSpace($SessionId)) {
         '--workspace', $workspaceRoot,
         '--project-workspace-id', $workspaceId,
         '--session-id', $SessionId,
-        '--mode', 'coding',
+        '--mode', 'audit',
         '--permission', 'read_only',
         '--runtime-policy', 'audit'
     )
@@ -83,11 +116,6 @@ $env:LBE_WALL_DATABASE = $Database
 $env:LBE_SESSION_ID = $SessionId
 $env:LBE_TARGET_WORKSPACE = $workspaceRoot
 $env:LBE_PROJECT_WORKSPACE_ID = $workspaceId
-
-$providerConfig = Join-Path $env:USERPROFILE '.cline\data\settings\providers.json'
-if (Test-Path -LiteralPath $providerConfig -PathType Leaf) {
-    $env:LBE_PROVIDER_CONFIG = $providerConfig
-}
 
 $lbeExe = Join-Path $PSScriptRoot 'lbe.exe'
 if (-not (Test-Path -LiteralPath $lbeExe -PathType Leaf)) {
