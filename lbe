@@ -1,6 +1,9 @@
 @echo off
 REM LBE - Lockstep Boundary Engine
-REM LBE-NATIVE INTERFACE (NOT Cline)
-REM Launches the LBE Textual TUI
-
-python -m lbe_guard_inspector.textual_tui
+REM Canonical user entrypoint: forwards to the existing LBE CLI/TUI wrapper.
+REM Runtime authority remains the LBE Persistent Agent Wall.
+setlocal
+set "SCRIPT_DIR=%~dp0"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%lbe-cli.ps1" -Workspace "%CD%" -Arguments %*
+set "EXIT_CODE=%ERRORLEVEL%"
+endlocal & exit /b %EXIT_CODE%
