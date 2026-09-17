@@ -1,97 +1,104 @@
 # LBE CLI - Lockstep Boundary Engine
-# LBE-NATIVE INTERFACE (NOT Cline)
+# Canonical LBE-branded terminal launcher.
+# LBE owns session identity, policy, authorization, execution, receipts, evidence,
+# persistence, validation, and completion. The Rust binary is only the UI client.
 
+[CmdletBinding()]
 param(
-    [string]$Workspace = $PWD.Path,
-    [string[]]$Arguments = @()
+    [string]$Workspace = (Get-Location).Path,
+    [string[]]$Arguments = @(),
+    [string]$WallRoot = $(if ($env:LBE_WALL_ROOT) { $env:LBE_WALL_ROOT } else { '' }),
+    [string]$Database = $(if ($env:LBE_WALL_DATABASE) { $env:LBE_WALL_DATABASE } else { '' }),
+    [string]$SessionId = $(if ($env:LBE_SESSION_ID) { $env:LBE_SESSION_ID } else { '' })
 )
 
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 
-# Provider configuration resolution
-# Cline providers.json is the source of truth for provider settings
-$clineProvidersPath = Join-Path $env:USERPROFILE '.cline\data\settings\providers.json'
-if (Test-Path $clineProvidersPath) {
-    $env:LBE_PROVIDER_CONFIG = $clineProvidersPath
-    Write-Host "  Provider config: $clineProvidersPath" -ForegroundColor Green
+function Resolve-RequiredDirectory([string]$Path, [string]$Name) {
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw "$Name is not configured. Set LBE_WALL_ROOT for the installed LBE runtime."
+    }
+    $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
+    if (-not (Test-Path -LiteralPath $resolved.Path -PathType Container)) {
+        throw "$Name is not a directory: $($resolved.Path)"
+    }
+    return $resolved.Path
+}
+
+$workspaceRoot = (Resolve-Path -LiteralPath $Workspace -ErrorAction Stop).Path
+if (-not (Test-Path -LiteralPath $workspaceRoot -PathType Container)) {
+    throw "Workspace is not a directory: $workspaceRoot"
+}
+
+$wallRoot = Resolve-RequiredDirectory $WallRoot 'LBE_WALL_ROOT'
+$python = if ($env:LBE_WALL_PYTHON) {
+    $env:LBE_WALL_PYTHON
 } else {
-    Write-Host "  Provider config: NOT FOUND" -ForegroundColor Yellow
+    (Get-Command python -ErrorAction Stop).Source
+}
+if (-not (Test-Path -LiteralPath $python -PathType Leaf) -and $python -notmatch '^[^\\/:]+$') {
+    throw "LBE_WALL_PYTHON is unavailable: $python"
 }
 
-# LBE Branding
-Write-Host ''
-Write-Host '  ============================================================' -ForegroundColor Cyan
-Write-Host '  ==  LBE - LOCKSTEP BOUNDARY ENGINE                        ==' -ForegroundColor Cyan
-Write-Host '  ==  Accountable AI Agent Terminal                        ==' -ForegroundColor Yellow
-Write-Host '  ==  LETTERBLACK - LBE-NATIVE (NOT CLINE)                 ==' -ForegroundColor Magenta
-Write-Host '  ============================================================' -ForegroundColor Cyan
-Write-Host ''
-Write-Host "  Workspace: $Workspace" -ForegroundColor Gray
-Write-Host ''
-
-# Normal conversation path: launch the Rust TUI.
-# The TUI uses the existing Cline interactive mechanics through the
-# LBE authority boundary (RealLbeWrapper -> product_entry.py).
-# lbe-cli.ps1 is a launcher/fallback only - no fabricated conversation.
-$lbeExe = Join-Path $PSScriptRoot 'lbe.exe'
-if (Test-Path $lbeExe) {
-    & $lbeExe --workspace $Workspace
-    exit $LASTEXITCODE
+if ([string]::IsNullOrWhiteSpace($Database)) {
+    $Database = Join-Path $wallRoot '.lbe\lbe.sqlite3'
+}
+$databaseParent = Split-Path -Parent $Database
+if (-not (Test-Path -LiteralPath $databaseParent -PathType Container)) {
+    New-Item -ItemType Directory -Path $databaseParent -Force | Out-Null
 }
 
-# Fallback: if lbe.exe is not available, run diagnostic commands only.
-# Diagnostic commands (no interactive conversation):
-$FG = @{G='Green';A='Yellow';R='Red';M='Magenta';C='Cyan';W='White';GR='Gray'}
+$workspaceId = if ($env:LBE_PROJECT_WORKSPACE_ID) {
+    $env:LBE_PROJECT_WORKSPACE_ID
+} else {
+    $bytes = [Text.Encoding]::UTF8.GetBytes($workspaceRoot.ToLowerInvariant())
+    $hash = [Security.Cryptography.SHA256]::HashData($bytes)
+    $hex = [BitConverter]::ToString($hash).Replace('-', '').ToLowerInvariant()
+    "workspace-$($hex.Substring(0, 24))"
+}
 
-if ($Arguments -and $Arguments.Count -gt 0) {
-    $arg = $Arguments[0]
-    if ($arg -match '^(/evidence|/memory|/skills|/audit|/governance|/help|/quit)$') {
-        switch ($arg) {
-            '/evidence' {
-                Write-Host "  Evidence Browser - LBE governed" -ForegroundColor Cyan
-                Write-Host "  Query: LBE evidence through product_entry.py" -ForegroundColor Gray
-            }
-            '/memory' {
-                Write-Host "  Memory Recall - LBE governed" -ForegroundColor Cyan
-                Write-Host "  Query: LBE memory through LBE_MEMORY_DB" -ForegroundColor Gray
-            }
-            '/skills' {
-                Write-Host "  Skills Registry - LBE bounded" -ForegroundColor Cyan
-                Write-Host "  Query: LBE governed skill surface" -ForegroundColor Gray
-            }
-            '/audit' {
-                Write-Host "  Audit Trail" -ForegroundColor Cyan
-                Write-Host "  Authorization: BOUNDED" -ForegroundColor Gray
-                Write-Host "  Evidence: ENFORCED" -ForegroundColor Gray
-                Write-Host "  Receipts: ENFORCED" -ForegroundColor Gray
-                Write-Host "  Mutation: APPROVAL_REQUIRED" -ForegroundColor Gray
-            }
-            '/governance' {
-                Write-Host "  Governance" -ForegroundColor Cyan
-                Write-Host "  Authorization: BOUNDED" -ForegroundColor Gray
-                Write-Host "  Mutation Policy: APPROVAL_REQUIRED" -ForegroundColor Gray
-                Write-Host "  Evidence: ENFORCED" -ForegroundColor Gray
-                Write-Host "  Receipts: ENFORCED" -ForegroundColor Gray
-                Write-Host "  Session: ACTIVE" -ForegroundColor Gray
-            }
-            '/help' {
-                Write-Host "  LBE CLI Commands:" -ForegroundColor Cyan
-                Write-Host "  /evidence  - Browse evidence records" -ForegroundColor Gray
-                Write-Host "  /memory    - Recall session memory" -ForegroundColor Gray
-                Write-Host "  /skills    - Inspect governed skills" -ForegroundColor Gray
-                Write-Host "  /audit     - Show audit trail" -ForegroundColor Gray
-                Write-Host "  /governance - Show governance status" -ForegroundColor Gray
-                Write-Host "  /help      - Show this help" -ForegroundColor Gray
-                Write-Host "  /quit      - Exit" -ForegroundColor Gray
-                Write-Host "  Modes: PLAN | ACT" -ForegroundColor Gray
-            }
-            '/quit' { Write-Host "  Goodbye" -ForegroundColor Cyan }
-        }
-        exit 0
+if ([string]::IsNullOrWhiteSpace($SessionId)) {
+    $SessionId = "lbe-$([guid]::NewGuid().ToString('N'))"
+    $createArgs = @(
+        '-m', 'lbe_guard_inspector.cli', '--format', 'json',
+        'session', 'create',
+        '--database', $Database,
+        '--workspace', $workspaceRoot,
+        '--project-workspace-id', $workspaceId,
+        '--session-id', $SessionId,
+        '--mode', 'coding',
+        '--permission', 'read_only',
+        '--runtime-policy', 'audit'
+    )
+    $createOutput = & $python @createArgs 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "LBE session creation failed: $([Environment]::NewLine)$($createOutput -join [Environment]::NewLine)"
     }
 }
 
-# No lbe.exe available - inform user
-Write-Host "  ERROR: lbe.exe not found at $lbeExe" -ForegroundColor Red
-Write-Host "  Build with: cargo build" -ForegroundColor Gray
-exit 1
+$env:LBE_RUNTIME = 'real'
+$env:LBE_WALL_ROOT = $wallRoot
+$env:LBE_WALL_PYTHON = $python
+$env:LBE_WALL_DATABASE = $Database
+$env:LBE_SESSION_ID = $SessionId
+$env:LBE_TARGET_WORKSPACE = $workspaceRoot
+$env:LBE_PROJECT_WORKSPACE_ID = $workspaceId
+
+$providerConfig = Join-Path $env:USERPROFILE '.cline\data\settings\providers.json'
+if (Test-Path -LiteralPath $providerConfig -PathType Leaf) {
+    $env:LBE_PROVIDER_CONFIG = $providerConfig
+}
+
+$lbeExe = Join-Path $PSScriptRoot 'lbe.exe'
+if (-not (Test-Path -LiteralPath $lbeExe -PathType Leaf)) {
+    throw "LBE client binary is unavailable: $lbeExe"
+}
+
+Write-Host "LBE" -ForegroundColor Cyan
+Write-Host "Workspace: $workspaceRoot" -ForegroundColor Gray
+Write-Host "Session:   $SessionId" -ForegroundColor Gray
+Write-Host "Runtime:   LBE authoritative runtime" -ForegroundColor Gray
+Write-Host "Provider:  discovered from configured Cline provider settings" -ForegroundColor Gray
+
+& $lbeExe '--workspace' $workspaceRoot @Arguments
+exit $LASTEXITCODE
