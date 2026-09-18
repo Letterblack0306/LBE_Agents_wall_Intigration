@@ -207,9 +207,9 @@ pub(crate) enum AgentMode {
 impl AgentMode {
     pub(crate) fn next(self) -> Self {
         match self {
-            Self::Plan => Self::Build,
-            Self::Build => Self::Audit,
-            Self::Audit => Self::Plan,
+            Self::Build => Self::Plan,
+            Self::Plan => Self::Audit,
+            Self::Audit => Self::Build,
         }
     }
 
