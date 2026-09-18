@@ -2924,12 +2924,7 @@ impl RealLbeWrapper {
                 "--database",
             ])
             .arg(&database)
-            .args([
-                "--session-id",
-                &session_id,
-                "--mode",
-                requested_mode,
-            ])
+            .args(["--session-id", &session_id, "--mode", requested_mode])
             .output()
             .map_err(|error| LbeError::new(format!("mode transition failed to launch: {error}")))?;
         let payload = parse_workspace_payload(&output.stdout, "session.mode")?;
