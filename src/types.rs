@@ -267,7 +267,10 @@ impl ChildAgentStatus {
     }
 
     pub(crate) fn is_terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::Failed | Self::Rejected | Self::Cancelled)
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::Rejected | Self::Cancelled
+        )
     }
 }
 

@@ -2943,11 +2943,7 @@ impl RealLbeWrapper {
         {
             return Err(LbeError::new("session.mode response identity mismatch"));
         }
-        if payload
-            .get("accepted")
-            .and_then(serde_json::Value::as_bool)
-            != Some(true)
-        {
+        if payload.get("accepted").and_then(serde_json::Value::as_bool) != Some(true) {
             let status = payload
                 .get("status")
                 .and_then(serde_json::Value::as_str)

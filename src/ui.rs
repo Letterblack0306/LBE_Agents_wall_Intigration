@@ -4,22 +4,22 @@ use std::{
 };
 
 use ratatui::termina::{
-    EventReader, PlatformTerminal, Terminal as _,
     escape::csi::{Csi, DecPrivateMode, DecPrivateModeCode, Mode},
+    EventReader, PlatformTerminal, Terminal as _,
 };
 use ratatui::{
-    Terminal,
     backend::TerminaBackend,
     layout::{Alignment, Constraint, Layout, Margin},
     prelude::*,
     style::{Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
+    Terminal,
 };
 use unicode_width::UnicodeWidthChar;
 
 use crate::{
-    app::{App, command_palette_commands},
+    app::{command_palette_commands, App},
     types::*,
 };
 
@@ -38,7 +38,11 @@ pub(crate) fn display_token(
     ascii: &'static str,
     ascii_mode: bool,
 ) -> &'static str {
-    if ascii_mode { ascii } else { unicode }
+    if ascii_mode {
+        ascii
+    } else {
+        unicode
+    }
 }
 
 pub(crate) fn init_terminal() -> io::Result<(AppTerminal, EventReader)> {
@@ -426,23 +430,25 @@ fn draw_landing(frame: &mut Frame, app: &App) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(PALETTE.green))
         .style(Style::default().bg(PALETTE.bg))
-        .title(Line::from(vec![
-            Span::styled(
-                " LBE - LOCKSTEP BOUNDARY ENGINE ",
-                Style::default().fg(PALETTE.green).add_modifier(Modifier::BOLD),
-            ),
-        ]))
+        .title(Line::from(vec![Span::styled(
+            " LBE - LOCKSTEP BOUNDARY ENGINE ",
+            Style::default()
+                .fg(PALETTE.green)
+                .add_modifier(Modifier::BOLD),
+        )]))
         .title_alignment(Alignment::Center);
 
     let inner = block.inner(sections[1]);
     frame.render_widget(block, sections[1]);
 
     // Landing content
-        let mut lines = vec![
+    let mut lines = vec![
         Line::default(),
         Line::from(Span::styled(
             "Welcome to LBE",
-            Style::default().fg(PALETTE.amber).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(PALETTE.amber)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::default(),
         Line::from(Span::styled(
@@ -458,7 +464,7 @@ fn draw_landing(frame: &mut Frame, app: &App) {
             "Provider:",
             Style::default().fg(PALETTE.muted),
         )),
-                Line::from(Span::styled(
+        Line::from(Span::styled(
             if app.snapshot.providers.is_empty() {
                 "  ▸ Select a provider (F2)".to_string()
             } else {
@@ -471,10 +477,7 @@ fn draw_landing(frame: &mut Frame, app: &App) {
             }),
         )),
         Line::default(),
-        Line::from(Span::styled(
-            "Model:",
-            Style::default().fg(PALETTE.muted),
-        )),
+        Line::from(Span::styled("Model:", Style::default().fg(PALETTE.muted))),
         Line::from(Span::styled(
             if app.snapshot.model_id.is_empty() {
                 "  ▸ Select a model (F3)".to_string()

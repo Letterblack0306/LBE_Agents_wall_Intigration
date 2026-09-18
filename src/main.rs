@@ -16,7 +16,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ratatui::termina::{EventReader, event::Event};
+use ratatui::termina::{event::Event, EventReader};
 
 use app::App;
 use events::LbeEvent;
@@ -529,7 +529,7 @@ fn run(
                 LbeEvent::SnapshotUpdated { snapshot }
                     if snapshot.workspace_id.is_some()
             );
-                        app.reduce_lbe_event(event);
+            app.reduce_lbe_event(event);
             if use_real_runtime && !startup_options_applied && has_authoritative_workspace {
                 startup_options_applied = true;
                 // Auto-refresh provider catalog so the landing page shows
@@ -586,4 +586,3 @@ fn run(
     wrapper.shutdown();
     Ok(())
 }
-

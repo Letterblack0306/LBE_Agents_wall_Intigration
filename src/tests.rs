@@ -6,15 +6,16 @@ use crate::{
     types::*,
     ui::{mock_panel_text_for_app, *},
     wrapper::{
-        LbeWrapper, MockLbeWrapper, RealLbeWrapper, executed_receipt_id, governed_response_status,
-        parse_provider_check_payload, parse_provider_list_payload, parse_workspace_payload,
-        validate_provenance, validate_validation, workspace_glob_matches, workspace_list_entries,
-        workspace_patch_result, workspace_read_content, workspace_search_results,
+        executed_receipt_id, governed_response_status, parse_provider_check_payload,
+        parse_provider_list_payload, parse_workspace_payload, validate_provenance,
+        validate_validation, workspace_glob_matches, workspace_list_entries,
+        workspace_patch_result, workspace_read_content, workspace_search_results, LbeWrapper,
+        MockLbeWrapper, RealLbeWrapper,
     },
 };
 
 use ratatui::termina::event::{KeyCode, KeyEvent, Modifiers};
-use ratatui::{Terminal, backend::TestBackend};
+use ratatui::{backend::TestBackend, Terminal};
 use std::time::{Duration, Instant};
 
 struct RecordingWrapper {
@@ -113,19 +114,15 @@ fn governed_response_status_accepts_only_contract_statuses() {
 #[test]
 fn governed_response_status_rejects_missing_non_string_and_unknown_statuses() {
     let missing = governed_response_status(&serde_json::json!({}), "workspace.list").unwrap_err();
-    assert!(
-        missing
-            .message
-            .contains("workspace.list response omitted status")
-    );
+    assert!(missing
+        .message
+        .contains("workspace.list response omitted status"));
 
     let non_string =
         governed_response_status(&serde_json::json!({"status": 42}), "workspace.glob").unwrap_err();
-    assert!(
-        non_string
-            .message
-            .contains("workspace.glob response omitted status")
-    );
+    assert!(non_string
+        .message
+        .contains("workspace.glob response omitted status"));
 
     let unknown =
         governed_response_status(&serde_json::json!({"status": "SUCCESS"}), "workspace.patch")
@@ -217,21 +214,18 @@ fn proposal_approval_lifecycle_reaches_receipt() {
         app.snapshot.execution_status,
         Some(ExecutionStatus::Completed)
     );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("TOOL  REQUESTED · workspace.inspect"))
-    );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("VALIDATION  PASSED"))
-    );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("COMPLETION ACCEPTED"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("TOOL  REQUESTED · workspace.inspect")));
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("VALIDATION  PASSED")));
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("COMPLETION ACCEPTED")));
 }
 
 #[test]
@@ -1075,11 +1069,10 @@ fn continuation_requires_the_active_session_and_projects_assistant_text() {
     app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
     app.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
     assert_eq!(app.snapshot.turn_id.as_deref(), Some("turn_mock_1"));
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("Mock follow-up received"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("Mock follow-up received")));
 
     let error = wrapper
         .submit(
@@ -1114,11 +1107,10 @@ fn new_command_requests_a_runtime_owned_session_and_projects_lineage() {
     assert_eq!(app.snapshot.lineage.parent_session_id, previous_session_id);
     assert_eq!(app.snapshot.lineage.root_session_id, current_session_id);
     assert_eq!(app.phase, Phase::Welcome);
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("SESSION  started"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("SESSION  started")));
     assert!(!app.transcript.iter().any(|line| line == "old transcript"));
 }
 
@@ -1178,11 +1170,10 @@ fn resume_command_requests_runtime_owned_session_restore() {
         Some(original_session.as_str())
     );
     assert_eq!(app.snapshot.lineage.root_session_id, original_session);
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("SESSION  restored"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("SESSION  restored")));
     assert_eq!(app.phase, Phase::Welcome);
 }
 
@@ -1216,17 +1207,15 @@ fn close_command_removes_non_active_runtime_session() {
     }
 
     assert_eq!(app.snapshot.sessions.len(), 1);
-    assert!(
-        !app.snapshot
-            .sessions
-            .iter()
-            .any(|s| s.session_id == original_session)
-    );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("SESSION  closed"))
-    );
+    assert!(!app
+        .snapshot
+        .sessions
+        .iter()
+        .any(|s| s.session_id == original_session));
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("SESSION  closed")));
 }
 
 #[test]
@@ -1236,11 +1225,10 @@ fn close_command_cannot_close_active_session() {
     let active = app.snapshot.session_id.clone().unwrap();
 
     app.handle_command(&format!("/close {active}"), &mut wrapper);
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("active session cannot be closed"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("active session cannot be closed")));
 }
 
 #[test]
@@ -1449,18 +1437,16 @@ fn provider_remove_command_removes_provider_and_models_from_projection() {
         app.reduce_lbe_event(event);
     }
 
-    assert!(
-        !app.snapshot
-            .providers
-            .iter()
-            .any(|provider| provider.provider_id == ProviderId::OpenAi)
-    );
-    assert!(
-        !app.snapshot
-            .models
-            .iter()
-            .any(|model| model.provider_id == ProviderId::OpenAi)
-    );
+    assert!(!app
+        .snapshot
+        .providers
+        .iter()
+        .any(|provider| provider.provider_id == ProviderId::OpenAi));
+    assert!(!app
+        .snapshot
+        .models
+        .iter()
+        .any(|model| model.provider_id == ProviderId::OpenAi));
 }
 
 #[test]
@@ -1518,11 +1504,10 @@ fn mock_read_command_fails_closed_without_fabricating_workspace_evidence() {
 
     app.handle_command("/read README.md", &mut wrapper);
 
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("governed workspace inspection is unavailable in mock mode"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("governed workspace inspection is unavailable in mock mode")));
     assert!(app.snapshot.project_truth.is_none());
 }
 
@@ -1533,11 +1518,10 @@ fn read_command_requires_a_relative_path_argument() {
 
     app.handle_command("/read", &mut wrapper);
 
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("usage: /open <relative-path>"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("usage: /open <relative-path>")));
 }
 
 #[test]
@@ -1547,11 +1531,10 @@ fn open_alias_uses_the_same_governed_read_request_as_read() {
 
     app.handle_command("/open README.md", &mut wrapper);
 
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("governed workspace inspection is unavailable in mock mode"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("governed workspace inspection is unavailable in mock mode")));
 }
 
 #[test]
@@ -1561,11 +1544,10 @@ fn mock_list_command_fails_closed_without_fabricating_workspace_entries() {
 
     app.handle_command("/list .", &mut wrapper);
 
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("governed workspace listing is unavailable in mock mode"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("governed workspace listing is unavailable in mock mode")));
 }
 
 #[test]
@@ -1575,11 +1557,10 @@ fn mock_glob_command_fails_closed_without_fabricating_workspace_matches() {
 
     app.handle_command("/glob **/*.rs", &mut wrapper);
 
-    assert!(
-        app.transcript.iter().any(|line| {
-            line.contains("governed workspace globbing is unavailable in mock mode")
-        })
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| { line.contains("governed workspace globbing is unavailable in mock mode") }));
 }
 
 #[test]
@@ -1589,11 +1570,10 @@ fn glob_command_requires_a_pattern_argument() {
 
     app.handle_command("/glob", &mut wrapper);
 
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("usage: /glob <relative-glob-pattern>"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("usage: /glob <relative-glob-pattern>")));
 }
 
 #[test]
@@ -1603,11 +1583,10 @@ fn mock_search_command_fails_closed_without_fabricating_workspace_results() {
 
     app.handle_command("/search workspace", &mut wrapper);
 
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("governed workspace search is unavailable in mock mode"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("governed workspace search is unavailable in mock mode")));
 }
 
 #[test]
@@ -1617,11 +1596,10 @@ fn search_command_requires_a_query_argument() {
 
     app.handle_command("/search", &mut wrapper);
 
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("usage: /find <query>"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("usage: /find <query>")));
 }
 
 #[test]
@@ -1632,11 +1610,10 @@ fn mock_patch_command_prepares_review_without_mutating() {
     app.handle_command("/patch file.txt abc replacement", &mut wrapper);
 
     assert!(matches!(app.phase, Phase::PatchReview { .. }));
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("PATCH  review ready"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("PATCH  review ready")));
 }
 
 #[test]
@@ -1648,11 +1625,10 @@ fn patch_review_escape_cancels_before_sending_a_mutation_request() {
     app.dismiss_or_reject(&mut wrapper);
 
     assert_eq!(app.phase, Phase::Welcome);
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("review cancelled"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("review cancelled")));
     assert!(app.pending_patch.is_none());
 }
 
@@ -2114,11 +2090,10 @@ fn run_command_requires_a_registered_command_id() {
 
     app.handle_command("/run", &mut wrapper);
 
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("usage: /run <registered-command-id>"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("usage: /run <registered-command-id>")));
 }
 
 #[test]
@@ -2136,11 +2111,10 @@ fn authorize_command_requires_a_capability() {
     let mut app = App::default();
     let mut wrapper = MockLbeWrapper::default();
     app.handle_command("/authorize", &mut wrapper);
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("usage: /authorize <capability>"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("usage: /authorize <capability>")));
 }
 
 #[test]
@@ -2154,11 +2128,9 @@ fn real_wrapper_rejects_foreign_approval_resolution() {
             Instant::now(),
         )
         .expect_err("foreign approval IDs must fail closed");
-    assert!(
-        error
-            .message
-            .contains("no Agent Wall authorization is pending")
-    );
+    assert!(error
+        .message
+        .contains("no Agent Wall authorization is pending"));
 }
 
 #[test]
@@ -2249,11 +2221,10 @@ fn compact_and_doctor_commands_render_mock_runtime_projections() {
     }
     assert_eq!(app.snapshot.context_used, 1);
     assert_eq!(app.snapshot.compaction_state, CompactionState::Completed);
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("CONTEXT  compaction completed"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("CONTEXT  compaction completed")));
 
     app.handle_command("/doctor", &mut wrapper);
     while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
@@ -2414,11 +2385,10 @@ fn patch_projection_retains_authoritative_diff_metadata() {
     assert_eq!(patch.patch, "-old\n+new\n");
     assert_eq!(patch.evidence_ref.as_deref(), Some("evidence-patch-1"));
     assert_eq!(patch.receipt_id, "receipt-patch-1");
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("PATCH  executed") && line.contains("receipt-patch-1"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("PATCH  executed") && line.contains("receipt-patch-1")));
 }
 
 #[test]
@@ -2618,26 +2588,22 @@ fn provider_refresh_emits_discovery_and_validation_lifecycle() {
     while let Some(event) = wrapper.poll_event(Instant::now()).unwrap() {
         app.reduce_lbe_event(event);
     }
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("PROVIDER  discovery started"))
-    );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("PROVIDER  discovery completed"))
-    );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("PROVIDER  validation started · Google Gemini"))
-    );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("PROVIDER  validation completed · LM Studio"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("PROVIDER  discovery started")));
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("PROVIDER  discovery completed")));
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("PROVIDER  validation started · Google Gemini")));
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("PROVIDER  validation completed · LM Studio")));
 }
 
 #[test]
@@ -2793,21 +2759,18 @@ fn execution_projects_checkpoint_and_command_streams_without_spawning_a_process(
         "transcript: {:?}",
         app.transcript
     );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("STDOUT cmd_mock_check"))
-    );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("STDERR cmd_mock_check"))
-    );
-    assert!(
-        app.transcript
-            .iter()
-            .any(|line| line.contains("COMMAND  completed") && line.contains("exit 0"))
-    );
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("STDOUT cmd_mock_check")));
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("STDERR cmd_mock_check")));
+    assert!(app
+        .transcript
+        .iter()
+        .any(|line| line.contains("COMMAND  completed") && line.contains("exit 0")));
     assert_eq!(app.phase, Phase::Completed);
 }
 
@@ -2833,12 +2796,10 @@ fn plan_and_audit_submissions_do_not_enter_execution_flow() {
     audit.submit_or_approve(&mut wrapper, now);
     audit.reduce_lbe_event(wrapper.poll_event(Instant::now()).unwrap().unwrap());
     assert_eq!(audit.phase, Phase::Welcome);
-    assert!(
-        audit
-            .transcript
-            .iter()
-            .any(|line| line.starts_with("AUDIT"))
-    );
+    assert!(audit
+        .transcript
+        .iter()
+        .any(|line| line.starts_with("AUDIT")));
 }
 
 #[test]
@@ -3267,12 +3228,10 @@ fn real_wrapper_submit_is_rejected_when_disconnected() {
         Instant::now(),
     );
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .message
-            .contains("operation requires a connected LBE runtime")
-    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("operation requires a connected LBE runtime"));
 }
 
 #[test]
@@ -3286,12 +3245,10 @@ fn real_wrapper_continuation_is_rejected_when_disconnected() {
         Instant::now(),
     );
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .message
-            .contains("operation requires a connected LBE runtime")
-    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("operation requires a connected LBE runtime"));
 }
 
 #[test]
@@ -3309,11 +3266,9 @@ fn real_wrapper_runtime_refresh_is_rejected_when_disconnected() {
     let error = wrapper
         .submit(UserRequest::RefreshRuntimeSnapshot, Instant::now())
         .expect_err("refresh requires a connected real runtime");
-    assert!(
-        error
-            .message
-            .contains("operation requires a connected LBE runtime")
-    );
+    assert!(error
+        .message
+        .contains("operation requires a connected LBE runtime"));
 }
 
 #[test]
@@ -3321,12 +3276,10 @@ fn real_wrapper_attach_requires_explicit_configuration() {
     let mut wrapper = RealLbeWrapper::new();
     let result = wrapper.attach();
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .message
-            .contains("LBE_WALL_ROOT is not configured")
-    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("LBE_WALL_ROOT is not configured"));
 }
 
 #[test]
@@ -3574,7 +3527,8 @@ fn real_wrapper_workspace_list_projects_agent_wall_receipt_and_evidence() {
     )));
 }
 
-#[ignore]#[test]
+#[ignore]
+#[test]
 fn real_wrapper_workspace_glob_projects_agent_wall_receipt_and_evidence() {
     let required = [
         "LBE_WALL_ROOT",
@@ -3628,7 +3582,8 @@ fn real_wrapper_workspace_glob_projects_agent_wall_receipt_and_evidence() {
     )));
 }
 
-#[ignore]#[test]
+#[ignore]
+#[test]
 fn real_wrapper_workspace_search_projects_agent_wall_receipt_and_evidence() {
     let required = [
         "LBE_WALL_ROOT",
@@ -4103,12 +4058,10 @@ fn validate_session_context_rejects_workspace_project_workspace_id_mismatch() {
     let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
     let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .message
-            .contains("data.workspace.project_workspace_id")
-    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("data.workspace.project_workspace_id"));
 }
 
 #[test]
@@ -4142,12 +4095,10 @@ fn validate_session_context_rejects_canonical_root_mismatch() {
     let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
     let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .message
-            .contains("canonical_workspace_root")
-    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("canonical_workspace_root"));
 }
 
 #[test]
@@ -4269,12 +4220,10 @@ fn validate_session_context_rejects_malformed_opaque_version() {
     let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
     let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .message
-            .contains("owner_payload_version")
-    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("owner_payload_version"));
 }
 
 #[test]
@@ -4382,12 +4331,10 @@ fn validate_session_context_rejects_malformed_transcript_event_id() {
     let projection: SessionContextProjection = serde_json::from_str(sc_json).unwrap();
     let result = validate_session_context(&projection, "ws_abc", "C:\\fake\\root", "sess_xyz");
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .message
-            .contains("transcript[0].event_id")
-    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("transcript[0].event_id"));
 }
 
 #[test]
@@ -4834,16 +4781,14 @@ fn validation_projection_rejects_identity_and_malformed_content() {
     assert!(
         validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", Some("other")).is_err()
     );
-    assert!(
-        validate_validation(
-            &projection,
-            "ws_abc",
-            "sess_xyz",
-            "task_123",
-            Some("task_123")
-        )
-        .is_ok()
-    );
+    assert!(validate_validation(
+        &projection,
+        "ws_abc",
+        "sess_xyz",
+        "task_123",
+        Some("task_123")
+    )
+    .is_ok());
     projection.data.evidence[0].status = ValidationEvidenceStatus::Fail;
     assert!(validate_validation(&projection, "ws_abc", "sess_xyz", "task_123", None).is_ok());
 }
@@ -4982,18 +4927,14 @@ fn terminal_restore_sequence_leaves_alt_screen_and_shows_cursor() {
 #[test]
 fn workspace_payload_parser_rejects_invalid_json_and_non_utf8() {
     let invalid_json = parse_workspace_payload(br#"{invalid}"#, "workspace.patch").unwrap_err();
-    assert!(
-        invalid_json
-            .message
-            .contains("invalid workspace.patch JSON")
-    );
+    assert!(invalid_json
+        .message
+        .contains("invalid workspace.patch JSON"));
 
     let invalid_utf8 = parse_workspace_payload(&[0xff], "workspace.read").unwrap_err();
-    assert!(
-        invalid_utf8
-            .message
-            .contains("workspace.read stdout was not UTF-8")
-    );
+    assert!(invalid_utf8
+        .message
+        .contains("workspace.read stdout was not UTF-8"));
 }
 
 #[test]
@@ -5017,11 +4958,9 @@ fn workspace_read_payload_accepts_content_and_hash() {
 #[test]
 fn workspace_list_payload_requires_entries() {
     let error = workspace_list_entries(&serde_json::json!({})).unwrap_err();
-    assert!(
-        error
-            .message
-            .contains("workspace.list response omitted entries")
-    );
+    assert!(error
+        .message
+        .contains("workspace.list response omitted entries"));
 }
 
 #[test]
