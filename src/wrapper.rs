@@ -2883,6 +2883,117 @@ impl RealLbeWrapper {
         Ok(())
     }
 
+    fn set_real_mode(&mut self, mode: AgentMode) -> Result<(), LbeError> {
+        self.require_connected()?;
+        let wall_root = self
+            .wall_root
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_ROOT is not configured"))?;
+        let database = self
+            .wall_database
+            .clone()
+            .ok_or_else(|| LbeError::new("LBE_WALL_DATABASE is not configured"))?;
+        let session_id = self
+            .session_id
+            .clone()
+            .or_else(|| self.snapshot.session_id.clone())
+            .ok_or_else(|| LbeError::new("LBE_SESSION_ID is not configured"))?;
+        let requested_mode = match mode {
+            AgentMode::Build => "coding",
+            AgentMode::Plan => "investigation",
+            AgentMode::Audit => "audit",
+        };
+        let current_permission = self
+            .snapshot
+            .session_context
+            .as_ref()
+            .and_then(|context| context.data.session.permission.as_deref())
+            .map(str::to_owned);
+        let python = std::env::var_os("LBE_WALL_PYTHON")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("python"));
+        let output = configured_lbe_command(&python, &wall_root)
+            .current_dir(&wall_root)
+            .args([
+                "-m",
+                "lbe_guard_inspector.product_entry",
+                "--format",
+                "json",
+                "session",
+                "mode",
+                "--database",
+            ])
+            .arg(&database)
+            .args([
+                "--session-id",
+                &session_id,
+                "--mode",
+                requested_mode,
+            ])
+            .output()
+            .map_err(|error| LbeError::new(format!("mode transition failed to launch: {error}")))?;
+        let payload = parse_workspace_payload(&output.stdout, "session.mode")?;
+        if !output.status.success() || payload.get("ok") != Some(&serde_json::Value::Bool(true)) {
+            let message = payload
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("LBE rejected the mode transition");
+            return Err(LbeError::new(message));
+        }
+        if payload.get("action").and_then(serde_json::Value::as_str) != Some("session.mode")
+            || payload
+                .get("session_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(session_id.as_str())
+        {
+            return Err(LbeError::new("session.mode response identity mismatch"));
+        }
+        if payload
+            .get("accepted")
+            .and_then(serde_json::Value::as_bool)
+            != Some(true)
+        {
+            let status = payload
+                .get("status")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("MODE_TRANSITION_DENIED");
+            let rationale = payload
+                .get("rationale")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("LBE policy rejected the requested product mode");
+            return Err(LbeError::new(format!("{status}: {rationale}")));
+        }
+        if payload.get("mode").and_then(serde_json::Value::as_str) != Some(requested_mode)
+            || payload
+                .get("resolved_mode")
+                .and_then(serde_json::Value::as_str)
+                != Some(requested_mode)
+        {
+            return Err(LbeError::new(
+                "session.mode response did not confirm the requested effective mode",
+            ));
+        }
+        if let Some(expected_permission) = current_permission.as_deref() {
+            if payload
+                .get("permission")
+                .and_then(serde_json::Value::as_str)
+                != Some(expected_permission)
+            {
+                return Err(LbeError::new(
+                    "session.mode attempted to change LBE permission authority",
+                ));
+            }
+        }
+
+        self.attach()?;
+        if self.snapshot.active_mode != mode {
+            return Err(LbeError::new(
+                "authoritative session projection did not retain requested mode",
+            ));
+        }
+        Ok(())
+    }
+
     fn create_real_session(&mut self) -> Result<(), LbeError> {
         self.require_connected()?;
         let wall_root = self
@@ -2935,7 +3046,7 @@ impl RealLbeWrapper {
                 "--permission",
                 "read_only",
                 "--runtime-policy",
-                "audit",
+                "permissive",
             ])
             .output()
             .map_err(|error| LbeError::new(format!("session creation failed: {error}")))?;
@@ -4822,7 +4933,7 @@ impl LbeWrapper for RealLbeWrapper {
             UserRequest::Reject { approval_id } => {
                 self.resolve_authorization(&approval_id, "reject")
             }
-            UserRequest::SetMode { .. } => self.unsupported_real_request("mode changes"),
+            UserRequest::SetMode { mode } => self.set_real_mode(mode),
             UserRequest::CompareCheckpoint { .. } => {
                 self.unsupported_real_request("checkpoint comparison")
             }
