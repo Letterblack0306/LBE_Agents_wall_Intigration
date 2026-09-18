@@ -1,5 +1,8 @@
 # LBE TUI Modular Status
 
+> **Current product-surface decision — 2026-09-18:** Rust/Ratatui is now the canonical visible LBE terminal implementation. HTML/React is retained as visual/interaction reference. Cline remains headless reasoning/provider/model/continuation mechanics only. Older rows that describe Rust as reference-only or a Cline CLI as the user-facing product are historical module notes and must be interpreted under this supersession.
+
+
 Update this file only when a module changes.
 
 | Module | Status | Product Relevance | Depends On | Notes |
