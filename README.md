@@ -5,21 +5,22 @@
 ```text
 PRODUCT                         = LBE
 RUNTIME / GOVERNANCE AUTHORITY  = LBE Persistent Agent Wall
-ACCEPTED PRODUCT-SURFACE DIR    = Cline CLI/TUI mechanics under LBE authority
-RUST / RATATUI                  = reference / integration client
-CLINE                            = reasoning/provider/UI mechanics; not LBE authority
+CANONICAL VISIBLE PRODUCT UI     = LBE-owned Rust/Ratatui
+HTML / REACT                     = visual + interaction contract/reference
+CLINE                            = headless reasoning/provider/model/continuation mechanics only
 ```
 
 LBE owns workspace/session identity, policy, authorization, governed execution,
 ToolReceipt/evidence persistence, validation, recovery, and completion truth.
 
-Cline may supply reasoning, provider interaction, continuation, and terminal UI
-mechanics, but it must not become a second session, authorization, execution,
-receipt/evidence, persistence, or completion owner.
+Cline supplies reasoning, provider/model interaction, tool-proposal, continuation,
+and response-composition mechanics behind LBE. It is not the visible product UI
+and must not become a second session, authorization, execution, receipt/evidence,
+persistence, or completion owner.
 
-The Rust/Ratatui client in this repository remains useful integration evidence.
-It must not be promoted to final-product authority merely because it builds or
-passes local tests.
+The Rust/Ratatui client in this repository is the canonical visible LBE terminal
+implementation by explicit product-owner decision dated 2026-09-18. Its source or
+tests still do not prove installed/runtime acceptance by themselves.
 
 ## Current source-truth rule
 
@@ -196,8 +197,9 @@ use.
 ## Product-surface reconciliation rule
 
 Do not reopen Textual vs Rust vs HTML vs Cline as a greenfield design decision.
-Current accepted direction is Cline CLI/TUI mechanics under LBE authority; Rust
-remains the bounded reference/integration client.
+Current accepted direction is the LBE-owned Rust/Ratatui terminal client under
+LBE authority. Existing HTML/React work is retained as the LBE visual/interaction
+contract and reuse source. Cline remains headless reasoning/provider mechanics only.
 
 Do not create another UI plan or alternative layout unless one of these is true:
 
@@ -229,7 +231,7 @@ LBE terminal
 
 No layer in the client may bypass or recreate LBE authority.
 
-## Rust reference client
+## Canonical Rust/Ratatui product client
 
 This repository still contains the Rust/Ratatui reference client.
 
