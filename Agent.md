@@ -32,9 +32,9 @@ Do not promote a lower source over a higher one.
 ```text
 PRODUCT                         = LBE
 RUNTIME / GOVERNANCE AUTHORITY  = LBE Persistent Agent Wall
-ACCEPTED PRODUCT-SURFACE DIR    = Cline CLI/TUI mechanics under LBE authority
-RUST / RATATUI                  = reference / integration client
-CLINE                            = reasoning/provider/UI mechanics; not authority
+CANONICAL VISIBLE PRODUCT UI     = LBE-owned Rust/Ratatui
+HTML / REACT                     = visual/interaction contract + reference
+CLINE                            = headless reasoning/provider/model/continuation mechanics only
 ```
 
 The governing invariant is:
@@ -181,9 +181,9 @@ C:\Agents-Memory-Tool-v6-integration
 Important client paths:
 
 ```text
-src/                 Rust/Ratatui reference client
-run-cline-lbe.ps1    accepted Cline-based product launcher when the bundled/local
-                     Cline surface is present and proven
+src/                 canonical Rust/Ratatui LBE product client
+lbe-cli.ps1          current LBE composition launcher; must remain LBE-authoritative
+run-cline-lbe.ps1    historical/reference Cline UI launcher, not the canonical visible product
 Docs/                integration/reference documentation
 ```
 
@@ -218,7 +218,7 @@ Do not skip directly from source/build success to READY or COMPLETE.
 7. Prefer the smallest architecture-consistent patch.
 8. Validate the exact changed path before reporting completion.
 
-## Rust reference-client commands
+## Rust canonical-client source validation commands
 
 ```powershell
 cargo check
@@ -227,6 +227,6 @@ cargo fmt --check
 cargo run --bin lbe
 ```
 
-These commands validate the Rust reference/integration client only. They do not,
-by themselves, prove the accepted Cline/LBE product surface or installed LBE
-runtime behavior.
+These commands validate the selected Rust client only at source/test level. They
+do not by themselves prove installed product acceptance, live provider/tool
+behavior, or PTY/ConPTY terminal restoration.
