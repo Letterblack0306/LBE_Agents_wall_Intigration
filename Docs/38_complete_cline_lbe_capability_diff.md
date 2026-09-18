@@ -1,5 +1,8 @@
 # Cline ↔ LBE Complete Product Capability Diff
 
+> **2026-09-18 PRODUCT-SURFACE SUPERSESSION**  
+> The product owner selected the existing LBE-owned Rust/Ratatui client as the canonical visible terminal implementation. Existing HTML/React LBE work is retained as the visual/interaction contract. Cline remains selected only for headless reasoning/provider/model/tool-proposal/continuation mechanics behind LBE. Any sections below that describe a full Cline CLI/TUI as the user-facing product surface are historical evidence and no longer current product direction. They must not be used to restore or require a copied Cline UI tree.
+
 ## Status
 `CAPABILITY_DIFF_RECONCILED — REAL_LBE_WRAPPER_ACCURATE_STATE — LIVE_RUNTIME_VALIDATED — CLINE_LBE_VISUAL_SURFACE_COMPLETE — INTERACTIVE_ACCEPTANCE_PENDING_TERMINAL`
 
