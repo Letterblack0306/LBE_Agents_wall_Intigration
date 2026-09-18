@@ -1,54 +1,52 @@
 # LBE TUI / Agent Wall Integration Alignment
 
-Status: **ACTIVE INTEGRATION MAP — CLI/WORKSPACE ROLES RECONCILED**
+Status: **ACTIVE — LBE-OWNED RUST TUI SELECTED**
 
-Updated: 2026-09-07
+Updated: 2026-09-18
 
-## Repository Ownership
+## Repository ownership
 
 ```text
 C:\LBE-TUI-Lab
-  = client/integration workspace containing:
-    - LBE CLI launcher (uses npm-installed Cline)
-    - Rust/Ratatui prototype/reference client
+  = canonical visible LBE terminal client workspace
+    - Rust/Ratatui UI in src/
+    - LbeWrapper / RealLbeWrapper client boundary
+    - LBE launch/client integration
 
 C:\Agents-Memory-Tool-v6-integration
-  = LBE Python runtime authority: governance, sessions, providers,
-    authorization, governed execution, evidence, receipts, persistence,
-    validation, completion truth
+  = LBE runtime authority
+    - sessions/workspace identity
+    - provider/model policy truth
+    - authorization / governed execution
+    - ToolReceipt / evidence
+    - persistence / recovery
+    - validation / completion
+    - headless governed Cline worker/provider mechanics
 ```
 
-## LBE CLI vs Rust Reference Client
-
-The current accepted product-surface direction uses the LBE CLI (Cline engine):
+## Product composition
 
 ```text
-LBE CLI (user-facing product)
-  source: npm-installed Cline (globally installed)
-  launcher: C:\LBE-TUI-Lab\run-cline-lbe.ps1
-  role: LBE CLI interface over Cline engine
-
-RUST REFERENCE CLIENT (reference only)
-  entrypoint: C:\LBE-TUI-Lab\src\main.rs
-  binary: C:\LBE-TUI-Lab\target\release\lbe.exe
-  launcher: C:\LBE-TUI-Lab\run-lbe.bat
-  role: Rust/Ratatui prototype/reference client
+USER
+  -> lbe
+  -> LBE-owned Rust/Ratatui terminal UI
+  -> RealLbeWrapper / LBE product-entry boundary
+  -> headless Cline reasoning/provider/model/continuation mechanics
+  -> LBE governed consequences and truth
 ```
 
-## Authority Flow
+## Technology roles
 
-```
-USER → LBE CLI (Cline-powered) → LBE Runtime → Sole Authority
-                                       ↓
-                              Governance / Evidence / Receipts
-```
+| Component | Current role |
+|---|---|
+| Rust/Ratatui | **Canonical visible LBE terminal implementation** |
+| HTML/React LBE prototypes | Visual/interaction contract and reuse source; not runtime proof |
+| Cline AgentRuntime / @cline/agents | Headless reasoning/provider/model/tool-proposal/continuation mechanics |
+| Cline CLI/OpenTUI product UI | Reference/reuse source only; not required as visible LBE product |
+| LBE runtime | Sole authority |
 
-## Product Definition
+## Authority invariant
 
-| Component | Role |
-|-----------|------|
-| **LBE CLI** | User-facing product surface |
-| **Cline** | Embedded AI provider/reasoning |
-| **LBE Runtime** | Sole authority |
+> The agent owns cognition. LBE owns capabilities and consequences. The Rust client owns presentation, not authority.
 
-**Core Principle:** The agent owns cognition. LBE owns capabilities and consequences.
+The Rust UI may request and project state, but must never become a second owner for sessions, authorization, execution, receipts/evidence, persistence, or completion truth.
